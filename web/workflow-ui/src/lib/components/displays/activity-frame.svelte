@@ -218,7 +218,7 @@
   });
 </script>
 
-<div class="relative h-full min-h-[70dvh] w-full overflow-hidden bg-black {display.class}">
+<div class="activity-frame relative h-full min-h-[70dvh] w-full overflow-hidden bg-black {display.class}">
   {#if ready}
     <iframe
       bind:this={frame}
