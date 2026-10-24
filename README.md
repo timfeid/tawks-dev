@@ -1,6 +1,6 @@
 # tawks-dev
 
-SDKs, examples and docs for building bots and games on [tawks](https://tawks.app).
+SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs and try the playground at [tawks-dev.vercel.app](https://tawks-dev.vercel.app).
 
 | Path | What it is |
 | --- | --- |
@@ -37,7 +37,7 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 pnpm --filter @tawks/example-tictactoe dev
 ```
 
-To build a page from workflow displays, open the playground (`pnpm --filter @tawks/site dev`, then `http://localhost:5300/playground`). It runs pages in the browser, answers server actions from mocks you write, and gives you the Rust for what you built. With devhost running, the plug button loads the pages your bot registered and sends their server actions to your bot.
+To build a page from workflow displays, open the [playground](https://tawks-dev.vercel.app/playground), or run it yourself with `pnpm --filter @tawks/site dev` and open `http://localhost:5300/playground`. It runs pages in the browser, answers server actions from mocks you write, and gives you the Rust for what you built. With devhost running, the plug button loads the pages your bot registered and sends their server actions to your bot.
 
 ## Contributing
 

@@ -5,3 +5,4 @@ dist/
 .env.*
 .svelte-kit/
 site/build/
+.vercel/

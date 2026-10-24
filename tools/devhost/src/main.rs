@@ -366,7 +366,7 @@ async fn dev_run(State(host): State<Shared>, Json(args): Json<Run>) -> Json<Valu
 
 /// Endpoints the hosted playground may call from its own origin.
 const PLAYGROUND_PATHS: [&str; 2] = ["/dev/workflows", "/dev/run"];
-const PLAYGROUND_ORIGINS: [&str; 2] = ["http://localhost:5300", "http://127.0.0.1:5300"];
+const PLAYGROUND_ORIGINS: [&str; 3] = ["https://tawks-dev.vercel.app", "http://localhost:5300", "http://127.0.0.1:5300"];
 
 fn playground_origins() -> Vec<String> {
     let mut origins: Vec<String> = PLAYGROUND_ORIGINS.iter().map(|o| o.to_string()).collect();

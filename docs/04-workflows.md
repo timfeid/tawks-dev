@@ -489,4 +489,4 @@ bot.start(|event, _sdk| async move {
 - Send computed booleans for every `Condition` instead of relying on `Gte` or on missing keys.
 - Rebuild the full view in one function and return it from every handler. Handlers stay small and the screens never drift out of sync.
 - Stick to common Tailwind utilities and the theme tokens. See [Styling](05-displays.md#styling).
-- Try a page before you deploy it. The playground on the tawks-dev site runs pages in your browser with the same node rules, conditions and transforms as tawks, answers server actions from mocks, and turns what you build into Rust. Connect it to devhost to send server actions to your real bot.
+- Try a page before you deploy it. The [playground](https://tawks-dev.vercel.app/playground) runs pages in your browser with the same node rules, conditions and transforms as tawks, answers server actions from mocks, and turns what you build into Rust. Connect it to devhost to send server actions to your real bot.

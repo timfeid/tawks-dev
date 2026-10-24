@@ -213,7 +213,7 @@ Key presses inside the frame never reach tawks, so a player's push-to-talk key s
 
 ### Without tawks
 
-The [tawks-dev repository](https://github.com/timfeid/tawks-dev) has `devhost`, a small stand-in for tawks that runs on your machine. It answers the calls your bot makes, runs your server actions, and shows your app in one frame per fake player, with the same sandbox, messages and limits as a real lobby. It shows game activities. For a page built from workflow displays, use the playground on the tawks-dev site: its plug button connects to devhost, loads the pages your bot registered, and sends their server actions to your bot.
+The [tawks-dev repository](https://github.com/timfeid/tawks-dev) has `devhost`, a small stand-in for tawks that runs on your machine. It answers the calls your bot makes, runs your server actions, and shows your app in one frame per fake player, with the same sandbox, messages and limits as a real lobby. It shows game activities. For a page built from workflow displays, use the [playground](https://tawks-dev.vercel.app/playground): its plug button connects to devhost, loads the pages your bot registered, and sends their server actions to your bot.
 
 ```sh
 cargo run -p tawks-devhost
