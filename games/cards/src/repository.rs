@@ -4047,11 +4047,15 @@ impl CardRepository {
 
     // Pack inventory
 
-    pub async fn create_pack_instance(&self, pack: &PackInstance) -> Result<()> {
-        sqlx::query(
+    /// Stores a pack and returns its id. A grant that already happened for the
+    /// same source reference returns the pack it made instead of a second one.
+    pub async fn create_pack_instance(&self, pack: &PackInstance) -> Result<String> {
+        let inserted: Option<String> = sqlx::query_scalar(
             r#"
             INSERT INTO pack_inventory (pack_instance_id, pack_type_id, owner_id, source, source_ref)
             VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (source, source_ref) WHERE source_ref IS NOT NULL DO NOTHING
+            RETURNING pack_instance_id
             "#,
         )
         .bind(&pack.pack_instance_id)
@@ -4059,9 +4063,19 @@ impl CardRepository {
         .bind(&pack.owner_id)
         .bind(&pack.source)
         .bind(&pack.source_ref)
-        .execute(self.pool.as_ref())
+        .fetch_optional(self.pool.as_ref())
         .await?;
-        Ok(())
+        if let Some(id) = inserted {
+            return Ok(id);
+        }
+        let existing: String = sqlx::query_scalar(
+            "SELECT pack_instance_id FROM pack_inventory WHERE source = $1 AND source_ref = $2",
+        )
+        .bind(&pack.source)
+        .bind(&pack.source_ref)
+        .fetch_one(self.pool.as_ref())
+        .await?;
+        Ok(existing)
     }
 
     pub async fn get_user_packs(&self, owner_id: &str) -> Result<Vec<PackInstance>> {

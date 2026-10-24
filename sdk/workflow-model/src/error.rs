@@ -29,6 +29,10 @@ pub enum WorkflowError {
 
     #[error("Invalid state")]
     InvalidState,
+
+    /// Another process changed the instance after this one read it.
+    #[error("Workflow instance {0} was changed by another request; try again")]
+    ConcurrentModification(String),
 }
 
 pub type AppResult<T> = Result<T, WorkflowError>;

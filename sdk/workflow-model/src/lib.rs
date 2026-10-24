@@ -783,6 +783,10 @@ pub struct WorkflowState {
     pub return_ops: Vec<TransformOp>,
     pub return_inject_response_as: Option<String>,
     pub return_reconcile_node: bool,
+
+    /// Bumped on every saved change; a write made from an older read fails.
+    #[serde(skip_serializing, skip_deserializing)]
+    pub version: i64,
 }
 
 impl WorkflowState {

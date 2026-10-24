@@ -271,6 +271,7 @@ impl TawksBot {
             let event_notify = event_notify.clone();
             let running = running.clone();
             let server_actions = server_actions.clone();
+            let registrar_id = self.registrar_id.clone();
             async move {
                 on_event(Event::Connect, &sdk).await;
                 loop {
@@ -308,7 +309,12 @@ impl TawksBot {
                                                                         match handler {
                                                                             Some(handler) => {
                                                                                 let sdk = sdk.clone();
+                                                                                let registrar_id = registrar_id.clone();
                                                                                 tokio::spawn(async move {
+                        if !claim_server_action(&sdk, &id, &registrar_id).await {
+                            debug!("Another copy of this bot took server action {}", id);
+                            return;
+                        }
                         debug!(
                             "Handling WorkflowRequestServerAction:\naction_id:\n{} id:\n{} inputs:\n{:?}",
                             action_id, id, workflow.workflow.responses
@@ -461,5 +467,19 @@ impl TawksBot {
                         }),
             )
             .await
+    }
+}
+
+/// Whether this process should handle a server action. Another running copy
+/// of the same bot may already have it. An API that predates claims can't
+/// say, so the action is handled as before.
+async fn claim_server_action(sdk: &TawksSdk, token: &str, registrar_id: &str) -> bool {
+    let args = serde_json::json!({ "token": token, "registrar_id": registrar_id });
+    match sdk.web_client.mutate::<_, bool>("workflow_claim_server_action", &args).await {
+        Ok(claimed) => claimed,
+        Err(error) => {
+            tracing::debug!(%error, token, "server action claim unavailable; handling it here");
+            true
+        }
     }
 }

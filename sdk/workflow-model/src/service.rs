@@ -297,6 +297,13 @@ pub struct WorkflowRespondServerActionArgs {
     pub result: ServerActionResult,
 }
 
+/// Asks to handle a server action. Only one process of a bot wins each token.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct WorkflowClaimServerActionArgs {
+    pub token: String,
+    pub registrar_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct RegisterExternalServerActionArgs {
     pub action_id: String,

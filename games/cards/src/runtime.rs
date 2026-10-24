@@ -80,16 +80,28 @@ async fn register_pack_fulfillment(bot: &TawksBot, pool: Arc<PgPool>) -> Result<
                     created_at: Utc::now(),
                 };
 
-                if let Err(e) = repo.create_pack_instance(&pack).await {
-                    tracing::error!(
-                        error = %e,
-                        purchase_id = %purchase_id,
-                        "Failed to create pack instance"
-                    );
-                    let _ = ctx.workflow.responses.clone();
-                    return Ok(ServerActionResult::Error(format!(
-                        "Failed to create pack: {e}"
-                    )));
+                let stored_id = match repo.create_pack_instance(&pack).await {
+                    Ok(id) => id,
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            purchase_id = %purchase_id,
+                            "Failed to create pack instance"
+                        );
+                        return Ok(ServerActionResult::Error(format!(
+                            "Failed to create pack: {e}"
+                        )));
+                    }
+                };
+                if stored_id != pack_instance_id {
+                    return Ok(ServerActionResult::CompleteWorkflow {
+                        responses: HashMap::from([
+                            ("pack_instance_id".to_string(), serde_json::json!(stored_id)),
+                            ("status".to_string(), serde_json::json!("fulfilled")),
+                        ]),
+                        close_active_modal: false,
+                        message: "Pack granted successfully".to_string(),
+                    });
                 }
 
                 repo.create_pack_audit(
