@@ -88,6 +88,12 @@ struct RespondArgs {
 }
 
 #[derive(Deserialize)]
+struct ClaimArgs {
+    token: String,
+    registrar_id: String,
+}
+
+#[derive(Deserialize)]
 struct ReconcileArgs {
     instance_id: String,
     #[serde(default)]
@@ -241,6 +247,10 @@ async fn call(app: &Shared, bot: &str, procedure: &str, input: Value) -> Result<
             activity["bot"] = json!(bot);
             host.register_activity(activity).await;
             Ok(Value::Null)
+        }
+        "workflow_claim_server_action" => {
+            let args: ClaimArgs = parse(input)?;
+            Ok(json!(host.claim(&args.token, &args.registrar_id).await))
         }
         "workflow_respond_server_action" => {
             let args: RespondArgs = parse(input)?;

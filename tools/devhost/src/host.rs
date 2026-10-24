@@ -72,6 +72,8 @@ enum Reply {
 struct Pending {
     instance_id: String,
     reply: Reply,
+    /// The registrar that took this request, when copies of a bot share a token.
+    claimed_by: Option<String>,
 }
 
 #[derive(Default)]
@@ -380,7 +382,7 @@ impl Host {
                 .ok_or_else(|| format!("bot {owner} registered {action_id} but is not connected"))?;
             let instance = state.instances.get(instance_id).ok_or("no such instance")?.clone();
             let name = state.definitions.get(&instance.workflow_id).map(|d| d.name.clone()).unwrap_or_default();
-            state.pending.insert(token.clone(), Pending { instance_id: instance_id.into(), reply });
+            state.pending.insert(token.clone(), Pending { instance_id: instance_id.into(), reply, claimed_by: None });
             let message = json!({
                 "type": "workflow_request_server_action",
                 "id": token,
@@ -396,6 +398,19 @@ impl Host {
             Err(_) => {
                 self.state.lock().await.pending.remove(&token);
                 Err(format!("the bot did not answer {action_id} within {}s", ACTION_TIMEOUT.as_secs()))
+            }
+        }
+    }
+
+    /// The first copy of a bot to claim a request handles it; the rest leave it.
+    pub async fn claim(&self, token: &str, registrar: &str) -> bool {
+        let mut state = self.state.lock().await;
+        let Some(pending) = state.pending.get_mut(token) else { return false };
+        match &pending.claimed_by {
+            Some(owner) => owner == registrar,
+            None => {
+                pending.claimed_by = Some(registrar.to_string());
+                true
             }
         }
     }
