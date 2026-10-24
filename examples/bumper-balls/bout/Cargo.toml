@@ -1,0 +1,11 @@
+[package]
+name = "bumper-balls"
+version = "0.1.0"
+edition = "2024"
+description = "Bumper Balls, the example Tawkathon bout."
+license = "MIT"
+
+[dependencies]
+rand = "0.9"
+serde_json = "1"
+tawks-bout = { path = "../../../sdk/bout" }

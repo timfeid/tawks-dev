@@ -1,0 +1,25 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "baseUrl": ".",
+    "paths": {
+      "@tawks/workflow-types": ["../workflow-types/index.d.ts"],
+      "@tawks/workflow-ui": ["./src/lib"],
+      "@tawks/workflow-ui/*": ["./src/lib/*"],
+      "@tawks/ui": ["../ui/src/lib"],
+      "@tawks/ui/*": ["../ui/src/lib/*"],
+      "@tawks/editor": ["../editor/src/lib"],
+      "@tawks/editor/*": ["../editor/src/lib/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte"]
+}

@@ -1,0 +1,8 @@
+packages:
+  - "sdk/*"
+  - "web/*"
+  - "site"
+  - "examples/*/client"
+
+onlyBuiltDependencies:
+  - esbuild

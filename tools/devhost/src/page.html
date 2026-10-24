@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tawks devhost</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #141821; --line: #262c3a; --text: #e6e8ee; --muted: #8a93a6; --accent: #7c9cff; --bad: #ff7a7a; --warn: #ffc46b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; }
+  select, button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .muted { color: var(--muted); }
+  main { flex: 1; display: grid; gap: 8px; padding: 8px; min-height: 0; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); grid-auto-rows: minmax(300px, 1fr); }
+  .pane { position: relative; background: #000; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; }
+  .pane header { padding: 6px 10px; gap: 8px; font-size: 12px; }
+  .pane iframe { flex: 1; width: 100%; border: 0; }
+  .done { color: var(--warn); }
+  #log { height: 160px; overflow: auto; border-top: 1px solid var(--line); padding: 8px 16px; font: 12px/1.5 ui-monospace, monospace; }
+  #log .error { color: var(--bad); }
+  #log .warn { color: var(--warn); }
+  #log .chat { color: var(--accent); }
+  .empty { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>tawks devhost</h1>
+  <label>Game <select id="activity"></select></label>
+  <label>Players <select id="players"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+  <button id="start">Start</button>
+  <span id="status" class="muted"></span>
+</header>
+<main id="panes"><div class="empty">Run your bot against this devhost, then pick its game and press Start.</div></main>
+<div id="log"></div>
+<script type="module">
+const PROTOCOL = 'tawks.activity';
+const VERSION = 1;
+const MAX_INPUT_BYTES = 16 * 1024;
+const SENDS_PER_SECOND = 20;
+const ACTION_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+
+const $ = (id) => document.getElementById(id);
+let activities = [];
+let displays = {};
+let lobbyId = 'dev-lobby';
+/** instance id -> { instance, frame, port, sentState, tokens, refilledAt } */
+const panes = new Map();
+/** The newest copy of every instance, including ones no pane shows yet. */
+const latest = new Map();
+
+function log(level, text) {
+  const line = document.createElement('div');
+  line.className = level;
+  line.textContent = `${new Date().toLocaleTimeString()}  ${text}`;
+  $('log').append(line);
+  $('log').scrollTop = $('log').scrollHeight;
+}
+
+function renderActivities() {
+  const select = $('activity');
+  const current = select.value;
+  select.replaceChildren(...activities.map((a) => {
+    const option = document.createElement('option');
+    option.value = a.workflow_id;
+    option.textContent = `${a.name} (${a.client_url})`;
+    return option;
+  }));
+  if (current) select.value = current;
+  $('status').textContent = activities.length ? '' : 'waiting for a bot to register an activity';
+}
+
+function stateOf(instance) {
+  const display = displays[instance.workflow_id];
+  const value = display ? instance.responses[display.state] : null;
+  return JSON.parse(JSON.stringify(value ?? null));
+}
+
+function post(pane, message) {
+  pane.port?.postMessage(message);
+}
+
+function allowSend(pane) {
+  const now = performance.now();
+  pane.tokens = Math.min(SENDS_PER_SECOND * 2, pane.tokens + ((now - pane.refilledAt) / 1000) * SENDS_PER_SECOND);
+  pane.refilledAt = now;
+  if (pane.tokens < 1) return false;
+  pane.tokens -= 1;
+  return true;
+}
+
+async function onGameMessage(pane, event) {
+  const message = event.data;
+  if (typeof message !== 'object' || message === null) return;
+  if (message.type === 'push_to_talk') return log('info', `${pane.name} push-to-talk ${message.down ? 'down' : 'up'}`);
+  if (message.type !== 'send' && message.type !== 'call') return;
+  const id = message.id;
+  if (!Number.isSafeInteger(id)) return;
+  const fail = (error) => {
+    log('warn', `${pane.name}: ${error}`);
+    post(pane, { type: 'result', id, ok: false, error });
+  };
+  const display = displays[pane.instance.workflow_id];
+  let action;
+  let inputs;
+  if (message.type === 'send') {
+    action = display?.action;
+    inputs = { input: message.input };
+  } else {
+    if (typeof message.action !== 'string' || !ACTION_ID.test(message.action)) return fail('That action id is not allowed.');
+    if (typeof message.inputs !== 'object' || message.inputs === null || Array.isArray(message.inputs)) return fail('Inputs must be an object.');
+    if (Object.keys(message.inputs).some((key) => key.startsWith('$'))) return fail('Input keys starting with $ are reserved.');
+    action = message.action;
+    inputs = message.inputs;
+  }
+  let encoded;
+  try { encoded = JSON.stringify(inputs); } catch { encoded = undefined; }
+  if (encoded === undefined) return fail('The move must be JSON.');
+  if (new TextEncoder().encode(encoded).length > MAX_INPUT_BYTES) return fail('The move is too large.');
+  if (!allowSend(pane)) return fail('Too many moves, slow down.');
+  if (!action) return fail('The game is not ready.');
+  const res = await fetch('/dev/act', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ instance_id: pane.instance.id, action, inputs: JSON.parse(encoded) }),
+  }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e) }));
+  if (res.ok) post(pane, { type: 'result', id, ok: true });
+  else fail(res.error);
+}
+
+window.addEventListener('message', (event) => {
+  if (event.data?.protocol !== PROTOCOL || event.data?.type !== 'hello') return;
+  const pane = [...panes.values()].find((p) => p.frame.contentWindow === event.source);
+  if (!pane) return;
+  if (event.origin !== 'null') return log('error', `${pane.name}: the game must run without an origin, as it does on tawks`);
+  pane.port?.close();
+  const channel = new MessageChannel();
+  pane.port = channel.port1;
+  pane.port.onmessage = (e) => onGameMessage(pane, e);
+  event.source.postMessage({ protocol: PROTOCOL, version: VERSION, type: 'welcome' }, '*', [channel.port2]);
+  pane.sentState = JSON.stringify(stateOf(pane.instance));
+  post(pane, { type: 'init', me: { id: pane.instance.user_id }, lobby: { id: lobbyId }, state: stateOf(pane.instance) });
+  post(pane, { type: 'push_to_talk', binding: null });
+});
+
+function showInstance(instance) {
+  latest.set(instance.id, instance);
+  const pane = panes.get(instance.id);
+  if (!pane) return;
+  pane.instance = instance;
+  pane.status.textContent = instance.completed ? `done${instance.complete_message ? `: ${instance.complete_message}` : ''}` : '';
+  const state = JSON.stringify(stateOf(instance));
+  if (state !== pane.sentState) {
+    pane.sentState = state;
+    post(pane, { type: 'state', state: JSON.parse(state) });
+  }
+}
+
+function buildPanes(started) {
+  const instances = started.map((instance) => latest.get(instance.id) ?? instance);
+  const activity = activities.find((a) => a.workflow_id === instances[0]?.workflow_id);
+  panes.forEach((p) => p.port?.close());
+  panes.clear();
+  $('panes').replaceChildren(...instances.map((instance) => {
+    const user = instance.context.$user ?? { display_name: instance.user_id };
+    const el = document.createElement('section');
+    el.className = 'pane';
+    const head = document.createElement('header');
+    const name = document.createElement('strong');
+    name.textContent = user.display_name;
+    const status = document.createElement('span');
+    status.className = 'done';
+    head.append(name, status);
+    const frame = document.createElement('iframe');
+    frame.sandbox = 'allow-scripts allow-pointer-lock';
+    frame.allow = 'fullscreen; gamepad; autoplay';
+    frame.referrerPolicy = 'no-referrer';
+    frame.title = `${activity?.name ?? 'Game'} as ${user.display_name}`;
+    el.append(head, frame);
+    panes.set(instance.id, { instance, frame, status, name: user.display_name, port: null, sentState: null, tokens: SENDS_PER_SECOND * 2, refilledAt: performance.now() });
+    frame.src = activity?.client_url ?? 'about:blank';
+    return el;
+  }));
+  instances.forEach(showInstance);
+}
+
+$('start').onclick = async () => {
+  const workflow_id = $('activity').value;
+  if (!workflow_id) return log('warn', 'no game is registered yet');
+  const res = await fetch('/dev/start', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workflow_id, players: Number($('players').value) }),
+  }).then((r) => r.json());
+  if (!res.ok) return;
+  lobbyId = (await fetch('/dev/state').then((r) => r.json())).lobby_id;
+  buildPanes(res.instances);
+};
+
+const initial = await fetch('/dev/state').then((r) => r.json());
+activities = initial.activities;
+displays = initial.displays;
+lobbyId = initial.lobby_id;
+renderActivities();
+
+new EventSource('/dev/stream').onmessage = async (message) => {
+  const event = JSON.parse(message.data);
+  if (event.type === 'log') log(event.level, event.text);
+  else if (event.type === 'instance') showInstance(event.instance);
+  else if (event.type === 'activities') {
+    const state = await fetch('/dev/state').then((r) => r.json());
+    activities = state.activities;
+    displays = state.displays;
+    renderActivities();
+  }
+};
+</script>
+</body>
+</html>

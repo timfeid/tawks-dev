@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+@import '../../web/ui/src/theme.css';
+@source "../../web/ui/src/lib";
+@source "../../web/workflow-ui/src/lib";
+@source "./";
+@plugin "@tailwindcss/typography";
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body {
+  min-height: 100%;
+  background: black;
+}

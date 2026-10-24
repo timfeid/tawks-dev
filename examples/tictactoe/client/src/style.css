@@ -1,0 +1,93 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0f17;
+  --cell: #161c28;
+  --cell-hover: #1f2738;
+  --text: #e5e7eb;
+  --muted: #8b93a7;
+  --x: #facc15;
+  --o: #38bdf8;
+  --win: #22c55e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+#status {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+#players {
+  margin: 0;
+  color: var(--muted);
+}
+
+#board {
+  display: grid;
+  width: min(80vmin, 420px);
+  aspect-ratio: 1;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.cell {
+  border: 0;
+  border-radius: 12px;
+  background: var(--cell);
+  color: var(--text);
+  font-size: clamp(2rem, 12vmin, 5rem);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cell:not(:disabled):hover {
+  background: var(--cell-hover);
+}
+
+.cell:disabled {
+  cursor: default;
+}
+
+.cell[data-mark='X'] {
+  color: var(--x);
+}
+
+.cell[data-mark='O'] {
+  color: var(--o);
+}
+
+.cell.won {
+  outline: 3px solid var(--win);
+}
+
+#reset {
+  border: 0;
+  border-radius: 999px;
+  background: var(--x);
+  color: #111;
+  padding: 8px 20px;
+  font-weight: 700;
+  cursor: pointer;
+}

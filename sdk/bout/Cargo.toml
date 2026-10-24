@@ -1,0 +1,10 @@
+[package]
+name = "tawks-bout"
+version = "0.1.0"
+edition = "2024"
+description = "The contract between a Tawkathon room and the bouts it runs."
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

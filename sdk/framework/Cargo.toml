@@ -1,0 +1,14 @@
+[package]
+name = "game-framework"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+workflow = { package = "workflow-model", path = "../workflow-model" }
+tawks-bot = { path = "../bot" }
+dashmap = "6.1.0"

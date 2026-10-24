@@ -1,0 +1,18 @@
+{
+  "name": "@tawks/bout-sdk",
+  "version": "0.1.0",
+  "description": "Draw a Tawkathon bout in the tawks client.",
+  "type": "module",
+  "exports": {
+    ".": "./src/renderer.ts"
+  },
+  "peerDependencies": {
+    "three": ">=0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.182.0",
+    "three": "^0.182.0",
+    "typescript": "^5.0.0"
+  },
+  "license": "MIT"
+}

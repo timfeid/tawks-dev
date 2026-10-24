@@ -1,0 +1,18 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; }
+html, body { margin: 0; height: 100%; background: #0b0b0d; color: #eee; }
+main { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; box-sizing: border-box; min-height: 100%; }
+h1 { font-size: 18px; margin: 0; text-align: center; }
+#hint { margin: 0; font-size: 13px; color: #a1a1aa; min-height: 1em; }
+#circle { position: relative; width: min(80vw, 240px); aspect-ratio: 1; }
+.seat { position: absolute; transform: translate(-50%, -50%); width: 78px; padding: 6px 4px; border-radius: 12px; border: 1px solid #ffffff22; background: #ffffff0a; color: inherit; font: inherit; font-size: 12px; text-align: center; cursor: default; }
+.seat.me { border-color: #39ff14; }
+.seat.out { opacity: 0.35; text-decoration: line-through; }
+.seat.target { cursor: pointer; background: #39ff1422; }
+.seat.target:hover { background: #39ff1444; }
+.seat .potato { display: block; width: 22px; height: 16px; margin: 2px auto 0; border-radius: 50%; background: #c58b3a; visibility: hidden; }
+.seat.holding .potato { visibility: visible; }
+.sizzling .seat.holding .potato { background: #ff5a1f; animation: shake 0.15s infinite alternate; }
+@keyframes shake { from { transform: translateX(-2px) rotate(-8deg); } to { transform: translateX(2px) rotate(8deg); } }
+#controls { display: flex; gap: 8px; }
+#controls button { padding: 8px 14px; border-radius: 10px; border: 0; background: #39ff14; color: #0b0b0d; font-weight: 700; cursor: pointer; }
+#log { list-style: none; margin: 0; padding: 0; font-size: 12px; color: #a1a1aa; text-align: center; }

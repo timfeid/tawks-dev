@@ -1,0 +1,15 @@
+[package]
+name = "workflow-model"
+version = "0.1.0"
+edition = "2024"
+description = "The data model and builders for tawks workflows."
+license = "MIT"
+
+[dependencies]
+chrono = { version = "0.4.40", features = ["serde"] }
+futures = "0.3.30"
+indexmap = { version = "2.12.1", features = ["serde"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+specta = { version = "=2.0.0-rc.22", default-features = false, features = ["derive", "serde", "serde_json"] }
+thiserror = "2.0.12"

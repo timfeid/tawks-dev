@@ -1,0 +1,123 @@
+/* The tawks look: colour tokens for light and dark, fonts, and the few base
+   rules the UI kit and the workflow renderer rely on. Import it after
+   tailwindcss. */
+
+:root {
+  @theme {
+      --breakpoint-3xl: 120rem;
+
+    --default-font-family: 'Noto Sans', 'Commissioner', 'Nunito Sans';
+    --font-mono: 'IBM Plex Mono';
+
+    --color-background: hsl(0, 0%, 95%);
+    --color-foreground: hsl(0, 0%, 3.9%);
+    --color-muted: hsl(0, 0%, 96.1%);
+    --color-muted-foreground: hsl(0, 0%, 45.1%);
+    --color-popover: hsl(0, 0%, 100%);
+    --color-popover-foreground: hsl(0, 0%, 3.9%);
+    --color-card: hsl(0, 0%, 100%);
+    --color-card-foreground: hsl(0, 0%, 3.9%);
+    --color-border: hsl(0, 0%, 89.8%);
+    --color-input: hsl(0, 0%, 89.8%);
+    --color-primary: hsl(340, 100%, 70%);
+    --color-primary-foreground: hsl(0, 0%, 98%);
+    --color-secondary: hsl(0, 0%, 96.1%);
+    --color-secondary-foreground: hsl(0, 0%, 9%);
+    --color-accent: hsla(132, 100%, 96%, 1);
+    --color-accent-foreground: hsl(0, 0%, 9%);
+    --color-destructive: hsl(0, 72.2%, 50.6%);
+    --color-destructive-foreground: hsl(0, 0%, 98%);
+    --color-ring: hsl(0, 0%, 3.9%);
+    --color-sidebar-background: hsl(0, 0%, 99%);
+    --color-sidebar-foreground: hsl(240, 5.3%, 26.1%);
+    --color-sidebar-primary: hsl(240, 5.9%, 10%);
+    --color-sidebar-primary-foreground: hsl(0, 0%, 98%);
+    --color-sidebar-accent: hsl(240, 14.8%, 95.9%);
+    --color-sidebar-accent-foreground: hsl(240, 5.9%, 10%);
+    --color-sidebar-border: hsl(220, 13%, 91%);
+    --color-sidebar-ring: hsl(217.2, 91.2%, 59.8%);
+    --color-sidebar: var(--color-sidebar-background);
+
+    --animate-wiggle: wiggle 0.3s ease-in-out infinite;
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-.3deg); }
+  50% { transform: rotate(.3deg); }
+}
+
+.animate-wiggle {
+  display: block;
+  animation: wiggle 0.3s ease-in-out infinite;
+}
+
+.dark {
+  @theme {
+    --color-background: hsl(0, 0%, 5.1%);
+    --color-foreground: hsl(0, 0%, 98%);
+    --color-muted: hsl(0, 0%, 24.9%);
+    --color-muted-foreground: hsl(0, 0%, 63.9%);
+    --color-popover: hsl(0, 0%, 5.1%);
+    --color-popover-foreground: hsl(0, 0%, 98%);
+    --color-card: hsl(0, 0%, 10%);
+    --color-card-foreground: hsl(0, 0%, 98%);
+    --color-border: hsl(340, 3.7%, 10.9%);
+    --color-input: hsl(0, 0%, 14.9%);
+    --color-primary: #39FF14;
+    --color-primary-foreground: hsl(0, 0%, 8%);
+    --color-secondary: hsl(0, 0%, 14.9%);
+    --color-secondary-foreground: hsl(0, 0%, 98%);
+    --color-accent: hsla(150, 5%, 9%, 1);
+    --color-accent-foreground: hsl(0, 0%, 98%);
+    --color-destructive: hsl(0, 62.8%, 50.6%);
+    --color-destructive-foreground: hsl(0, 0%, 98%);
+    --color-ring: hsl(0, 0%, 13.1%);
+    --color-sidebar-background: hsl(0, 0%, 7.6%);
+    --color-sidebar-foreground: hsl(240, 4.8%, 95.9%);
+    --color-sidebar-primary: hsl(0, 0, 22.67%);
+    --color-sidebar-primary-foreground: hsl(0, 0%, 100%);
+    --color-sidebar-accent: hsl(0, 0%, 15%);
+    --color-sidebar-accent-foreground: hsl(240, 4.8%, 95.9%);
+    --color-sidebar-border: hsl(340, 3.7%, 10.9%);
+    --color-sidebar-ring: hsl(217.2, 91.2%, 59.8%);
+    --color-sidebar: hsl(0, 0%, 9.6%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    background: black;
+    @apply  text-foreground;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+}
+
+.link {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+* {
+  text-underline-offset: 4px;
+}
+
+[data-bits-floating-content-wrapper] {
+  filter: drop-shadow(0 0 1px var(--color-border));
+  isolation: isolate;
+}
+[data-tooltip-content] {
+  overflow: visible;
+}
+[data-tooltip-content] > span > svg {
+  color: var(--color-popover);
+}
+
+button {
+  cursor: pointer;
+}

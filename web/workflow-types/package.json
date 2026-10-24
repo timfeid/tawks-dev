@@ -1,0 +1,11 @@
+{
+  "name": "@tawks/workflow-types",
+  "version": "0.1.0",
+  "description": "TypeScript types for tawks workflows, generated from the Rust model.",
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts" }
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@tawks/activity-sdk",
+  "version": "0.1.0",
+  "description": "Connect a game running inside a tawks activity frame to tawks.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

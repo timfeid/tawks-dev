@@ -1,0 +1,851 @@
+{
+  "palette": [
+    {
+      "label": "Heading",
+      "hint": "Text with a larger class",
+      "display": {
+        "class": "text-xl font-semibold",
+        "type": {
+          "Text": {
+            "text": "A heading"
+          }
+        }
+      }
+    },
+    {
+      "label": "Text",
+      "hint": "Use {key} to show a response",
+      "display": {
+        "class": "",
+        "type": {
+          "Text": {
+            "text": "Hello, {name}"
+          }
+        }
+      }
+    },
+    {
+      "label": "Button",
+      "hint": "Runs a workflow action",
+      "display": {
+        "class": "",
+        "type": {
+          "Button": {
+            "content": [
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "Press me"
+                  }
+                }
+              }
+            ],
+            "input_map": null,
+            "action_id": "my_action",
+            "variant": "default",
+            "size": "default",
+            "type": "button"
+          }
+        }
+      }
+    },
+    {
+      "label": "Text input",
+      "hint": "Saved under its id",
+      "display": {
+        "class": "",
+        "type": {
+          "Input": {
+            "id": "name",
+            "input": {
+              "readonly": null,
+              "type": {
+                "Text": {
+                  "placeholder": "Type here"
+                }
+              },
+              "default_value": null,
+              "required": false,
+              "on_change_action": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "Number input",
+      "hint": "With a min and max",
+      "display": {
+        "class": "",
+        "type": {
+          "Input": {
+            "id": "amount",
+            "input": {
+              "readonly": null,
+              "type": {
+                "Number": {
+                  "min": 0,
+                  "max": 100
+                }
+              },
+              "default_value": null,
+              "required": false,
+              "on_change_action": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "Switch",
+      "hint": "A boolean input",
+      "display": {
+        "class": "",
+        "type": {
+          "Input": {
+            "id": "enabled",
+            "input": {
+              "readonly": null,
+              "type": "Switch",
+              "default_value": null,
+              "required": false,
+              "on_change_action": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "Row",
+      "hint": "A div that lays its children out",
+      "display": {
+        "class": "flex items-center gap-2",
+        "type": {
+          "Div": {
+            "content": [
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "Left"
+                  }
+                }
+              },
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "Right"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Card",
+      "hint": "A bordered panel",
+      "display": {
+        "class": "",
+        "type": {
+          "Card": {
+            "content": [
+              {
+                "class": "font-semibold",
+                "type": {
+                  "Text": {
+                    "text": "Card title"
+                  }
+                }
+              },
+              {
+                "class": "text-muted-foreground",
+                "type": {
+                  "Text": {
+                    "text": "Some details"
+                  }
+                }
+              }
+            ],
+            "layout": "Vertical"
+          }
+        }
+      }
+    },
+    {
+      "label": "Badge",
+      "hint": "A small label",
+      "display": {
+        "class": "",
+        "type": {
+          "Badge": {
+            "variant": "secondary",
+            "text": "New"
+          }
+        }
+      }
+    },
+    {
+      "label": "Icon",
+      "hint": "A Lucide icon from the supported set",
+      "display": {
+        "class": "size-5",
+        "type": {
+          "Icon": {
+            "lib": "Lucide",
+            "name": "sparkles",
+            "aria_label": "Sparkles",
+            "url": null
+          }
+        }
+      }
+    },
+    {
+      "label": "Image",
+      "hint": "Any https image",
+      "display": {
+        "class": "w-48 rounded-lg",
+        "type": {
+          "Image": {
+            "src": "https://cdn.tawks.app/avatars/default-1.png",
+            "alt_text": "An avatar"
+          }
+        }
+      }
+    },
+    {
+      "label": "List",
+      "hint": "Repeats its content for each item",
+      "display": {
+        "class": "flex flex-col gap-1",
+        "type": {
+          "List": {
+            "items_key": "items",
+            "as": "item",
+            "content": [
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "{item.name}"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Table",
+      "hint": "Rows from a response list",
+      "display": {
+        "class": "",
+        "type": {
+          "Table": {
+            "items_key": "rows",
+            "as": "row",
+            "headers": [
+              {
+                "label": "Name",
+                "key": "name",
+                "width": null,
+                "align": null
+              },
+              {
+                "label": "Score",
+                "key": "score",
+                "width": "6rem",
+                "align": null
+              }
+            ],
+            "row": [
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "{row.name}"
+                  }
+                }
+              },
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "{row.score}"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Show when",
+      "hint": "Content that appears when a condition holds",
+      "display": {
+        "class": "",
+        "type": {
+          "Condition": {
+            "condition": {
+              "ResponseExists": "name"
+            },
+            "content": [
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "You told us your name."
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Link",
+      "hint": "http(s) or an in-app path",
+      "display": {
+        "class": "link",
+        "type": {
+          "Link": {
+            "href": "https://tawks.app",
+            "content": [
+              {
+                "class": "",
+                "type": {
+                  "Text": {
+                    "text": "Open tawks"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "templates": [
+    {
+      "key": "hello",
+      "name": "Hello",
+      "description": "An input, a button and a server action answered by a mock.",
+      "definition": {
+        "id": "hello",
+        "name": "Hello",
+        "description": null,
+        "nodes": {
+          "home": {
+            "title": "Hello",
+            "description": null,
+            "visuals": [
+              {
+                "id": "page",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-2xl font-bold",
+                        "type": {
+                          "Text": {
+                            "text": "Hello, {name}!"
+                          }
+                        }
+                      },
+                      {
+                        "class": "flex gap-2",
+                        "type": {
+                          "Form": {
+                            "server_action_id": "wave",
+                            "content": [
+                              {
+                                "class": "flex-1",
+                                "type": {
+                                  "Input": {
+                                    "id": "name",
+                                    "input": {
+                                      "readonly": null,
+                                      "type": {
+                                        "Text": {
+                                          "placeholder": "Your name"
+                                        }
+                                      },
+                                      "default_value": null,
+                                      "required": false,
+                                      "on_change_action": null
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Wave"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "wave",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "submit"
+                                  }
+                                }
+                              }
+                            ],
+                            "submit_when": "OnSubmit"
+                          }
+                        }
+                      },
+                      {
+                        "class": "text-muted-foreground",
+                        "type": {
+                          "Text": {
+                            "text": "{reply}"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": null,
+            "parent_id": null
+          }
+        },
+        "responses": {
+          "name": "there"
+        },
+        "context": {},
+        "actions": [
+          {
+            "id": "wave",
+            "action_type": "RunServerAction",
+            "allow_while_loading": false,
+            "target": "hello.wave",
+            "progress_node": true
+          }
+        ],
+        "starting_server_action": null,
+        "multi_instance_per_user": false
+      },
+      "mocks": {
+        "hello.wave": {
+          "UpdateResponses": {
+            "reply": "The bot waves back."
+          }
+        }
+      },
+      "source": "use serde_json::json;\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\n/// A greeting page: type a name, press Wave, and the bot answers.\npub fn definition(wave_action: &str) -> CreateWorkflowDefinition {\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-2xl font-bold\").text(\"Hello, {name}!\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .form(\n                        \"wave\",\n                        vec![\n                            WorkflowDisplayBuilder::new(\"flex-1\")\n                                .input(\n                                    \"name\",\n                                    WorkflowInputBuilder::new()\n                                        .r#type(InputTypeBuilder::text(Some(\"Your name\".into())))\n                                        .build(),\n                                )\n                                .build(),\n                            WorkflowDisplayBuilder::new(\"\")\n                                .submit(\n                                    vec![WorkflowDisplayBuilder::new(\"\").text(\"Wave\").build()],\n                                    None,\n                                    \"wave\",\n                                    \"default\",\n                                    \"default\",\n                                )\n                                .build(),\n                        ],\n                        SubmitWhen::OnSubmit,\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{reply}\").build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"hello\", \"Hello\")\n        .response(\"name\", json!(\"there\"))\n        .add_action(WorkflowActionBuilder::new(\"wave\").run_server_action().target(wave_action).build())\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Hello\").visual(page).build())\n        .build()\n}\n"
+    },
+    {
+      "key": "mood",
+      "name": "Mood",
+      "description": "Transforms and conditions, no bot needed.",
+      "definition": {
+        "id": "mood",
+        "name": "Mood",
+        "description": null,
+        "nodes": {
+          "home": {
+            "title": "Mood",
+            "description": null,
+            "visuals": [
+              {
+                "id": "page",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-xl font-semibold",
+                        "type": {
+                          "Text": {
+                            "text": "How is your day?"
+                          }
+                        }
+                      },
+                      {
+                        "class": "flex gap-2",
+                        "type": {
+                          "Div": {
+                            "content": [
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Good"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "good",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "button"
+                                  }
+                                }
+                              },
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Meh"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "meh",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "button"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "class": "",
+                        "type": {
+                          "Condition": {
+                            "condition": {
+                              "ResponseEquals": {
+                                "field": "mood",
+                                "value": "good"
+                              }
+                            },
+                            "content": [
+                              {
+                                "class": "text-primary",
+                                "type": {
+                                  "Text": {
+                                    "text": "Glad to hear it."
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "class": "",
+                        "type": {
+                          "Condition": {
+                            "condition": {
+                              "ResponseEquals": {
+                                "field": "mood",
+                                "value": "meh"
+                              }
+                            },
+                            "content": [
+                              {
+                                "class": "text-muted-foreground",
+                                "type": {
+                                  "Text": {
+                                    "text": "Tomorrow is another one."
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": null,
+            "parent_id": null
+          }
+        },
+        "responses": {},
+        "context": {},
+        "actions": [
+          {
+            "id": "good",
+            "action_type": {
+              "TransformResponses": {
+                "ops": [
+                  {
+                    "Set": {
+                      "path": "mood",
+                      "value": "good"
+                    }
+                  }
+                ],
+                "reconcile_node": true
+              }
+            },
+            "allow_while_loading": false,
+            "target": null,
+            "progress_node": true
+          },
+          {
+            "id": "meh",
+            "action_type": {
+              "TransformResponses": {
+                "ops": [
+                  {
+                    "Set": {
+                      "path": "mood",
+                      "value": "meh"
+                    }
+                  }
+                ],
+                "reconcile_node": true
+              }
+            },
+            "allow_while_loading": false,
+            "target": null,
+            "progress_node": true
+          }
+        ],
+        "starting_server_action": null,
+        "multi_instance_per_user": false
+      },
+      "mocks": {},
+      "source": "use serde_json::json;\nuse workflow_model::builder::{\n    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowNodeBuilder,\n    WorkflowVisualBuilder,\n};\nuse workflow_model::transform::TransformOp;\nuse workflow_model::{CreateWorkflowDefinition, WorkflowDisplay};\n\nfn button(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\nfn set_mood(action: &str, mood: &str) -> workflow_model::WorkflowAction {\n    WorkflowActionBuilder::new(action)\n        .transform_responses(vec![TransformOp::Set { path: \"mood\".into(), value: json!(mood) }], true)\n        .build()\n}\n\n/// No bot needed: buttons change responses with transforms, and conditions\n/// pick what to show.\npub fn definition() -> CreateWorkflowDefinition {\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"How is your day?\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .div(vec![button(\"Good\", \"good\"), button(\"Meh\", \"meh\")])\n                    .build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .condition(\n                        Cond::response_equals(\"mood\", json!(\"good\")),\n                        vec![WorkflowDisplayBuilder::new(\"text-primary\").text(\"Glad to hear it.\").build()],\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .condition(\n                        Cond::response_equals(\"mood\", json!(\"meh\")),\n                        vec![WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"Tomorrow is another one.\").build()],\n                    )\n                    .build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"mood\", \"Mood\")\n        .add_action(set_mood(\"good\", \"good\"))\n        .add_action(set_mood(\"meh\", \"meh\"))\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Mood\").visual(page).build())\n        .build()\n}\n"
+    },
+    {
+      "key": "steps",
+      "name": "Two steps",
+      "description": "Next, Back and Submit move through nodes.",
+      "definition": {
+        "id": "steps",
+        "name": "Two steps",
+        "description": null,
+        "nodes": {
+          "a_start": {
+            "title": "Step 1",
+            "description": null,
+            "visuals": [
+              {
+                "id": "first",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-xl font-semibold",
+                        "type": {
+                          "Text": {
+                            "text": "Step 1: who are you?"
+                          }
+                        }
+                      },
+                      {
+                        "class": "",
+                        "type": {
+                          "Input": {
+                            "id": "name",
+                            "input": {
+                              "readonly": null,
+                              "type": {
+                                "Text": {
+                                  "placeholder": "Name"
+                                }
+                              },
+                              "default_value": null,
+                              "required": true,
+                              "on_change_action": null
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "class": "",
+                        "type": {
+                          "Button": {
+                            "content": [
+                              {
+                                "class": "",
+                                "type": {
+                                  "Text": {
+                                    "text": "Next"
+                                  }
+                                }
+                              }
+                            ],
+                            "input_map": null,
+                            "action_id": "next",
+                            "variant": "default",
+                            "size": "default",
+                            "type": "button"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": null,
+            "parent_id": null
+          },
+          "b_details": {
+            "title": "Step 2",
+            "description": null,
+            "visuals": [
+              {
+                "id": "second",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-xl font-semibold",
+                        "type": {
+                          "Text": {
+                            "text": "Step 2: pick a number, {name}"
+                          }
+                        }
+                      },
+                      {
+                        "class": "",
+                        "type": {
+                          "Input": {
+                            "id": "favorite",
+                            "input": {
+                              "readonly": null,
+                              "type": {
+                                "Number": {
+                                  "min": 1,
+                                  "max": 10
+                                }
+                              },
+                              "default_value": null,
+                              "required": false,
+                              "on_change_action": null
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "class": "flex gap-2",
+                        "type": {
+                          "Div": {
+                            "content": [
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Back"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "back",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "button"
+                                  }
+                                }
+                              },
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Finish"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "finish",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "button"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": null,
+            "parent_id": "a_start"
+          }
+        },
+        "responses": {},
+        "context": {},
+        "actions": [
+          {
+            "id": "next",
+            "action_type": "NextNode",
+            "allow_while_loading": false,
+            "target": null,
+            "progress_node": true
+          },
+          {
+            "id": "back",
+            "action_type": "PreviousNode",
+            "allow_while_loading": false,
+            "target": null,
+            "progress_node": true
+          },
+          {
+            "id": "finish",
+            "action_type": "Submit",
+            "allow_while_loading": false,
+            "target": null,
+            "progress_node": true
+          }
+        ],
+        "starting_server_action": null,
+        "multi_instance_per_user": false
+      },
+      "mocks": {},
+      "source": "use workflow_model::CreateWorkflowDefinition;\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\nfn button(label: &str, action: &str) -> workflow_model::WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\n/// Two pages and a finish: Next and Back move between nodes, Submit completes.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 1: who are you?\").build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .input(\n                        \"name\",\n                        WorkflowInputBuilder::new()\n                            .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                            .required(true)\n                            .build(),\n                    )\n                    .build(),\n                button(\"Next\", \"next\"),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 2: pick a number, {name}\").build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .input(\n                        \"favorite\",\n                        WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .div(vec![button(\"Back\", \"back\"), button(\"Finish\", \"finish\")])\n                    .build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Two steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .build()\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+import MarkdownIt from 'markdown-it';
+
+const files = import.meta.glob('../../../docs/*.md', { query: '?raw', import: 'default', eager: true }) as Record<
+  string,
+  string
+>;
+
+export type Doc = { slug: string; title: string; markdown: string };
+
+function slugOf(file: string): string | null {
+  const name = file.split('/').pop() ?? '';
+  const match = /^\d+-([a-z0-9-]+)\.md$/.exec(name);
+  return match ? match[1] : null;
+}
+
+export const docs: Doc[] = Object.entries(files)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .flatMap(([file, markdown]) => {
+    const slug = slugOf(file);
+    if (!slug) return [];
+    const title = /^#\s+(.+)$/m.exec(markdown)?.[1].trim() ?? slug;
+    return [{ slug, title, markdown }];
+  });
+
+const bySlug = new Map(docs.map((d) => [d.slug, d]));
+const fileToSlug = new Map(
+  Object.keys(files).flatMap((file) => {
+    const slug = slugOf(file);
+    return slug ? [[file.split('/').pop()!, slug] as const] : [];
+  }),
+);
+
+export function anchor(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^a-z0-9 -]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+const md = new MarkdownIt({ html: false, linkify: true });
+
+const linkOpen = md.renderer.rules.link_open ?? ((tokens, i, options, _env, self) => self.renderToken(tokens, i, options));
+md.renderer.rules.link_open = (tokens, i, options, env, self) => {
+  const href = tokens[i].attrGet('href') ?? '';
+  const [file, hash] = href.split('#');
+  const slug = fileToSlug.get(file.replace(/^\.\//, ''));
+  if (slug) tokens[i].attrSet('href', `/docs/${slug}${hash ? `#${hash}` : ''}`);
+  else if (/^https?:/.test(href)) {
+    tokens[i].attrSet('target', '_blank');
+    tokens[i].attrSet('rel', 'noopener noreferrer');
+  }
+  return linkOpen(tokens, i, options, env, self);
+};
+
+const headingOpen = md.renderer.rules.heading_open ?? ((tokens, i, options, _env, self) => self.renderToken(tokens, i, options));
+md.renderer.rules.heading_open = (tokens, i, options, env, self) => {
+  const inline = tokens[i + 1];
+  if (inline?.type === 'inline') tokens[i].attrSet('id', anchor(inline.content));
+  return headingOpen(tokens, i, options, env, self);
+};
+
+export function findDoc(slug: string): Doc | undefined {
+  return bySlug.get(slug);
+}
+
+export function render(doc: Doc): string {
+  return md.render(doc.markdown);
+}
+
+export function headings(doc: Doc): { level: number; text: string; id: string }[] {
+  return md
+    .parse(doc.markdown, {})
+    .flatMap((t, i, all) =>
+      t.type === 'heading_open' && (t.tag === 'h2' || t.tag === 'h3')
+        ? [{ level: Number(t.tag[1]), text: all[i + 1].content, id: anchor(all[i + 1].content) }]
+        : [],
+    );
+}
