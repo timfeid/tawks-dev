@@ -51,8 +51,64 @@
       }
     },
     {
+      "label": "Form",
+      "hint": "Sends the inputs inside it to an action when its submit button is pressed",
+      "display": {
+        "class": "flex flex-col gap-2",
+        "type": {
+          "Form": {
+            "server_action_id": "my_action",
+            "content": [
+              {
+                "class": "",
+                "type": {
+                  "Input": {
+                    "id": "name",
+                    "input": {
+                      "readonly": null,
+                      "type": {
+                        "Text": {
+                          "placeholder": "Type here"
+                        }
+                      },
+                      "default_value": null,
+                      "required": false,
+                      "on_change_action": null
+                    }
+                  }
+                }
+              },
+              {
+                "class": "",
+                "type": {
+                  "Button": {
+                    "content": [
+                      {
+                        "class": "",
+                        "type": {
+                          "Text": {
+                            "text": "Send"
+                          }
+                        }
+                      }
+                    ],
+                    "input_map": null,
+                    "action_id": "my_action",
+                    "variant": "default",
+                    "size": "default",
+                    "type": "submit"
+                  }
+                }
+              }
+            ],
+            "submit_when": "OnSubmit"
+          }
+        }
+      }
+    },
+    {
       "label": "Text input",
-      "hint": "Saved under its id",
+      "hint": "Saved under its id. Put it inside a Form so actions receive it",
       "display": {
         "class": "",
         "type": {
@@ -75,7 +131,7 @@
     },
     {
       "label": "Number input",
-      "hint": "With a min and max",
+      "hint": "With a min and max. Put it inside a Form so actions receive it",
       "display": {
         "class": "",
         "type": {
@@ -99,7 +155,7 @@
     },
     {
       "label": "Switch",
-      "hint": "A boolean input",
+      "hint": "A boolean input. Put it inside a Form so actions receive it",
       "display": {
         "class": "",
         "type": {
@@ -666,43 +722,54 @@
                         }
                       },
                       {
-                        "class": "",
+                        "class": "flex flex-col gap-4",
                         "type": {
-                          "Input": {
-                            "id": "name",
-                            "input": {
-                              "readonly": null,
-                              "type": {
-                                "Text": {
-                                  "placeholder": "Name"
-                                }
-                              },
-                              "default_value": null,
-                              "required": true,
-                              "on_change_action": null
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "class": "",
-                        "type": {
-                          "Button": {
+                          "Form": {
+                            "server_action_id": "next",
                             "content": [
                               {
                                 "class": "",
                                 "type": {
-                                  "Text": {
-                                    "text": "Next"
+                                  "Input": {
+                                    "id": "name",
+                                    "input": {
+                                      "readonly": null,
+                                      "type": {
+                                        "Text": {
+                                          "placeholder": "Name"
+                                        }
+                                      },
+                                      "default_value": null,
+                                      "required": true,
+                                      "on_change_action": null
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Next"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "next",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "submit"
                                   }
                                 }
                               }
                             ],
-                            "input_map": null,
-                            "action_id": "next",
-                            "variant": "default",
-                            "size": "default",
-                            "type": "button"
+                            "submit_when": "OnSubmit"
                           }
                         }
                       }
@@ -734,75 +801,86 @@
                         }
                       },
                       {
-                        "class": "",
+                        "class": "flex flex-col gap-4",
                         "type": {
-                          "Input": {
-                            "id": "favorite",
-                            "input": {
-                              "readonly": null,
-                              "type": {
-                                "Number": {
-                                  "min": 1,
-                                  "max": 10
-                                }
-                              },
-                              "default_value": null,
-                              "required": false,
-                              "on_change_action": null
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "class": "flex gap-2",
-                        "type": {
-                          "Div": {
+                          "Form": {
+                            "server_action_id": "finish",
                             "content": [
                               {
                                 "class": "",
                                 "type": {
-                                  "Button": {
-                                    "content": [
-                                      {
-                                        "class": "",
-                                        "type": {
-                                          "Text": {
-                                            "text": "Back"
-                                          }
+                                  "Input": {
+                                    "id": "favorite",
+                                    "input": {
+                                      "readonly": null,
+                                      "type": {
+                                        "Number": {
+                                          "min": 1,
+                                          "max": 10
                                         }
-                                      }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "back",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "button"
+                                      },
+                                      "default_value": null,
+                                      "required": false,
+                                      "on_change_action": null
+                                    }
                                   }
                                 }
                               },
                               {
-                                "class": "",
+                                "class": "flex gap-2",
                                 "type": {
-                                  "Button": {
+                                  "Div": {
                                     "content": [
                                       {
                                         "class": "",
                                         "type": {
-                                          "Text": {
-                                            "text": "Finish"
+                                          "Button": {
+                                            "content": [
+                                              {
+                                                "class": "",
+                                                "type": {
+                                                  "Text": {
+                                                    "text": "Back"
+                                                  }
+                                                }
+                                              }
+                                            ],
+                                            "input_map": null,
+                                            "action_id": "back",
+                                            "variant": "default",
+                                            "size": "default",
+                                            "type": "button"
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Button": {
+                                            "content": [
+                                              {
+                                                "class": "",
+                                                "type": {
+                                                  "Text": {
+                                                    "text": "Finish"
+                                                  }
+                                                }
+                                              }
+                                            ],
+                                            "input_map": null,
+                                            "action_id": "finish",
+                                            "variant": "default",
+                                            "size": "default",
+                                            "type": "submit"
                                           }
                                         }
                                       }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "finish",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "button"
+                                    ]
                                   }
                                 }
                               }
-                            ]
+                            ],
+                            "submit_when": "OnSubmit"
                           }
                         }
                       }
@@ -845,7 +923,7 @@
         "multi_instance_per_user": false
       },
       "mocks": {},
-      "source": "use workflow_model::CreateWorkflowDefinition;\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\nfn button(label: &str, action: &str) -> workflow_model::WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\n/// Two pages and a finish: Next and Back move between nodes, Submit completes.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 1: who are you?\").build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .input(\n                        \"name\",\n                        WorkflowInputBuilder::new()\n                            .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                            .required(true)\n                            .build(),\n                    )\n                    .build(),\n                button(\"Next\", \"next\"),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 2: pick a number, {name}\").build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .input(\n                        \"favorite\",\n                        WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .div(vec![button(\"Back\", \"back\"), button(\"Finish\", \"finish\")])\n                    .build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Two steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .build()\n}\n"
+      "source": "use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\nfn button(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\nfn submit(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .submit(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\n/// Typed values only reach an action from inside a form.\nfn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"flex flex-col gap-4\").form(action, content, SubmitWhen::OnSubmit).build()\n}\n\n/// Two pages and a finish: Next and Back move between nodes, Submit completes.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 1: who are you?\").build(),\n                form(\n                    \"next\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"name\",\n                                WorkflowInputBuilder::new()\n                                    .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                                    .required(true)\n                                    .build(),\n                            )\n                            .build(),\n                        submit(\"Next\", \"next\"),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 2: pick a number, {name}\").build(),\n                form(\n                    \"finish\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"favorite\",\n                                WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                            )\n                            .build(),\n                        WorkflowDisplayBuilder::new(\"flex gap-2\")\n                            .div(vec![button(\"Back\", \"back\"), submit(\"Finish\", \"finish\")])\n                            .build(),\n                    ],\n                ),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Two steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .build()\n}\n"
     }
   ]
 }

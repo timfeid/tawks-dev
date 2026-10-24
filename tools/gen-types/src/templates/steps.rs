@@ -1,13 +1,24 @@
-use workflow_model::CreateWorkflowDefinition;
+use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};
 use workflow_model::builder::{
     InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,
     WorkflowNodeBuilder, WorkflowVisualBuilder,
 };
 
-fn button(label: &str, action: &str) -> workflow_model::WorkflowDisplay {
+fn button(label: &str, action: &str) -> WorkflowDisplay {
     WorkflowDisplayBuilder::new("")
         .button(vec![WorkflowDisplayBuilder::new("").text(label).build()], None, action, "default", "default")
         .build()
+}
+
+fn submit(label: &str, action: &str) -> WorkflowDisplay {
+    WorkflowDisplayBuilder::new("")
+        .submit(vec![WorkflowDisplayBuilder::new("").text(label).build()], None, action, "default", "default")
+        .build()
+}
+
+/// Typed values only reach an action from inside a form.
+fn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
+    WorkflowDisplayBuilder::new("flex flex-col gap-4").form(action, content, SubmitWhen::OnSubmit).build()
 }
 
 /// Two pages and a finish: Next and Back move between nodes, Submit completes.
@@ -17,16 +28,21 @@ pub fn definition() -> CreateWorkflowDefinition {
             "mx-auto flex max-w-md flex-col gap-4 p-8",
             vec![
                 WorkflowDisplayBuilder::new("text-xl font-semibold").text("Step 1: who are you?").build(),
-                WorkflowDisplayBuilder::new("")
-                    .input(
-                        "name",
-                        WorkflowInputBuilder::new()
-                            .r#type(InputTypeBuilder::text(Some("Name".into())))
-                            .required(true)
+                form(
+                    "next",
+                    vec![
+                        WorkflowDisplayBuilder::new("")
+                            .input(
+                                "name",
+                                WorkflowInputBuilder::new()
+                                    .r#type(InputTypeBuilder::text(Some("Name".into())))
+                                    .required(true)
+                                    .build(),
+                            )
                             .build(),
-                    )
-                    .build(),
-                button("Next", "next"),
+                        submit("Next", "next"),
+                    ],
+                ),
             ],
         )
         .build();
@@ -35,15 +51,20 @@ pub fn definition() -> CreateWorkflowDefinition {
             "mx-auto flex max-w-md flex-col gap-4 p-8",
             vec![
                 WorkflowDisplayBuilder::new("text-xl font-semibold").text("Step 2: pick a number, {name}").build(),
-                WorkflowDisplayBuilder::new("")
-                    .input(
-                        "favorite",
-                        WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),
-                    )
-                    .build(),
-                WorkflowDisplayBuilder::new("flex gap-2")
-                    .div(vec![button("Back", "back"), button("Finish", "finish")])
-                    .build(),
+                form(
+                    "finish",
+                    vec![
+                        WorkflowDisplayBuilder::new("")
+                            .input(
+                                "favorite",
+                                WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),
+                            )
+                            .build(),
+                        WorkflowDisplayBuilder::new("flex gap-2")
+                            .div(vec![button("Back", "back"), submit("Finish", "finish")])
+                            .build(),
+                    ],
+                ),
             ],
         )
         .build();

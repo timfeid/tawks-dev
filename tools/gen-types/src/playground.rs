@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use workflow_model::builder::{
     Cond, InputTypeBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder, table_header,
 };
-use workflow_model::{CardLayout, CreateWorkflowDefinition, WorkflowDisplay};
+use workflow_model::{CardLayout, CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};
 
 use crate::templates;
 
@@ -48,22 +48,38 @@ pub fn build() -> Playground {
             display: WorkflowDisplayBuilder::new("").button(vec![text("", "Press me")], None, "my_action", "default", "default").build(),
         },
         PaletteItem {
+            label: "Form",
+            hint: "Sends the inputs inside it to an action when its submit button is pressed",
+            display: WorkflowDisplayBuilder::new("flex flex-col gap-2")
+                .form(
+                    "my_action",
+                    vec![
+                        WorkflowDisplayBuilder::new("")
+                            .input("name", WorkflowInputBuilder::new().r#type(InputTypeBuilder::text(Some("Type here".into()))).build())
+                            .build(),
+                        WorkflowDisplayBuilder::new("").submit(vec![text("", "Send")], None, "my_action", "default", "default").build(),
+                    ],
+                    SubmitWhen::OnSubmit,
+                )
+                .build(),
+        },
+        PaletteItem {
             label: "Text input",
-            hint: "Saved under its id",
+            hint: "Saved under its id. Put it inside a Form so actions receive it",
             display: WorkflowDisplayBuilder::new("")
                 .input("name", WorkflowInputBuilder::new().r#type(InputTypeBuilder::text(Some("Type here".into()))).build())
                 .build(),
         },
         PaletteItem {
             label: "Number input",
-            hint: "With a min and max",
+            hint: "With a min and max. Put it inside a Form so actions receive it",
             display: WorkflowDisplayBuilder::new("")
                 .input("amount", WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(0), Some(100))).build())
                 .build(),
         },
         PaletteItem {
             label: "Switch",
-            hint: "A boolean input",
+            hint: "A boolean input. Put it inside a Form so actions receive it",
             display: WorkflowDisplayBuilder::new("")
                 .input("enabled", WorkflowInputBuilder::new().r#type(InputTypeBuilder::switch()).build())
                 .build(),
