@@ -44,6 +44,7 @@ pub fn definition(wave_action: &str) -> CreateWorkflowDefinition {
 
     WorkflowDefinitionBuilder::new("hello", "Hello")
         .response("name", json!("there"))
+        .response("reply", json!(""))
         .add_action(WorkflowActionBuilder::new("wave").run_server_action().target(wave_action).build())
         .add_node("home", WorkflowNodeBuilder::new("Hello").visual(page).build())
         .build()
