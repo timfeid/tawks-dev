@@ -140,4 +140,4 @@ The bot platform is open to outside developers as a preview. A few things are st
 - **Test niches and channels.** Only the tawks team creates niches, and that includes private ones. Ask in `dev-chat` for a private niche to test in; once you own it you can add channels, attach your workflows and invite testers from its settings.
 - **Lobby picker.** The in-lobby game menu lists first-party games and the game activities a niche has turned on. A game built from workflow displays starts from a channel page instead.
 - **Tawks score.** Awarding tawks score is limited to first-party games for now.
-- **First-party games.** The games that ship with tawks will be open-sourced, so you can read real bots end to end.
+- **First-party games.** Three lobby games that ship with tawks are open source in the [tawks-dev repository](https://github.com/timfeid/tawks-dev) under `games/`: Cards, Midnight and Tracklines. They run on the same game framework as your bots, so you can read real games end to end.

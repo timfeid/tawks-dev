@@ -1,0 +1,15 @@
+[package]
+name = "tawks-data"
+version = "0.1.0"
+edition = "2021"
+description = "Small Postgres helpers shared by tawks crates: a pool, cursor pagination and a repository trait."
+license = "MIT"
+
+[dependencies]
+sqlx = { workspace = true }
+serde = { workspace = true }
+specta = { workspace = true, features = ["derive"] }
+anyhow = { workspace = true }
+
+[lib]
+path = "lib.rs"

@@ -1,0 +1,29 @@
+[package]
+name = "cardgame"
+version = "0.1.0"
+edition = "2024"
+description = "Cards, the collectible card game that runs in tawks lobbies, with its simulator and balance tools."
+license = "MIT"
+
+[dependencies]
+game-framework = { path = "../../sdk/framework" }
+workflow = { package = "workflow-model", path = "../../sdk/workflow-model" }
+tawks-bot = { path = "../../sdk/bot" }
+
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros"] }
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+dotenvy = { workspace = true }
+rand = { workspace = true }
+rand_chacha = "0.9.0"
+strsim = "0.11.1"
+tokio = { workspace = true }
+tracing = { workspace = true }
+ulid = { workspace = true }
+dashmap = "6.1.0"
+base64 = { workspace = true }
+tawks-data = { path = "../../sdk/data" }
+libc = "0.2"
+rayon = "1.10"

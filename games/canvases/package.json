@@ -1,0 +1,26 @@
+{
+  "name": "@tawks/game-canvases",
+  "version": "0.1.0",
+  "description": "The 3D canvases for the open-source tawks lobby games: Cards and Tracklines.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@tawks/ui": "workspace:^",
+    "@tawks/workflow-types": "workspace:^",
+    "@tawks/workflow-ui": "workspace:^",
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "@lucide/svelte": "^0.561.0",
+    "@types/three": "^0.182.0",
+    "svelte": "^5.37.1",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@lucide/svelte": "*",
+    "svelte": "^5.0.0"
+  },
+  "license": "MIT"
+}

@@ -4,6 +4,7 @@ packages:
   - "site"
   - "examples/*/client"
   - "examples/hello-js"
+  - "games/canvases"
 
 onlyBuiltDependencies:
   - esbuild

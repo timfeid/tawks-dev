@@ -69,6 +69,34 @@ importers:
         specifier: ^7.0.6
         version: 7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.106.1)(yaml@2.9.1)
 
+  games/canvases:
+    dependencies:
+      '@tawks/ui':
+        specifier: workspace:^
+        version: link:../../web/ui
+      '@tawks/workflow-types':
+        specifier: workspace:^
+        version: link:../../web/workflow-types
+      '@tawks/workflow-ui':
+        specifier: workspace:^
+        version: link:../../web/workflow-ui
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@lucide/svelte':
+        specifier: ^0.561.0
+        version: 0.561.0(svelte@5.57.2(@typescript-eslint/types@8.72.0))
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+      svelte:
+        specifier: ^5.37.1
+        version: 5.57.2(@typescript-eslint/types@8.72.0)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   sdk/activity:
     devDependencies:
       typescript:

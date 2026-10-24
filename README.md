@@ -15,6 +15,11 @@ SDKs, examples and docs for building bots and games on [tawks](https://tawks.app
 | `examples/hot-potato` | a 2 to 6 player activity with a hidden fuse, a turn clock and lobby announcements |
 | `examples/hoard` | a 2 to 4 player card game: hidden hands, a shared market, cards that steal and shield, spectators and animated moves |
 | `examples/bumper-balls` | the Tawkathon bout tawks itself runs, simulation and renderer |
+| `games/cards` | Cards, the collectible card game tawks runs in lobbies: rules engine, card catalog, AI, draft, simulator and balance tools |
+| `games/midnight` | Midnight, a hidden-role party game for lobbies, built from workflow pages |
+| `games/tracklines` | Tracklines, a 3D railway game for lobbies |
+| `games/canvases` | `@tawks/game-canvases`, the 3D canvases that draw Cards and Tracklines |
+| `sdk/data` | `tawks-data`, small Postgres helpers for cursor pagination |
 | `tools/devhost` | a local stand-in for tawks: run your bot and play your game as several fake players |
 | `tools/gen-types` | generates `web/workflow-types` and the playground's templates from the Rust model |
 | `web` | the workflow renderer, UI kit and editor that tawks draws pages with |

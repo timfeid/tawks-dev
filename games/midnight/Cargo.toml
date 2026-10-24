@@ -1,0 +1,22 @@
+[package]
+name = "midnight"
+version = "0.1.0"
+edition = "2024"
+description = "Midnight, a hidden-role party game for tawks lobbies."
+license = "MIT"
+
+[dependencies]
+game-framework = { path = "../../sdk/framework" }
+workflow = { package = "workflow-model", path = "../../sdk/workflow-model" }
+tawks-bot = { path = "../../sdk/bot" }
+
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+rand = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+ulid = { workspace = true }
+specta = { workspace = true }
+rand_chacha = "0.9.0"
