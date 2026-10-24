@@ -482,6 +482,12 @@ bot.start(|event, _sdk| async move {
 3. The user types 40 and presses Enter. The form sends `{ "gn_guess": "40" }` to the `guess` action, and the bot replies with new `gn_tries`, `gn_message` and `gn_done`. The node stays `play`, and the list and message re-render in place.
 4. When the guess is right, `gn_done` becomes true. tawks moves to `done`, and the update carries the new node's visuals.
 
+## Trying pages in the playground
+
+![The playground running the Guess template: the page outline on the left, the page in the middle, and the server action's mock rules on the right](https://tawks-dev.vercel.app/img/docs/playground.webp)
+
+The [playground](https://tawks-dev.vercel.app/playground) runs a page in your browser with the same node rules, conditions and transforms as tawks. Build on the left, use the page in the middle, and set what each server action answers on the right. Above, a guess of 70 went to the `guess.check` mock, whose rules answered "Too high". The Rust tab gives you the code for what you built, and the plug button connects to devhost so your real bot answers instead.
+
 ## Rules of thumb
 
 - Keep one node per view and keep list rows flat. Deeply nested display trees make the page slow to update.
@@ -489,4 +495,4 @@ bot.start(|event, _sdk| async move {
 - Send computed booleans for every `Condition` instead of relying on `Gte` or on missing keys.
 - Rebuild the full view in one function and return it from every handler. Handlers stay small and the screens never drift out of sync.
 - Stick to common Tailwind utilities and the theme tokens. See [Styling](05-displays.md#styling).
-- Try a page before you deploy it. The [playground](https://tawks-dev.vercel.app/playground) runs pages in your browser with the same node rules, conditions and transforms as tawks, answers server actions from mocks, and turns what you build into Rust. Connect it to devhost to send server actions to your real bot.
+- Try a page in the playground before you deploy it.

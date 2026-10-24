@@ -227,6 +227,8 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 
 Open `http://localhost:8787`, pick your game, choose how many players, and press Start. Each frame is a different player, so you can play every seat yourself. Every Start opens a new lobby, so your bot starts a fresh game. The log under the frames shows what your bot said in the lobby, and any call or result devhost does not fake yet. A move your game refuses also shows there as an error, which is expected.
 
+![devhost running the tic-tac-toe example with two players side by side, mid-game](https://tawks-dev.vercel.app/img/docs/devhost.webp)
+
 The examples register their app at a `localhost` address by default. Set `CLIENT_URL` when you run one to point it somewhere else, such as another port or a deployed `https` build.
 
 ### On tawks

@@ -630,6 +630,10 @@ A few things to notice:
 
 The Duel is small on purpose. These are the questions that come up once a game has hidden hands, timers and more than two players.
 
+![Hoard running in devhost with three players. Each frame shows the same table, with only that player's own hand face up](https://tawks-dev.vercel.app/img/docs/hoard.webp)
+
+The Hoard example in devhost, one frame per player. The market and deck are shared, and each player's hand is face up only in their own frame, because `view_for` leaves the other hands out.
+
 ### One move action or several
 
 An activity can send every move through one action (`activity.send`) or name a separate action per move (`activity.call`). One action carrying a tagged enum is the simplest, and it's what the examples do:

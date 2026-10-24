@@ -19,7 +19,7 @@
       {/each}
     </nav>
   </aside>
-  <article class="prose prose-invert min-w-0 max-w-3xl flex-1 prose-headings:scroll-mt-20 prose-a:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:bg-card">
+  <article class="prose prose-invert min-w-0 max-w-3xl flex-1 prose-headings:scroll-mt-20 prose-a:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:bg-card prose-img:rounded-lg prose-img:border">
     <!-- The docs are this repository's own markdown, rendered with raw HTML disabled. -->
     {@html data.html}
     <div class="not-prose mt-12 flex justify-between gap-4 border-t pt-6 text-sm">

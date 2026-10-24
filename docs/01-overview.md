@@ -48,6 +48,10 @@ A niche groups its channels into categories in the sidebar. Every channel has a 
 
 What a channel actually shows comes from the **workflow** attached to it. A niche admin picks that workflow in the channel's settings, and any workflow your bot has registered appears in the list. When someone opens the channel, tawks starts your workflow for that person and passes it the channel and niche it is running in, plus who is viewing.
 
+![The Connections channel in the Tawks niche: the channel list on the left, and the daily puzzle a bot draws with a workflow on the right](https://tawks-dev.vercel.app/img/docs/niche-page.webp)
+
+The Tawks niche, opened as a guest. The sidebar lists its channels by category, and the Connections puzzle in the middle is a page a bot describes with a workflow.
+
 ### Roles and permissions
 
 Each niche has roles, ordered by position, with an `everyone` role that applies to all members. Roles carry permissions, and a channel can override them per role or per member. The permissions that matter most when you set up a bot are:
