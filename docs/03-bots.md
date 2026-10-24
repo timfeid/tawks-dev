@@ -676,3 +676,19 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 A handler receives a `ServerActionContext` and returns a result. `ctx.input(key)` reads a response, including the inputs the page just sent, and `ctx.number(key)` also accepts numbers that arrive as strings from templates. `ctx.user` is the person using the page, and `ctx.anonymous` is true for a guest. Return `result.responses({...})`, `result.context({...})`, `result.complete(message)`, `result.error(message)` or `result.none()`, or any `ServerActionResult` as plain JSON. A handler that throws answers with its error message.
 
 `ui` builds the displays most pages need: `text`, `div`, `image`, `badge`, `list`, `when`, `button`, `submit`, `form`, `textInput`, `numberInput`, `switchInput`, `page`, `node`, `workflow`, plus `ui.actions` and `ui.cond`. Each returns the plain JSON from the [Display reference](05-displays.md), so you can mix them with displays written by hand. In TypeScript every definition is checked against the types in `@tawks/workflow-types`.
+
+For the full range of displays, `@tawks/bot` also has the same builders as the Rust SDK: `WorkflowDefinitionBuilder`, `WorkflowNodeBuilder`, `WorkflowVisualBuilder`, `WorkflowDisplayBuilder`, `WorkflowInputBuilder`, `InputTypeBuilder`, `WorkflowActionBuilder` and `Cond`, with the Rust method names in camelCase. A chain gives the same JSON as its Rust twin. The [playground](https://tawks-dev.vercel.app/playground)'s TypeScript tab writes this code for any page you build there.
+
+```ts
+import { WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder } from '@tawks/bot';
+
+const hello = new WorkflowDefinitionBuilder('hello', 'Hello')
+  .addNode('home', new WorkflowNodeBuilder('Hello')
+    .visual(new WorkflowVisualBuilder('page')
+      .block('mx-auto flex max-w-md flex-col gap-4 p-8', [
+        new WorkflowDisplayBuilder('text-2xl font-bold').text('Hello, {name}!').build(),
+      ])
+      .build())
+    .build())
+  .build();
+```

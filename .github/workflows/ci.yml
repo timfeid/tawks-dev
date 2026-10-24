@@ -48,5 +48,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r --if-present build
-      - run: node --test --experimental-strip-types site/src/lib/playground/runtime.test.ts
+      - run: node --test --experimental-strip-types site/src/lib/playground/runtime.test.ts site/src/lib/playground/codegen.test.ts
       - run: pnpm --filter @tawks/bot run test

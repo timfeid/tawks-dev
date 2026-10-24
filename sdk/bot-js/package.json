@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./builder": {
+      "types": "./dist/builder.d.ts",
+      "default": "./dist/builder.js"
     }
   },
   "files": [
@@ -16,7 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepare": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && node --test test/sdk.test.js"
+    "test": "tsc -p tsconfig.json && node --test test/sdk.test.js src/builder.test.ts"
   },
   "engines": {
     "node": ">=22"

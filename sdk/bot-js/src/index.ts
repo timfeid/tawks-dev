@@ -20,3 +20,4 @@ export type {
   WorkflowResourceWithContext,
 } from '@tawks/workflow-types';
 export * as ui from './ui.js';
+export * from './builder.js';

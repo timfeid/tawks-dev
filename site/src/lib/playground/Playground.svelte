@@ -7,7 +7,7 @@
   import { act, begin, fromMocks, start, type Json, type LogEntry, type Mocks, type State } from './runtime';
   import { DEFAULT_DEVHOST, devhostActions, listWorkflows, type DevhostWorkflow } from './devhost';
   import { getAt, insertTarget, setAt, tree, type Path } from './tree';
-  import { rustFor } from './codegen';
+  import { rustFor, typescriptFor } from './codegen';
   import { decode, encode } from './share';
   import Outline from './Outline.svelte';
   import Preview from './Preview.svelte';
@@ -35,7 +35,7 @@
   let live = $state<{ url: string; workflowId: string } | null>(null);
   const server = $derived(live ? devhostActions(live.url, live.workflowId) : fromMocks(mocks));
 
-  let leftTab = $state<'build' | 'json' | 'rust'>('build');
+  let leftTab = $state<'build' | 'json' | 'rust' | 'ts'>('build');
   let rightTab = $state<'mocks' | 'state' | 'log'>('mocks');
   let selected = $state<Path | null>(null);
 
@@ -52,6 +52,7 @@
     return t && JSON.stringify(t.definition) === JSON.stringify(definition) ? t.source : null;
   });
   const rust = $derived(rustFor(definition, unchanged));
+  const typescript = $derived(typescriptFor(definition));
 
   const resource = $derived.by((): WorkflowResource => {
     const node = runtime.nodeId ? (definition.nodes[runtime.nodeId] as WorkflowNode | undefined) : undefined;
@@ -368,7 +369,7 @@
       </form>
     {/if}
     <div class="flex border-b text-sm">
-      {#each [['build', 'Build'], ['json', 'JSON'], ['rust', 'Rust']] as [key, label] (key)}
+      {#each [['build', 'Build'], ['json', 'JSON'], ['rust', 'Rust'], ['ts', 'TypeScript']] as [key, label] (key)}
         <button
           class="flex-1 px-3 py-2 {leftTab === key ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground'}"
           onclick={() => {
@@ -417,6 +418,16 @@
       <div class="flex min-h-0 flex-1 flex-col p-2">
         <textarea class="flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs" spellcheck="false" bind:value={jsonText} oninput={applyJson}></textarea>
         {#if jsonError}<p class="mt-1 text-xs text-destructive">{jsonError}</p>{/if}
+      </div>
+    {:else if leftTab === 'ts'}
+      <div class="flex min-h-0 flex-1 flex-col p-2">
+        <p class="mb-2 text-xs text-muted-foreground">
+          This page with the builders in <code>@tawks/bot</code>. Register it with <code>await bot.workflow(definition)</code>.
+        </p>
+        <pre class="min-h-0 flex-1 overflow-auto rounded-md border bg-card p-2 font-mono text-xs">{typescript}</pre>
+        <button class="mt-2 flex items-center justify-center gap-1 rounded-md border py-1.5 text-sm hover:border-primary/60" onclick={() => copy(typescript, 'TypeScript')}>
+          <Copy class="size-4" /> Copy
+        </button>
       </div>
     {:else}
       <div class="flex min-h-0 flex-1 flex-col p-2">
