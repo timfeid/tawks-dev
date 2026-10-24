@@ -486,8 +486,8 @@
           }
         },
         "responses": {
-          "name": "there",
-          "reply": ""
+          "reply": "",
+          "name": "there"
         },
         "context": {},
         "actions": [

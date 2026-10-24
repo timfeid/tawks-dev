@@ -364,8 +364,12 @@ async fn dev_run(State(host): State<Shared>, Json(args): Json<Run>) -> Json<Valu
     }
 }
 
-/// Endpoints the hosted playground may call from its own origin.
+/// Endpoints the hosted playground and API explorer may call from their own origin.
 const PLAYGROUND_PATHS: [&str; 2] = ["/dev/workflows", "/dev/run"];
+
+fn for_docs_site(path: &str) -> bool {
+    PLAYGROUND_PATHS.contains(&path) || path.starts_with("/rspc/")
+}
 const PLAYGROUND_ORIGINS: [&str; 3] = ["https://tawks-dev.vercel.app", "http://localhost:5300", "http://127.0.0.1:5300"];
 
 fn playground_origins() -> Vec<String> {
@@ -379,7 +383,7 @@ fn playground_origins() -> Vec<String> {
 /// Only this machine may talk to devhost. Checking Host stops DNS rebinding,
 /// and checking Origin stops other sites in the developer's browser from
 /// driving the page's endpoints or hijacking a bot's events socket. The
-/// playground's origins may reach its two endpoints and nothing else.
+/// playground's origins may reach its endpoints and the API, and nothing else.
 async fn local_only(port: u16, playground: Arc<Vec<String>>, request: Request, next: Next) -> Result<Response, StatusCode> {
     let local = [format!("localhost:{port}"), format!("127.0.0.1:{port}")];
     let host_ok = request
@@ -396,7 +400,7 @@ async fn local_only(port: u16, playground: Arc<Vec<String>>, request: Request, n
     if local.iter().any(|l| origin == format!("http://{l}")) {
         return Ok(next.run(request).await);
     }
-    let for_playground = PLAYGROUND_PATHS.contains(&request.uri().path()) && playground.iter().any(|o| *o == origin);
+    let for_playground = for_docs_site(request.uri().path()) && playground.iter().any(|o| *o == origin);
     if !for_playground {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -409,7 +413,7 @@ async fn local_only(port: u16, playground: Arc<Vec<String>>, request: Request, n
     let origin = HeaderValue::from_str(&origin).map_err(|_| StatusCode::FORBIDDEN)?;
     headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin);
     headers.insert(ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static("GET, POST"));
-    headers.insert(ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("content-type"));
+    headers.insert(ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("authorization, content-type"));
     headers.insert("access-control-allow-private-network", HeaderValue::from_static("true"));
     headers.insert(VARY, HeaderValue::from_static("origin"));
     Ok(response)

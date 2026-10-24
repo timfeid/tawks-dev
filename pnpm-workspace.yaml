@@ -3,6 +3,7 @@ packages:
   - "web/*"
   - "site"
   - "examples/*/client"
+  - "examples/hello-js"
 
 onlyBuiltDependencies:
   - esbuild

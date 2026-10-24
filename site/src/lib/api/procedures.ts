@@ -1,0 +1,232 @@
+export type Procedure = {
+  name: string;
+  kind: 'query' | 'mutation';
+  group: string;
+  summary: string;
+  input: unknown;
+  /** What comes back, in a few words. */
+  returns: string;
+  /** A docs page that explains it, as `[title, slug]`. */
+  doc?: [string, string];
+};
+
+const hello = {
+  id: 'hello',
+  name: 'Hello',
+  description: null,
+  nodes: {
+    home: {
+      title: 'Hello',
+      description: null,
+      visuals: [
+        {
+          id: 'page',
+          display: {
+            Block: {
+              class: 'mx-auto flex max-w-md flex-col gap-4 p-8',
+              content: [{ class: 'text-2xl font-bold', type: { Text: { text: 'Hello from the API explorer' } } }],
+            },
+          },
+        },
+      ],
+      layout: null,
+      condition: null,
+      parent_id: null,
+    },
+  },
+  responses: {},
+  context: {},
+  actions: [],
+  starting_server_action: null,
+  multi_instance_per_user: false,
+};
+
+export const procedures: Procedure[] = [
+  {
+    name: 'auth_whoami',
+    kind: 'query',
+    group: 'Account',
+    summary: 'The account the token belongs to, and the niches it is in. A quick way to check a token works.',
+    input: null,
+    returns: '{ user, niches }',
+  },
+  {
+    name: 'auth_access_token',
+    kind: 'query',
+    group: 'Account',
+    summary: 'Swaps a bot token for a short-lived session token, which the events socket needs as its `token` query parameter.',
+    input: null,
+    returns: '{ access_token, refresh_token }',
+    doc: ['Writing a bot', 'bots'],
+  },
+  {
+    name: 'chat_create_message',
+    kind: 'mutation',
+    group: 'Chat',
+    summary: 'Posts a message. For a chat channel, the chat id is the channel id. The bot must be a member of the niche or friend group.',
+    input: { chat_id: 'dev-chat', contents: { text: 'Hello from the API explorer', attachments: null } },
+    returns: 'the new message',
+    doc: ['Writing a bot', 'bots'],
+  },
+  {
+    name: 'chat_messages',
+    kind: 'query',
+    group: 'Chat',
+    summary: 'A page of messages from a chat, newest first. Pass the cursor from `page_info` as `before` for older ones.',
+    input: { chat_id: 'dev-chat', first: 20, before: null, after: null, last: null },
+    returns: '{ edges, page_info }',
+  },
+  {
+    name: 'workflow_register_workflow',
+    kind: 'mutation',
+    group: 'Workflows',
+    summary: 'Registers a workflow definition and returns its full id, `wf-<id>-<your bot>`, which channel settings list. Registering again replaces it.',
+    input: hello,
+    returns: 'the full workflow id',
+    doc: ['Workflows', 'workflows'],
+  },
+  {
+    name: 'workflow_definition_availability',
+    kind: 'query',
+    group: 'Workflows',
+    summary: 'Whether tawks still has these workflows. Definitions live in memory, so a tawks restart drops them until your bot registers again.',
+    input: { workflow_ids: ['wf-hello-yourbot'] },
+    returns: '[{ workflow_id, available_now, unavailable_reason }]',
+  },
+  {
+    name: 'workflow_start_on_behalf',
+    kind: 'mutation',
+    group: 'Workflows',
+    summary: 'Starts one of your workflows for a person, for example to open a page in a modal for them.',
+    input: { workflow_definition_id: 'wf-hello-yourbot', input: {}, context: {}, user_id: 'USR-...', inject: { Modal: { title: 'Hello' } } },
+    returns: 'the new instance',
+    doc: ['Writing a bot', 'bots'],
+  },
+  {
+    name: 'workflow_process_action',
+    kind: 'mutation',
+    group: 'Workflows',
+    summary: 'Runs a workflow action on an instance, as if its user pressed the button.',
+    input: { instance_id: '...', action_id: 'wave', inputs: {} },
+    returns: 'nothing',
+  },
+  {
+    name: 'workflow_restart',
+    kind: 'mutation',
+    group: 'Workflows',
+    summary: 'Starts an instance over from its first node with fresh responses.',
+    input: { instance_id: '...', input: {}, context: {} },
+    returns: 'the restarted instance',
+  },
+  {
+    name: 'workflow_broadcast_updates',
+    kind: 'mutation',
+    group: 'Workflows',
+    summary: 'Merges responses into every open instance of one of your workflows, or only those matching the filter. Use it to push live scores and timers to pages people have open.',
+    input: { workflow_definition_id: 'wf-hello-yourbot', filter: { user_id: null, response_equals: null, include_completed: false }, updates: { gn_message: 'Updated for everyone' } },
+    returns: '{ count, instances }',
+    doc: ['Writing a bot', 'bots'],
+  },
+  {
+    name: 'server_action_register',
+    kind: 'mutation',
+    group: 'Server actions',
+    summary: 'Registers a server action and returns its full id, `sa-<id>-<your bot>`, for workflow actions to target. Registrations are leases: renew them or they lapse.',
+    input: { action_id: 'hello.wave', registrar_id: 'my-bot-process-1' },
+    returns: 'the full server action id',
+    doc: ['Writing a bot', 'bots'],
+  },
+  {
+    name: 'server_action_renew_leases',
+    kind: 'mutation',
+    group: 'Server actions',
+    summary: 'Renews every lease held by a registrar. Call it every 15 seconds or so. Fewer renewed than you registered means tawks restarted and you should register again.',
+    input: { registrar_id: 'my-bot-process-1' },
+    returns: 'how many leases were renewed',
+  },
+  {
+    name: 'workflow_respond_server_action',
+    kind: 'mutation',
+    group: 'Server actions',
+    summary: 'Answers a server action request from the events socket, using its token. The result is externally tagged JSON, so the variant name is the key.',
+    input: { token: 'from-the-request', result: { UpdateResponses: { reply: 'The bot waves back.' } } },
+    returns: 'nothing',
+    doc: ['Workflows', 'workflows'],
+  },
+  {
+    name: 'channel_find_by_slug',
+    kind: 'query',
+    group: 'Channels',
+    summary: 'A channel by its niche and channel slugs, as they appear in its URL.',
+    input: { niche_slug: 'dev', channel_slug: 'chat' },
+    returns: 'the channel',
+  },
+  {
+    name: 'channel_post_publish',
+    kind: 'mutation',
+    group: 'Channels',
+    summary: 'Publishes HTML as a post channel\'s page. Publishing the same content again changes nothing. The bot needs to be a niche admin or hold Manage Niche Profile.',
+    input: { channel_id: 'your-post-channel', content: '<h1>Hello</h1><p>Published from the API explorer.</p>' },
+    returns: 'whether anything changed',
+  },
+  {
+    name: 'lobby_speak',
+    kind: 'query',
+    group: 'Lobbies and games',
+    summary: 'Says something out loud in a lobby\'s voice room, as the bot.',
+    input: { lobby_id: '...', text: 'Round two starts in ten seconds' },
+    returns: 'nothing',
+    doc: ['Building games', 'games'],
+  },
+  {
+    name: 'activity_register',
+    kind: 'mutation',
+    group: 'Lobbies and games',
+    summary: 'Registers a game activity, a web game that runs in lobbies. Niche admins turn it on under Settings, then Games.',
+    input: { workflow_id: 'wf-mygame-yourbot', name: 'My game', description: 'Three in a row', icon: 'game', min_players: 2, max_players: 2, client_url: 'https://example.com/mygame/' },
+    returns: 'the activity',
+    doc: ['Game activities', 'tables'],
+  },
+  {
+    name: 'game_result_record',
+    kind: 'mutation',
+    group: 'Lobbies and games',
+    summary: 'Records a finished match and awards tawks score to the players. In a lobby, it also posts a one-line summary to the lobby chat.',
+    input: { lobby_id: '...', game_id: 'mygame', home_team: 'Ana', away_team: 'Ben', home_score: 3, away_score: 1, home_humans: 1, away_humans: 1, players: [{ user_id: 'USR-...', side: 'home' }, { user_id: 'USR-...', side: 'away' }] },
+    returns: 'the result id',
+    doc: ['Building games', 'games'],
+  },
+  {
+    name: 'game_result_leaderboard',
+    kind: 'query',
+    group: 'Lobbies and games',
+    summary: 'Players with games, wins and losses for one game.',
+    input: { game_key: 'mygame', limit: 10 },
+    returns: '[{ user_id, username, games, wins, ... }]',
+  },
+  {
+    name: 'bot_notifications_register_kinds',
+    kind: 'mutation',
+    group: 'Notifications',
+    summary: 'Declares the notifications a channel offers. People opt in to each kind from the channel\'s bell menu.',
+    input: { channel_id: 'your-channel', kinds: [{ key: 'yourbot.daily', label: 'Daily hello', description: 'A greeting every morning', kind: 'reminder', default_state: 'off', sort_order: 0 }] },
+    returns: 'how many kinds were registered',
+    doc: ['Writing a bot', 'bots'],
+  },
+  {
+    name: 'bot_notifications_subscribers',
+    kind: 'query',
+    group: 'Notifications',
+    summary: 'Who opted in to a notification kind. Only ever send to this list.',
+    input: { channel_id: 'your-channel', event_key: 'yourbot.daily' },
+    returns: 'user ids',
+  },
+  {
+    name: 'bot_notifications_send',
+    kind: 'mutation',
+    group: 'Notifications',
+    summary: 'Sends a push and in-app notification. Sending the same dedupe key to the same person twice delivers once.',
+    input: { channel_id: 'your-channel', event_key: 'yourbot.daily', dedupe_key: 'yourbot.daily:2026-10-24', user_ids: ['USR-...'], title: 'Good morning', body: 'Come say hello', url: null },
+    returns: 'how many people it reached',
+  },
+];

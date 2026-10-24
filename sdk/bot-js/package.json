@@ -1,0 +1,31 @@
+{
+  "name": "@tawks/bot",
+  "version": "0.1.0",
+  "description": "Write tawks bots in JavaScript or TypeScript: pages, server actions and chat.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node --test test/sdk.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tawks/workflow-types": "workspace:^"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "license": "MIT"
+}

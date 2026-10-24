@@ -1,0 +1,11 @@
+{
+  "name": "@tawks/example-hello-js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@tawks/bot": "workspace:^"
+  }
+}

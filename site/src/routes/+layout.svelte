@@ -8,6 +8,7 @@
   const links = [
     { href: '/docs/overview', label: 'Docs', match: '/docs' },
     { href: '/playground', label: 'Playground', match: '/playground' },
+    { href: '/api', label: 'API', match: '/api' },
   ];
 </script>
 

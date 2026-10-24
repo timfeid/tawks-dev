@@ -10,6 +10,7 @@ mod templates;
 use specta::TypeCollection;
 use specta_typescript::Typescript;
 use tawks_bot::types::UserResource;
+use workflow_model::server_action::ServerActionResult;
 use workflow_model::service::{WorkflowResource, WorkflowResourceWithContext};
 use workflow_model::{
     ActionType, CreateWorkflowDefinition, DisplayType, InputType, SelectOption, WorkflowAction,
@@ -31,6 +32,7 @@ fn main() {
         .register::<SelectOption>()
         .register::<WorkflowResource>()
         .register::<WorkflowResourceWithContext>()
+        .register::<ServerActionResult>()
         .register::<UserResource>();
 
     let out = concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/workflow-types/index.d.ts");

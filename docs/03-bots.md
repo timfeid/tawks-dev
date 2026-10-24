@@ -8,7 +8,7 @@ A tawks bot is a program you run yourself. It logs in with a bot token, keeps a 
 
 A channel shows your page once the channel's workflow is set to one of your registered workflows.
 
-This page covers the Rust SDK (crate `tawks-bot`, imported as `tawks_bot`) first, because it handles server actions for you. The JavaScript SDK has a shorter section at the end. If you have not set up a project and a token yet, start with [Your first bot](02-first-bot.md).
+This page covers the Rust SDK (crate `tawks-bot`, imported as `tawks_bot`) first. The JavaScript SDK, `@tawks/bot`, does the same work and has its own section at the end. If you have not set up a project and a token yet, start with [Your first bot](02-first-bot.md).
 
 ## What you need
 
@@ -417,12 +417,10 @@ The SDK sends a heartbeat every 25 seconds, which is what shows your bot as onli
 
 | `MessageEvent` variant | When |
 | --- | --- |
-| `ChatMessage { message, chat_id }` | A message was posted. |
-| `ChatTyping`, `ChatReaction`, `ChatPin`, `ChatThreadReply`, `ChatWorkflow` | Other chat activity. |
-| `TileUpdate` | Responses changed on an instance you can see. |
-| `WorkflowReturnedToParent` | A child workflow finished and returned to its parent. |
+| `ChatMessage { message, chat_id }` | A message was posted in a chat your bot can see. `message` has `id`, `user`, `content`, `chat_id` and `parent_message_id`. |
 | `WorkflowRequestServerAction { id, workflow, action_id }` | Only for actions you have no handler for. |
-| `Error`, `Ping`, `Pong` | Connection housekeeping. |
+| `Error { message }` | The events server reported a problem. |
+| `Other` | Everything else, such as typing indicators and reactions. |
 
 Server action requests for actions you registered never reach the callback: the SDK runs your handler and sends the reply. Full `WorkflowCreated` and `WorkflowUpdated` events are skipped as well.
 
@@ -560,57 +558,71 @@ Users have a tawks score that shows on their profile. Score is awarded by first-
 
 ## The JavaScript SDK
 
-> The JavaScript SDK is not in the tawks-dev repository yet. This section describes it for when it is.
+`@tawks/bot` is the JavaScript and TypeScript SDK, in the [tawks-dev repository](https://github.com/timfeid/tawks-dev) under `sdk/bot-js`. It does what the Rust SDK does: registers your workflows and server actions, runs your handlers when people press buttons, keeps the events socket open with heartbeats, renews server action leases, and registers everything again after a dropped connection or a tawks restart. It has no dependencies and runs on Node 22 or later, Bun and Deno.
 
-The JavaScript SDK is the package `@tawks/apis`. It has three entry points: `@tawks/apis/events` (the client), `@tawks/apis/rspc` and `@tawks/apis/auth-client`. It suits chat bots and scripts. For a bot that serves pages, use the Rust SDK, which handles server actions and lease renewal for you.
+It is not on npm yet, so depend on it by git. The `examples/hello-js` folder in the repository is a working bot to copy.
 
-### Creating a client
+### A complete bot
 
-```ts
-import { TawksClient } from '@tawks/apis/events';
+```js
+import { TawksBot, result, ui } from '@tawks/bot';
 
-const client = new TawksClient({
-  rspcUrl: 'https://rspc.tawks.app/rspc',
-  eventsWebsocketUrl: 'wss://events.tawks.app/',
+const bot = new TawksBot({
+  rspcUrl: process.env.RSPC_URL ?? 'https://rspc.tawks.app/rspc',
+  eventsUrl: process.env.EVENTS_WS_URL ?? 'wss://events.tawks.app/',
   token: process.env.BOT_TOKEN,
-  tokenType: 'bot',
 });
 
-client.on('error', (e) => console.error(e));
-
-client.chat.onMessage(async ({ message, chat_id }) => {
-  if (message.user.is_bot || message.content.trim() !== '!ping') return;
-  await client.chat.send(chat_id, { contents: { text: 'pong', attachments: null } });
+const wave = await bot.serverAction('hello.wave', (ctx) => {
+  const name = ctx.input('name')?.trim() || ctx.user.display_name;
+  const waves = (ctx.number('waves') ?? 0) + 1;
+  return result.responses({ name, waves, reply: `The bot has waved back ${waves} times.` });
 });
+
+const hello = ui.workflow(
+  'hello',
+  'Hello',
+  {
+    home: ui.node('Hello', [
+      ui.page([
+        ui.text('Hello, {name}!', 'text-2xl font-bold'),
+        ui.form('wave', [ui.textInput('name', 'Your name'), ui.submit('Wave', 'wave')], { cls: 'flex gap-2' }),
+        ui.text('{reply}', 'text-muted-foreground'),
+      ]),
+    ]),
+  },
+  { responses: { name: 'there', reply: '', waves: 0 }, actions: [ui.actions.run('wave', wave)] },
+);
+
+console.log('registered', await bot.workflow(hello));
+
+bot.onChat(async (message) => {
+  if (message.content.trim() === '!ping') await bot.say(message.chat_id, 'pong');
+});
+
+await bot.run();
 ```
 
-The constructor connects right away. It sends a heartbeat every 25 seconds, and if the connection drops it reconnects with exponential backoff capped at 30 seconds, emitting `reconnect_attempt` each time. It needs a global `WebSocket`, which Node 22 and later provide.
+Run it against devhost to try it without tawks, then open the page in the playground with the plug button:
 
-Always pass `tokenType: 'bot'`. It tells the client to send your token as a bot token and to fetch a session token before opening the socket.
+```sh
+RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT_TOKEN=hellojs node index.js
+```
 
-`TawksClient` is a Node `EventEmitter`. Add an `error` listener, because an `error` event with no listener throws.
+### The pieces
 
-### Namespaces
-
-| Property | Covers |
+| Call | What it does |
 | --- | --- |
-| `chat` | `send`, `messages`, edits, reactions, pins, read markers, plus `onMessage`, `onTyping`, `onReaction`, `onPin`, `onThreadReply` |
-| `workflow` | `register`, `start`, `startOrResume`, `processAction`, `listDefinitions`, plus `onCreated`, `onUpdated`, `onReturnedToParent`, `onRequestServerAction` |
-| `serverAction` | `register(actionId, registrarId?)`, `process`, `list` |
-| `channel` | `update`, `findBySlug`, `startWorkflow`, `startPageWorkflow`, `listPages`, `resolvePage`, `reorder` |
-| `auth` | `whoami`, `accessToken`, `refreshToken` |
-| `lobby`, `niche`, `category`, `role`, `permission`, `follow`, `friendGroup`, `invite`, `milestone`, `flair`, `nicheFile`, `tile`, `command` | the matching procedures |
+| `new TawksBot({ rspcUrl, eventsUrl, token })` | `tokenType` defaults to `Bot`. Pass `logger: null` to silence the SDK's own log lines. |
+| `bot.serverAction(id, handler)` | Registers a server action and returns its full id, `sa-<id>-<your bot's user id>`, for workflow actions to target. |
+| `bot.workflow(definition)` | Registers a workflow and returns its full id, which appears in channel settings. |
+| `bot.activity({ workflow_id, name, client_url, ... })` | Registers a game activity. See [Game activities](07-tables.md). |
+| `bot.run()` | Connects and stays connected until `bot.stop()`. Register before calling it. |
+| `bot.onChat(listener)` | Chat messages from people. Messages from bots, yours included, are skipped. |
+| `bot.say(chatId, text)` | Posts a chat message. For a chat channel, the chat id is the channel id. |
+| `bot.on('connect' \| 'disconnect' \| 'error' \| 'message', listener)` | Connection events, and any event from tawks that is not a server action request for one of your handlers. |
+| `bot.api.query(name, input)`, `bot.api.mutate(name, input)` | Any API procedure by name, as in the [API explorer](https://tawks-dev.vercel.app/api). |
 
-`client.webClient` is the typed rspc client underneath, for any procedure without a wrapper. Every `on*` helper returns a function that removes the listener. You can also subscribe to any event type directly, for example `client.on('chat_message', ...)`.
+A handler receives a `ServerActionContext` and returns a result. `ctx.input(key)` reads a response, including the inputs the page just sent, and `ctx.number(key)` also accepts numbers that arrive as strings from templates. `ctx.user` is the person using the page, and `ctx.anonymous` is true for a guest. Return `result.responses({...})`, `result.context({...})`, `result.complete(message)`, `result.error(message)` or `result.none()`, or any `ServerActionResult` as plain JSON. A handler that throws answers with its error message.
 
-### Server actions from JavaScript
-
-If you do want to serve a server action from JavaScript, you handle the steps the Rust SDK does for you:
-
-1. Pick a registrar id for this process and call `client.serverAction.register('hello.wave', registrarId)`. Keep the returned canonical id.
-2. Listen with `client.workflow.onRequestServerAction(handler, { actionId })`.
-3. Reply with `client.webClient.workflow_respond_server_action.mutate({ token: event.id, result: { UpdateResponses: { ... } } })`. `ServerActionResult` is externally tagged JSON, so the variant name is the key.
-4. Call `client.webClient.server_action_renew_leases.mutate({ registrar_id })` every 15 seconds or so, well inside the 45 second lease.
-5. If a renewal reports fewer leases than you registered, register your actions and workflows again.
-
-Notifications have no JavaScript wrapper. Call the `bot_notifications_register_kinds`, `bot_notifications_subscribers` and `bot_notifications_send` procedures through `client.webClient`, with the same fields as the Rust `Notifier` uses.
+`ui` builds the displays most pages need: `text`, `div`, `image`, `badge`, `list`, `when`, `button`, `submit`, `form`, `textInput`, `numberInput`, `switchInput`, `page`, `node`, `workflow`, plus `ui.actions` and `ui.cond`. Each returns the plain JSON from the [Display reference](05-displays.md), so you can mix them with displays written by hand. In TypeScript every definition is checked against the types in `@tawks/workflow-types`.

@@ -1,14 +1,16 @@
 # tawks-dev
 
-SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs and try the playground at [tawks-dev.vercel.app](https://tawks-dev.vercel.app).
+SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs, try the playground and call the API from your browser at [tawks-dev.vercel.app](https://tawks-dev.vercel.app).
 
 | Path | What it is |
 | --- | --- |
 | `sdk/bot` | `tawks-bot`, the Rust bot SDK: connect, register workflows and server actions, talk in lobbies |
 | `sdk/workflow-model` | the workflow data model and builders bots use to describe their pages |
 | `sdk/framework` | `game-framework`, the turn-based game engine the first-party lobby games are built on |
+| `sdk/bot-js` | `@tawks/bot`, the JavaScript and TypeScript SDK for bots |
 | `sdk/activity` | `@tawks/activity-sdk`, for a web game running in a tawks activity frame |
 | `sdk/bout` | `tawks-bout` and `@tawks/bout-sdk`, the contract for Tawkathon bouts (simulation and renderer) |
+| `examples/hello-js` | a page with a server action and a chat command, in plain JavaScript |
 | `examples/tictactoe` | a two-player activity: rules in a bot, board in a web app |
 | `examples/hot-potato` | a 2 to 6 player activity with a hidden fuse, a turn clock and lobby announcements |
 | `examples/hoard` | a 2 to 4 player card game: hidden hands, a shared market, cards that steal and shield, spectators and animated moves |

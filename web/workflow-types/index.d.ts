@@ -86,7 +86,13 @@ export type NodeCondition = { SomeInList: { list: string; as: string; condition:
 
 export type NotificationVariant = "Success" | "Info" | "Warning" | "Error"
 
+export type ScheduledAction = { RunServerAction: { action_id: string; payload: JsonValue } } | { UpdateResponses: { updates: Partial<{ [key in string]: JsonValue }>; reconcile_node: boolean } } | { TransformResponses: { ops: TransformOp[]; reconcile_node: boolean } }
+
+export type ScheduledJob = { idempotency_key: string; after_ms: number; guard: NodeCondition | null; action: ScheduledAction }
+
 export type SelectOption = { value: string; label: string }
+
+export type ServerActionResult = { ReplaceWithNew: { workflow_definition_id: string; context: Partial<{ [key in string]: JsonValue }>; inputs: Partial<{ [key in string]: JsonValue }> } } | "None" | { Reset: { context: Partial<{ [key in string]: JsonValue }>; inputs: Partial<{ [key in string]: JsonValue }> } } | { Error: string } | { ExternalServerActionStarted: { action_id: string; token: string } } | { NextPage: { page_id: string } } | { UpdateResponses: Partial<{ [key in string]: JsonValue }> } | { UpdateContext: Partial<{ [key in string]: JsonValue }> } | { ScheduleJobs: { context: Partial<{ [key in string]: JsonValue }>; inputs: Partial<{ [key in string]: JsonValue }>; jobs: ScheduledJob[]; reconcile_node: boolean } } | { UpdateContextAndResponses: { context: Partial<{ [key in string]: JsonValue }>; responses: Partial<{ [key in string]: JsonValue }> } } | { CompleteWorkflow: { responses: Partial<{ [key in string]: JsonValue }>; close_active_modal: boolean; message: string } } | { StartNewWorkflow: { inject: InjectWorkflowPlace | null; workflow_id: string; responses: Partial<{ [key in string]: JsonValue }>; attach_id: string; inputs: Partial<{ [key in string]: JsonValue }>; context: Partial<{ [key in string]: JsonValue }> } } | "CancelWorkflow" | { StartAndWaitWorkflow: { attach_id: string; responses: Partial<{ [key in string]: JsonValue }>; context: Partial<{ [key in string]: JsonValue }>; inputs: Partial<{ [key in string]: JsonValue }>; definition_id: string; inject: InjectWorkflowPlace | null; inject_response_as: string | null; on_complete: TransformOp[]; reconcile_node: boolean } } | { WaitForPredicate: { responses: Partial<{ [key in string]: JsonValue }>; predicate: WorkflowPredicate; inject_response_as: string | null; on_complete: TransformOp[]; reconcile_node: boolean } } | { ReplaceWithInstance: string }
 
 export type StickyPosition = "Top" | "Bottom" | "Toolbar"
 
@@ -117,6 +123,8 @@ export type WorkflowDisplay = { class: string; type: DisplayType }
 export type WorkflowInput = { readonly: NodeCondition | null; type: InputType; default_value: JsonValue | null; required: boolean; on_change_action: [string, Partial<{ [key in string]: string }>] | null }
 
 export type WorkflowNode = { title: string; description: string | null; visuals: WorkflowVisual[]; layout: string | null; condition: NodeCondition | null; parent_id: string | null }
+
+export type WorkflowPredicate = { ByWorkflowDefinitionIdAndUserId: [string, string] } | { And: WorkflowPredicate[] } | { Or: WorkflowPredicate[] }
 
 export type WorkflowResource = { inject: InjectWorkflowPlace | null; instance_id: string; workflow_id: string; stale_definition: boolean; name: string; description: string | null; responses: Partial<{ [key in string]: JsonValue }>; completed: boolean; status: WorkflowRuntimeStatus; complete_message: string | null; visuals: WorkflowVisual[]; layout: string | null; user_id: string; current_node_id: string; waiting: boolean; attached_workflows: Partial<{ [key in string]: AttachedWorkflowMeta }>; parent: string | null; created_at: string; updated_at: string; completed_at: string | null }
 
