@@ -39,11 +39,25 @@ export type ServerActions = {
   run: (actionId: string, state: State) => Promise<Json | undefined>;
 };
 
+/**
+ * A mock is a result, or a list of `{ if, then }` rules checked in order
+ * against the instance, where `if` is a node condition and may be left out.
+ */
 export function fromMocks(mocks: Mocks): ServerActions {
   return {
     source: 'its mock',
-    missing: (id) => `No mock for server action ${id}. Add one under Mocks to see its result.`,
-    run: async (id) => (id in mocks ? clone(mocks[id]) : undefined),
+    missing: (id) => `No mock for server action ${id}, or none of its rules matched. Add one under Mocks to see its result.`,
+    run: async (id, state) => {
+      const mock = mocks[id];
+      if (mock === undefined) return undefined;
+      if (!Array.isArray(mock)) return clone(mock);
+      for (const rule of mock) {
+        if (!rule || typeof rule !== 'object' || Array.isArray(rule) || !('then' in rule)) continue;
+        const cond = (rule as Map).if as NodeCondition | undefined;
+        if (!cond || evalCondition(cond, state.responses, state.context)) return clone((rule as Map).then);
+      }
+      return undefined;
+    },
   };
 }
 

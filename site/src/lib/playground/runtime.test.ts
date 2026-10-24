@@ -102,3 +102,17 @@ test('an update from a server action re-picks the node within its group', async 
   assert.equal(after.state.nodeId, 'lobby_playing');
   assert.deepEqual(after.state.history, ['lobby', 'lobby_waiting']);
 });
+
+test('mock rules answer by condition, and the right guess switches the page', async () => {
+  const t = template('guess');
+  let s = start(t.definition, user);
+  assert.equal(s.nodeId, 'play');
+  s = (await act(t.definition, s, 'guess', { gn_guess: 80 }, t.mocks)).state;
+  assert.equal(s.responses.gn_message, 'Too high. Try lower.');
+  assert.equal(s.nodeId, 'play');
+  s = (await act(t.definition, s, 'guess', { gn_guess: 10 }, t.mocks)).state;
+  assert.equal(s.responses.gn_message, 'Too low. Try higher.');
+  s = (await act(t.definition, s, 'guess', { gn_guess: 42 }, t.mocks)).state;
+  assert.equal(s.nodeId, 'won');
+  assert.equal(s.responses.gn_done, true);
+});

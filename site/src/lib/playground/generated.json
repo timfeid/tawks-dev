@@ -511,6 +511,201 @@
       "source": "use serde_json::json;\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\n/// A greeting page: type a name, press Wave, and the bot answers.\npub fn definition(wave_action: &str) -> CreateWorkflowDefinition {\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-2xl font-bold\").text(\"Hello, {name}!\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .form(\n                        \"wave\",\n                        vec![\n                            WorkflowDisplayBuilder::new(\"flex-1\")\n                                .input(\n                                    \"name\",\n                                    WorkflowInputBuilder::new()\n                                        .r#type(InputTypeBuilder::text(Some(\"Your name\".into())))\n                                        .build(),\n                                )\n                                .build(),\n                            WorkflowDisplayBuilder::new(\"\")\n                                .submit(\n                                    vec![WorkflowDisplayBuilder::new(\"\").text(\"Wave\").build()],\n                                    None,\n                                    \"wave\",\n                                    \"default\",\n                                    \"default\",\n                                )\n                                .build(),\n                        ],\n                        SubmitWhen::OnSubmit,\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{reply}\").build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"hello\", \"Hello\")\n        .response(\"name\", json!(\"there\"))\n        .add_action(WorkflowActionBuilder::new(\"wave\").run_server_action().target(wave_action).build())\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Hello\").visual(page).build())\n        .build()\n}\n"
     },
     {
+      "key": "guess",
+      "name": "Guess",
+      "description": "A server action answers each guess, and the right answer switches the page.",
+      "definition": {
+        "id": "guess",
+        "name": "Guess the number",
+        "description": null,
+        "nodes": {
+          "play": {
+            "title": "Play",
+            "description": null,
+            "visuals": [
+              {
+                "id": "play",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-xl font-semibold",
+                        "type": {
+                          "Text": {
+                            "text": "Guess the number"
+                          }
+                        }
+                      },
+                      {
+                        "class": "text-muted-foreground",
+                        "type": {
+                          "Text": {
+                            "text": "{gn_message}"
+                          }
+                        }
+                      },
+                      {
+                        "class": "flex gap-2",
+                        "type": {
+                          "Form": {
+                            "server_action_id": "guess",
+                            "content": [
+                              {
+                                "class": "flex-1",
+                                "type": {
+                                  "Input": {
+                                    "id": "gn_guess",
+                                    "input": {
+                                      "readonly": null,
+                                      "type": {
+                                        "Number": {
+                                          "min": 1,
+                                          "max": 100
+                                        }
+                                      },
+                                      "default_value": null,
+                                      "required": true,
+                                      "on_change_action": null
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Guess"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "guess",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "submit"
+                                  }
+                                }
+                              }
+                            ],
+                            "submit_when": "OnSubmit"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": null,
+            "parent_id": null
+          },
+          "won": {
+            "title": "Won",
+            "description": null,
+            "visuals": [
+              {
+                "id": "won",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-xl font-semibold",
+                        "type": {
+                          "Text": {
+                            "text": "You got it!"
+                          }
+                        }
+                      },
+                      {
+                        "class": "text-muted-foreground",
+                        "type": {
+                          "Text": {
+                            "text": "{gn_message}"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": {
+              "ResponseEquals": {
+                "field": "gn_done",
+                "value": true
+              }
+            },
+            "parent_id": "play"
+          }
+        },
+        "responses": {
+          "gn_done": false,
+          "gn_message": "I'm thinking of a number from 1 to 100."
+        },
+        "context": {},
+        "actions": [
+          {
+            "id": "guess",
+            "action_type": "RunServerAction",
+            "allow_while_loading": false,
+            "target": "guess.check",
+            "progress_node": true
+          }
+        ],
+        "starting_server_action": null,
+        "multi_instance_per_user": false
+      },
+      "mocks": {
+        "guess.check": [
+          {
+            "if": {
+              "ResponseEquals": {
+                "field": "gn_guess",
+                "value": 42
+              }
+            },
+            "then": {
+              "UpdateResponses": {
+                "gn_done": true,
+                "gn_message": "42 it is."
+              }
+            }
+          },
+          {
+            "if": {
+              "Gte": {
+                "field": "gn_guess",
+                "value": 43
+              }
+            },
+            "then": {
+              "UpdateResponses": {
+                "gn_message": "Too high. Try lower."
+              }
+            }
+          },
+          {
+            "then": {
+              "UpdateResponses": {
+                "gn_message": "Too low. Try higher."
+              }
+            }
+          }
+        ]
+      },
+      "source": "use serde_json::json;\nuse workflow_model::builder::{\n    Cond, InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,\n    WorkflowInputBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\n\n/// Guess a number the bot is thinking of. The secret stays on the bot: each\n/// guess goes to a server action that answers higher, lower or correct, and a\n/// correct answer moves the page to the win screen.\npub fn definition(check_action: &str) -> CreateWorkflowDefinition {\n    let play = WorkflowVisualBuilder::new(\"play\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Guess the number\").build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{gn_message}\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .form(\n                        \"guess\",\n                        vec![\n                            WorkflowDisplayBuilder::new(\"flex-1\")\n                                .input(\n                                    \"gn_guess\",\n                                    WorkflowInputBuilder::new()\n                                        .r#type(InputTypeBuilder::number(Some(1), Some(100)))\n                                        .required(true)\n                                        .build(),\n                                )\n                                .build(),\n                            WorkflowDisplayBuilder::new(\"\")\n                                .submit(\n                                    vec![WorkflowDisplayBuilder::new(\"\").text(\"Guess\").build()],\n                                    None,\n                                    \"guess\",\n                                    \"default\",\n                                    \"default\",\n                                )\n                                .build(),\n                        ],\n                        SubmitWhen::OnSubmit,\n                    )\n                    .build(),\n            ],\n        )\n        .build();\n    let won = WorkflowVisualBuilder::new(\"won\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"You got it!\").build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{gn_message}\").build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"guess\", \"Guess the number\")\n        .response(\"gn_message\", json!(\"I'm thinking of a number from 1 to 100.\"))\n        .response(\"gn_done\", json!(false))\n        .add_action(WorkflowActionBuilder::new(\"guess\").run_server_action().target(check_action).build())\n        .add_node(\"play\", WorkflowNodeBuilder::new(\"Play\").visual(play).build())\n        .add_node(\n            \"won\",\n            WorkflowNodeBuilder::new(\"Won\")\n                .parent_id(\"play\")\n                .condition(Cond::response_equals(\"gn_done\", json!(true)))\n                .visual(won)\n                .build(),\n        )\n        .build()\n}\n"
+    },
+    {
       "key": "mood",
       "name": "Mood",
       "description": "Transforms and conditions, no bot needed.",
@@ -696,11 +891,11 @@
     },
     {
       "key": "steps",
-      "name": "Two steps",
-      "description": "Next, Back and Submit move through nodes.",
+      "name": "Steps",
+      "description": "Forms carry what you type from page to page, and Done completes the instance.",
       "definition": {
         "id": "steps",
-        "name": "Two steps",
+        "name": "Steps",
         "description": null,
         "nodes": {
           "a_start": {
@@ -804,7 +999,7 @@
                         "class": "flex flex-col gap-4",
                         "type": {
                           "Form": {
-                            "server_action_id": "finish",
+                            "server_action_id": "next",
                             "content": [
                               {
                                 "class": "",
@@ -862,13 +1057,13 @@
                                                 "class": "",
                                                 "type": {
                                                   "Text": {
-                                                    "text": "Finish"
+                                                    "text": "Next"
                                                   }
                                                 }
                                               }
                                             ],
                                             "input_map": null,
-                                            "action_id": "finish",
+                                            "action_id": "next",
                                             "variant": "default",
                                             "size": "default",
                                             "type": "submit"
@@ -892,6 +1087,94 @@
             "layout": null,
             "condition": null,
             "parent_id": "a_start"
+          },
+          "c_summary": {
+            "title": "Summary",
+            "description": null,
+            "visuals": [
+              {
+                "id": "summary",
+                "display": {
+                  "Block": {
+                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                    "content": [
+                      {
+                        "class": "text-xl font-semibold",
+                        "type": {
+                          "Text": {
+                            "text": "Thanks, {name}"
+                          }
+                        }
+                      },
+                      {
+                        "class": "text-muted-foreground",
+                        "type": {
+                          "Text": {
+                            "text": "You picked {favorite}."
+                          }
+                        }
+                      },
+                      {
+                        "class": "flex gap-2",
+                        "type": {
+                          "Div": {
+                            "content": [
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Back"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "back",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "button"
+                                  }
+                                }
+                              },
+                              {
+                                "class": "",
+                                "type": {
+                                  "Button": {
+                                    "content": [
+                                      {
+                                        "class": "",
+                                        "type": {
+                                          "Text": {
+                                            "text": "Done"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "input_map": null,
+                                    "action_id": "finish",
+                                    "variant": "default",
+                                    "size": "default",
+                                    "type": "button"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "layout": null,
+            "condition": null,
+            "parent_id": "b_details"
           }
         },
         "responses": {},
@@ -923,7 +1206,7 @@
         "multi_instance_per_user": false
       },
       "mocks": {},
-      "source": "use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\nfn button(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\nfn submit(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .submit(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\n/// Typed values only reach an action from inside a form.\nfn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"flex flex-col gap-4\").form(action, content, SubmitWhen::OnSubmit).build()\n}\n\n/// Two pages and a finish: Next and Back move between nodes, Submit completes.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 1: who are you?\").build(),\n                form(\n                    \"next\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"name\",\n                                WorkflowInputBuilder::new()\n                                    .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                                    .required(true)\n                                    .build(),\n                            )\n                            .build(),\n                        submit(\"Next\", \"next\"),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 2: pick a number, {name}\").build(),\n                form(\n                    \"finish\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"favorite\",\n                                WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                            )\n                            .build(),\n                        WorkflowDisplayBuilder::new(\"flex gap-2\")\n                            .div(vec![button(\"Back\", \"back\"), submit(\"Finish\", \"finish\")])\n                            .build(),\n                    ],\n                ),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Two steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .build()\n}\n"
+      "source": "use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\nfn button(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\nfn submit(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .submit(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\n/// Typed values only reach an action from inside a form.\nfn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"flex flex-col gap-4\").form(action, content, SubmitWhen::OnSubmit).build()\n}\n\n/// Three pages: Next and Back move between nodes, and Done completes the instance.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 1: who are you?\").build(),\n                form(\n                    \"next\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"name\",\n                                WorkflowInputBuilder::new()\n                                    .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                                    .required(true)\n                                    .build(),\n                            )\n                            .build(),\n                        submit(\"Next\", \"next\"),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 2: pick a number, {name}\").build(),\n                form(\n                    \"next\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"favorite\",\n                                WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                            )\n                            .build(),\n                        WorkflowDisplayBuilder::new(\"flex gap-2\")\n                            .div(vec![button(\"Back\", \"back\"), submit(\"Next\", \"next\")])\n                            .build(),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let summary = WorkflowVisualBuilder::new(\"summary\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Thanks, {name}\").build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"You picked {favorite}.\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .div(vec![button(\"Back\", \"back\"), button(\"Done\", \"finish\")])\n                    .build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .add_node(\"c_summary\", WorkflowNodeBuilder::new(\"Summary\").parent_id(\"b_details\").visual(summary).build())\n        .build()\n}\n"
     }
   ]
 }

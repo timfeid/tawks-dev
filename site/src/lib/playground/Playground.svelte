@@ -440,6 +440,19 @@
       <button class="ml-auto flex items-center gap-1 hover:text-foreground" onclick={restart}><RotateCcw class="size-3.5" /> Restart</button>
     </div>
     <div class="relative min-h-0 flex-1 overflow-auto bg-background">
+      {#if runtime.status !== 'active'}
+        <div class="m-3 flex items-start gap-3 rounded-md border border-primary/40 bg-primary/10 p-3 text-sm">
+          <div class="min-w-0 flex-1">
+            <p class="font-semibold">{runtime.status === 'completed' ? 'This instance is complete.' : 'This instance was cancelled.'}</p>
+            <p class="mt-1 text-muted-foreground">
+              {runtime.message ? `"${runtime.message}" ` : ''}No more actions run until you restart. Its responses are under State.
+            </p>
+          </div>
+          <button class="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs hover:border-primary/60" onclick={restart}>
+            <RotateCcw class="size-3.5" /> Restart
+          </button>
+        </div>
+      {/if}
       {#if runtime.nodeId}
         <Preview {resource} {onAction} />
       {:else}
@@ -472,7 +485,8 @@
       <div class="flex min-h-0 flex-1 flex-col p-2">
         <p class="mb-2 text-xs text-muted-foreground">
           What each server action answers here, by action id, for example
-          <code>{'{ "UpdateResponses": { "reply": "Hi" } }'}</code>. On tawks your bot answers instead.
+          <code>{'{ "UpdateResponses": { "reply": "Hi" } }'}</code>. For an answer that depends on what was sent, give a list of
+          <code>{'{ "if": condition, "then": result }'}</code> rules; the first match answers. On tawks your bot answers instead.
         </p>
         <textarea class="flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs" spellcheck="false" bind:value={mocksText} oninput={applyMocks}></textarea>
         {#if mocksError}<p class="mt-1 text-xs text-destructive">{mocksError}</p>{/if}

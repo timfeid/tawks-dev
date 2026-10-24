@@ -152,6 +152,26 @@ pub fn build() -> Playground {
             source: include_str!("templates/hello.rs"),
         },
         Template {
+            key: "guess",
+            name: "Guess",
+            description: "A server action answers each guess, and the right answer switches the page.",
+            definition: templates::guess::definition("guess.check"),
+            mocks: json!({
+                "guess.check": [
+                    {
+                        "if": { "ResponseEquals": { "field": "gn_guess", "value": 42 } },
+                        "then": { "UpdateResponses": { "gn_done": true, "gn_message": "42 it is." } }
+                    },
+                    {
+                        "if": { "Gte": { "field": "gn_guess", "value": 43 } },
+                        "then": { "UpdateResponses": { "gn_message": "Too high. Try lower." } }
+                    },
+                    { "then": { "UpdateResponses": { "gn_message": "Too low. Try higher." } } }
+                ]
+            }),
+            source: include_str!("templates/guess.rs"),
+        },
+        Template {
             key: "mood",
             name: "Mood",
             description: "Transforms and conditions, no bot needed.",
@@ -161,8 +181,8 @@ pub fn build() -> Playground {
         },
         Template {
             key: "steps",
-            name: "Two steps",
-            description: "Next, Back and Submit move through nodes.",
+            name: "Steps",
+            description: "Forms carry what you type from page to page, and Done completes the instance.",
             definition: templates::steps::definition(),
             mocks: json!({}),
             source: include_str!("templates/steps.rs"),

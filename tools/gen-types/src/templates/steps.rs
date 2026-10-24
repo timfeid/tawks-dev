@@ -21,7 +21,7 @@ fn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
     WorkflowDisplayBuilder::new("flex flex-col gap-4").form(action, content, SubmitWhen::OnSubmit).build()
 }
 
-/// Two pages and a finish: Next and Back move between nodes, Submit completes.
+/// Three pages: Next and Back move between nodes, and Done completes the instance.
 pub fn definition() -> CreateWorkflowDefinition {
     let first = WorkflowVisualBuilder::new("first")
         .block(
@@ -52,7 +52,7 @@ pub fn definition() -> CreateWorkflowDefinition {
             vec![
                 WorkflowDisplayBuilder::new("text-xl font-semibold").text("Step 2: pick a number, {name}").build(),
                 form(
-                    "finish",
+                    "next",
                     vec![
                         WorkflowDisplayBuilder::new("")
                             .input(
@@ -61,19 +61,32 @@ pub fn definition() -> CreateWorkflowDefinition {
                             )
                             .build(),
                         WorkflowDisplayBuilder::new("flex gap-2")
-                            .div(vec![button("Back", "back"), submit("Finish", "finish")])
+                            .div(vec![button("Back", "back"), submit("Next", "next")])
                             .build(),
                     ],
                 ),
             ],
         )
         .build();
+    let summary = WorkflowVisualBuilder::new("summary")
+        .block(
+            "mx-auto flex max-w-md flex-col gap-4 p-8",
+            vec![
+                WorkflowDisplayBuilder::new("text-xl font-semibold").text("Thanks, {name}").build(),
+                WorkflowDisplayBuilder::new("text-muted-foreground").text("You picked {favorite}.").build(),
+                WorkflowDisplayBuilder::new("flex gap-2")
+                    .div(vec![button("Back", "back"), button("Done", "finish")])
+                    .build(),
+            ],
+        )
+        .build();
 
-    WorkflowDefinitionBuilder::new("steps", "Two steps")
+    WorkflowDefinitionBuilder::new("steps", "Steps")
         .add_action(WorkflowActionBuilder::new("next").next_node().build())
         .add_action(WorkflowActionBuilder::new("back").previous_node().build())
         .add_action(WorkflowActionBuilder::new("finish").submit().build())
         .add_node("a_start", WorkflowNodeBuilder::new("Step 1").visual(first).build())
         .add_node("b_details", WorkflowNodeBuilder::new("Step 2").parent_id("a_start").visual(second).build())
+        .add_node("c_summary", WorkflowNodeBuilder::new("Summary").parent_id("b_details").visual(summary).build())
         .build()
 }
