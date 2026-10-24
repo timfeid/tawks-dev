@@ -11,3 +11,21 @@ body {
   min-height: 100%;
   background: black;
 }
+
+/* Highlighted code keeps the site's card color instead of the theme's own. */
+pre.shiki {
+  background-color: var(--color-card) !important;
+}
+
+.display-example-json {
+  margin-top: -1rem;
+  margin-bottom: 1.5rem;
+}
+.display-example-json > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+}
+.display-example-json > summary:hover {
+  color: var(--color-foreground);
+}

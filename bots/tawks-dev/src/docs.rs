@@ -1,5 +1,5 @@
 use include_dir::{Dir, include_dir};
-use pulldown_cmark::{CowStr, Event, Options, Parser, Tag, html};
+use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Parser, Tag, html};
 
 static DOCS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../docs");
 
@@ -51,10 +51,45 @@ pub fn render(markdown: &str) -> String {
         }
         other => other,
     });
+    let events = without_display_examples(events);
     let mut out = String::new();
     html::push_html(&mut out, events);
     out
 }
+
+/// Live display examples only work on the docs site, so each one becomes a
+/// link to it there.
+fn without_display_examples<'a>(events: impl Iterator<Item = Event<'a>>) -> impl Iterator<Item = Event<'a>> {
+    let mut skipping = false;
+    events.flat_map(move |event| {
+        let out: Vec<Event<'a>> = match event {
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref lang))) if lang.as_ref() == "display" => {
+                skipping = true;
+                vec![
+                    Event::Start(Tag::Paragraph),
+                    Event::Start(Tag::Link {
+                        link_type: pulldown_cmark::LinkType::Inline,
+                        dest_url: EXAMPLES_URL.into(),
+                        title: "".into(),
+                        id: "".into(),
+                    }),
+                    Event::Text("See a live example on the docs site".into()),
+                    Event::End(pulldown_cmark::TagEnd::Link),
+                    Event::End(pulldown_cmark::TagEnd::Paragraph),
+                ]
+            }
+            Event::End(pulldown_cmark::TagEnd::CodeBlock) if skipping => {
+                skipping = false;
+                vec![]
+            }
+            _ if skipping => vec![],
+            other => vec![other],
+        };
+        out
+    })
+}
+
+const EXAMPLES_URL: &str = "https://tawks-dev.vercel.app/docs/displays";
 
 #[cfg(test)]
 mod tests {
@@ -72,6 +107,14 @@ mod tests {
         let html = render("See [games](06-games.md#lobbies) and [site](https://tawks.app).");
         assert!(html.contains(r#"href="/niche/dev/games#lobbies""#));
         assert!(html.contains(r#"href="https://tawks.app""#));
+    }
+
+    #[test]
+    fn display_examples_become_links_to_the_docs_site() {
+        let html = render("Before\n\n```display\n{\"display\": {}}\n```\n\nAfter");
+        assert!(html.contains("tawks-dev.vercel.app/docs/displays"));
+        assert!(!html.contains("display\": {}"));
+        assert!(html.contains("<p>After</p>"));
     }
 
     #[test]

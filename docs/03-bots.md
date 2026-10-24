@@ -4,7 +4,7 @@ A tawks bot is a program you run yourself. It logs in with a bot token, keeps a 
 
 1. Register **server actions**: named handlers that tawks calls when a user does something on one of your pages.
 2. Register **workflow definitions**: the pages users see, built from nodes, displays and actions. [Workflows](04-workflows.md) explains the model.
-3. React to **events**: chat messages, typing, reactions and so on.
+3. React to **events**, such as chat messages.
 
 A channel shows your page once the channel's workflow is set to one of your registered workflows.
 

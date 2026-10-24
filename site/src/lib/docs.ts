@@ -1,4 +1,20 @@
 import MarkdownIt from 'markdown-it';
+import { createHighlighter } from 'shiki';
+import { exampleDefinition, type DisplayExample } from './examples';
+import { encode } from './playground/share';
+
+const THEME = 'github-dark-default';
+const highlighter = await createHighlighter({
+  themes: [THEME],
+  langs: ['rust', 'ts', 'js', 'json', 'sh', 'toml', 'html'],
+});
+
+function highlight(code: string, lang: string): string {
+  const known = highlighter.getLoadedLanguages().includes(lang);
+  return highlighter.codeToHtml(code, { lang: known ? lang : 'text', theme: THEME });
+}
+
+const escapeAttr = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 const files = import.meta.glob('../../../docs/*.md', { query: '?raw', import: 'default', eager: true }) as Record<
   string,
@@ -39,7 +55,21 @@ export function anchor(text: string): string {
     .replace(/\s+/g, '-');
 }
 
-const md = new MarkdownIt({ html: false, linkify: true });
+const md = new MarkdownIt({ html: false, linkify: true, highlight });
+
+// A `display` fence is a live example in the Display reference: the docs
+// site draws it with the real renderer, and the JSON follows it.
+const fence = md.renderer.rules.fence!;
+md.renderer.rules.fence = (tokens, i, options, env, self) => {
+  const token = tokens[i];
+  if (token.info.trim() !== 'display') return fence(tokens, i, options, env, self);
+  const example = JSON.parse(token.content) as DisplayExample;
+  const playground = `/playground#p=${encode({ definition: exampleDefinition(example), mocks: {} })}`;
+  return (
+    `<div class="not-prose" data-display-example="${escapeAttr(JSON.stringify(example))}" data-playground="${escapeAttr(playground)}"></div>` +
+    `<details class="display-example-json"><summary>Show the JSON</summary>${highlight(token.content.trim(), 'json')}</details>`
+  );
+};
 
 const linkOpen = md.renderer.rules.link_open ?? ((tokens, i, options, _env, self) => self.renderToken(tokens, i, options));
 md.renderer.rules.link_open = (tokens, i, options, env, self) => {

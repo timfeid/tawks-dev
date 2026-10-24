@@ -27,6 +27,7 @@
     "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4.1.16",
     "@types/markdown-it": "^14.1.2",
+    "shiki": "^3.23.0",
     "svelte": "^5.37.1",
     "svelte-check": "^4.3.0",
     "svelte-sonner": "1.0.5",

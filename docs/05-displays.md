@@ -39,11 +39,119 @@ Target elements by the HTML id of a visual (`#my_block`) or by a marker class yo
 
 If the class contains the token `stuck-aware`, a `stuck` class is toggled on the element while it is pinned by `position: sticky`, so you can style that state with `[&.stuck]:...`.
 
+```display
+{
+  "display": {
+    "class": "flex items-center gap-2",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "size-5 text-primary",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "trophy",
+                "aria_label": "trophy",
+                "url": null
+              }
+            }
+          },
+          {
+            "class": "font-semibold",
+            "type": {
+              "Text": {
+                "text": "Weekly leaderboard"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Badge": {
+                "variant": "secondary",
+                "text": "Week 3"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ### Condition
 
 `Condition { condition, content }`, builder `.condition(cond, content)`. Renders `content` only when the condition holds against the current scope. With an empty class the children render with no wrapper; with a class they get a wrapping `div`.
 
 Display conditions see responses only. Compute booleans in your bot and test them with `Cond::response_equals`. See [Conditions](04-workflows.md#conditions).
+
+```display
+{
+  "responses": {
+    "finished": true,
+    "score": 7
+  },
+  "display": {
+    "class": "flex flex-col gap-1",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "Condition": {
+                "condition": {
+                  "ResponseEquals": {
+                    "field": "finished",
+                    "value": true
+                  }
+                },
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "You finished with {score} points."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Condition": {
+                "condition": {
+                  "Not": {
+                    "ResponseEquals": {
+                      "field": "finished",
+                      "value": true
+                    }
+                  }
+                },
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "Keep going!"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### List
 
@@ -52,12 +160,151 @@ Display conditions see responses only. Compute booleans in your bot and test the
 - Reads: the array at `items_key`. Anything other than an array renders nothing.
 - Renders `content` once per item inside one `div` with your class. Each item is in scope as `as`.
 
+```display
+{
+  "responses": {
+    "players": [
+      {
+        "name": "Ana",
+        "score": 12,
+        "wins": 4
+      },
+      {
+        "name": "Ben",
+        "score": 9,
+        "wins": 3
+      },
+      {
+        "name": "Cy",
+        "score": 5,
+        "wins": 1
+      }
+    ]
+  },
+  "display": {
+    "class": "flex flex-col divide-y rounded-md border",
+    "type": {
+      "List": {
+        "items_key": "players",
+        "as": "p",
+        "content": [
+          {
+            "class": "flex justify-between px-3 py-2",
+            "type": {
+              "Div": {
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "{p.name}"
+                      }
+                    }
+                  },
+                  {
+                    "class": "text-muted-foreground",
+                    "type": {
+                      "Text": {
+                        "text": "{p.score} pts"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ### Table
 
 `Table { items_key, as, headers, row }`, builder `.table(items_key, as, headers, row)`. Build headers with `table_header(label, key, width, align)`.
 
 - Reads: the array at `items_key`.
 - Renders a horizontally scrolling `<table>` with your class. Each header shows its `label`, with `width` as its CSS width. Each item becomes a row with one cell per display in `row`, with the item in scope as `as`.
+
+```display
+{
+  "responses": {
+    "players": [
+      {
+        "name": "Ana",
+        "score": 12,
+        "wins": 4
+      },
+      {
+        "name": "Ben",
+        "score": 9,
+        "wins": 3
+      },
+      {
+        "name": "Cy",
+        "score": 5,
+        "wins": 1
+      }
+    ]
+  },
+  "display": {
+    "class": "w-full text-sm",
+    "type": {
+      "Table": {
+        "items_key": "players",
+        "as": "p",
+        "headers": [
+          {
+            "label": "Player",
+            "key": "name",
+            "width": null,
+            "align": null
+          },
+          {
+            "label": "Wins",
+            "key": "wins",
+            "width": "5rem",
+            "align": "right"
+          },
+          {
+            "label": "Score",
+            "key": "score",
+            "width": "5rem",
+            "align": "right"
+          }
+        ],
+        "row": [
+          {
+            "class": "",
+            "type": {
+              "Text": {
+                "text": "{p.name}"
+              }
+            }
+          },
+          {
+            "class": "text-right",
+            "type": {
+              "Text": {
+                "text": "{p.wins}"
+              }
+            }
+          },
+          {
+            "class": "text-right font-semibold",
+            "type": {
+              "Text": {
+                "text": "{p.score}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Carousel
 
@@ -75,12 +322,66 @@ Display conditions see responses only. Compute booleans in your bot and test the
 - `CardLayout::Image { image_key }`: a 16:9 image read from `image_key` above the content.
 - `CardLayout::ActionImage { image_key, update_responses_key, from_input_key, action }`: the whole card is a button. Clicking reads the value at `from_input_key` and fires `action` with `{ <update_responses_key>: value }`.
 
+```display
+{
+  "display": {
+    "class": "",
+    "type": {
+      "Card": {
+        "content": [
+          {
+            "class": "font-semibold",
+            "type": {
+              "Text": {
+                "text": "Daily puzzle #37"
+              }
+            }
+          },
+          {
+            "class": "text-sm text-muted-foreground",
+            "type": {
+              "Text": {
+                "text": "Find four groups of four."
+              }
+            }
+          }
+        ],
+        "layout": "Vertical"
+      }
+    }
+  }
+}
+```
+
 ### Link
 
 `Link { href, content }`, builder `.link(href, content)`.
 
 - `href` is a template. An `http` or `https` URL opens in a new tab, or in the system browser in the desktop app. `#top` scrolls the page back to the top. Anything else is an in-app path such as `/niche/hello/hello-channel`.
 - While `href` still has an unresolved `{...}`, the content renders without a link.
+
+```display
+{
+  "display": {
+    "class": "text-primary underline",
+    "type": {
+      "Link": {
+        "href": "https://tawks.app",
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "Text": {
+                "text": "Open tawks"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Popover
 
@@ -96,9 +397,84 @@ Display conditions see responses only. Compute booleans in your bot and test the
 
 `Text { text }`, builder `.text(text)`. A `div` with the interpolated text. Text is always escaped, never parsed as HTML. Renders nothing if the result is empty. `WorkflowDisplayBuilder::section_title(title)` is a shortcut for a text display with `text-lg font-semibold px-4`.
 
+```display
+{
+  "responses": {
+    "name": "Ada"
+  },
+  "display": {
+    "class": "text-2xl font-bold",
+    "type": {
+      "Text": {
+        "text": "Hello, {name}!"
+      }
+    }
+  }
+}
+```
+
 ### Badge
 
 `Badge { variant, text }`, builder `.badge(variant, text)`. A small pill with the interpolated text. Variants: `default`, `secondary`, `destructive`, `outline`, `glass`.
+
+```display
+{
+  "display": {
+    "class": "flex flex-wrap gap-2",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "Badge": {
+                "variant": "default",
+                "text": "default"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Badge": {
+                "variant": "secondary",
+                "text": "secondary"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Badge": {
+                "variant": "destructive",
+                "text": "destructive"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Badge": {
+                "variant": "outline",
+                "text": "outline"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Badge": {
+                "variant": "glass",
+                "text": "glass"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Icon
 
@@ -107,9 +483,103 @@ Display conditions see responses only. Compute booleans in your bot and test the
 - `IconLibrary::Lucide`: `name` is a template naming a [Lucide](https://lucide.dev) icon from this set: `activity`, `arrow-left`, `arrow-right`, `arrow-up`, `audio-lines`, `badge-check`, `bell`, `brain`, `calendar`, `calendar-off`, `chat`, `check`, `check-circle-2`, `chef-hat`, `chevron-left`, `chevron-right`, `clock`, `cloud`, `compass`, `copy`, `cpu`, `crown`, `external-link`, `fast-forward`, `file-plus`, `funnel`, `game`, `gauge`, `ghost`, `gift`, `hard-drive`, `hash`, `heart`, `image`, `info`, `key-round`, `layers`, `layout-grid`, `lightbulb`, `link`, `loader`, `lock`, `memory-stick`, `message-circle`, `message-square`, `mic`, `minus`, `monitor`, `moon`, `music`, `newspaper`, `paperclip`, `pencil`, `pin`, `play`, `plus`, `popcorn`, `puzzle`, `receipt-text`, `refresh-cw`, `refrigerator`, `search`, `server`, `share-2`, `shield`, `shopping-cart`, `shuffle`, `sliders-horizontal`, `smartphone`, `smile`, `sparkles`, `star`, `terminal`, `thermometer`, `trees`, `trending-up`, `trophy`, `tv`, `type`, `user`, `user-round`, `users`, `waves`, `x`, `x-circle`. Other names draw a small placeholder square.
 - `IconLibrary::Url`: an image loaded from `url`, for your own icons.
 
+```display
+{
+  "display": {
+    "class": "flex gap-3 text-muted-foreground",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "size-5",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "trophy",
+                "aria_label": "trophy",
+                "url": null
+              }
+            }
+          },
+          {
+            "class": "size-5",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "star",
+                "aria_label": "star",
+                "url": null
+              }
+            }
+          },
+          {
+            "class": "size-5",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "heart",
+                "aria_label": "heart",
+                "url": null
+              }
+            }
+          },
+          {
+            "class": "size-5",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "puzzle",
+                "aria_label": "puzzle",
+                "url": null
+              }
+            }
+          },
+          {
+            "class": "size-5",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "music",
+                "aria_label": "music",
+                "url": null
+              }
+            }
+          },
+          {
+            "class": "size-5",
+            "type": {
+              "Icon": {
+                "lib": "Lucide",
+                "name": "users",
+                "aria_label": "users",
+                "url": null
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ### Image
 
 `Image { src, alt_text }`, builder `.image(src, alt_text)`. Both are templates. Renders nothing until `src` fully resolves, so a missing image simply does not appear.
+
+```display
+{
+  "display": {
+    "class": "w-full rounded-md",
+    "type": {
+      "Image": {
+        "src": "https://tawks-dev.vercel.app/img/docs/hoard.webp",
+        "alt_text": "Hoard running in devhost"
+      }
+    }
+  }
+}
+```
 
 ### Video
 
@@ -127,9 +597,82 @@ Display conditions see responses only. Compute booleans in your bot and test the
 
 `UserAvatar { key }`, builder `.user_avatar(key)`. Reads a user object (`id`, `username`, `avatar_url`) at `key`, such as a `UserResource` you copied from `$user`, and draws a 32 pixel round avatar that falls back to the first letter of the username. It has fixed styling.
 
+```display
+{
+  "responses": {
+    "player": {
+      "id": "u1",
+      "username": "ana",
+      "avatar_url": ""
+    }
+  },
+  "display": {
+    "class": "flex items-center gap-2",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "UserAvatar": {
+                "key": "player"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Text": {
+                "text": "ana"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ### Time
 
 `Time { key, opts }`, builder `.time(key, opts)`. Reads a date at `key`, or interpolates `key` as a template if that path is missing. Anything under a day old shows as relative time ("5 minutes ago"), older dates as "Apr 5, 7pm". `TimeDisplayOpts::timeago()` always shows relative time.
+
+```display
+{
+  "responses": {
+    "posted_at": "2026-10-20T19:00:00Z"
+  },
+  "display": {
+    "class": "flex gap-1 text-sm text-muted-foreground",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "Text": {
+                "text": "Posted"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Time": {
+                "key": "posted_at",
+                "opts": {
+                  "timeago": false
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Countdown
 
@@ -139,13 +682,79 @@ Display conditions see responses only. Compute booleans in your bot and test the
 - Every second (more often near the end), the remaining time is put in scope as `as` with the fields `days`, `hours`, `minutes`, `seconds`, `ms` and `total_seconds`, and the `text` template is rendered. Example: `.countdown("{round_ends_at}", "t", "{t.minutes}:{t.seconds}", Some(5000))`.
 - Under `shake_under_ms_left` milliseconds, the text shakes and pulses.
 
+```display
+{
+  "responses": {
+    "season_ends_at": "2027-01-01T00:00:00Z"
+  },
+  "display": {
+    "class": "font-mono text-xl",
+    "type": {
+      "Countdown": {
+        "until": "{season_ends_at}",
+        "as": "t",
+        "text": "{t.days}d {t.hours}h {t.minutes}m {t.seconds}s",
+        "shake_under_ms_left": 5000
+      }
+    }
+  }
+}
+```
+
 ### Progress
 
 `Progress { progress_percentage_key, percentage_class }`, builder `.progress(key, percentage_class)`. A bar filled to the number at the key, from 0 to 100. `percentage_class` is a template applied to the filled part, so you can color it by state.
 
+```display
+{
+  "responses": {
+    "done_pct": 65
+  },
+  "display": {
+    "class": "",
+    "type": {
+      "Progress": {
+        "progress_percentage_key": "done_pct",
+        "percentage_class": "bg-primary"
+      }
+    }
+  }
+}
+```
+
 ### ScoreTicker
 
 `ScoreTicker { value_key, icon, container_class, pop_text_class, pop_container_class }`, builder `.score_ticker(value_key, lucide_icon, icon_class, container_class, pop_text_class, pop_container_class)`. Shows the number at `value_key` with a Lucide icon and plays a short pop animation when it goes up. Hidden while the key is missing.
+
+```display
+{
+  "responses": {
+    "score": 42
+  },
+  "display": {
+    "class": "",
+    "type": {
+      "ScoreTicker": {
+        "value_key": "score",
+        "icon": {
+          "class": "size-4",
+          "type": {
+            "Icon": {
+              "lib": "Lucide",
+              "name": "trophy",
+              "aria_label": "trophy",
+              "url": null
+            }
+          }
+        },
+        "container_class": null,
+        "pop_text_class": null,
+        "pop_container_class": null
+      }
+    }
+  }
+}
+```
 
 ### Loader
 
@@ -154,6 +763,30 @@ Display conditions see responses only. Compute booleans in your bot and test the
 ### Tooltip
 
 `Tooltip { class, tooltip_html, view_display }`, builder `.tooltip(tooltip_html, class, view_display)`. Hovering `view_display` shows a tooltip. `tooltip_html` is interpolated and inserted as HTML, so escape anything that came from users before you put it there. The display's own class goes on the trigger and the `class` field on the tooltip panel.
+
+```display
+{
+  "display": {
+    "class": "underline decoration-dotted",
+    "type": {
+      "Tooltip": {
+        "class": "",
+        "tooltip_html": "<b>4</b> wins this week",
+        "view_display": [
+          {
+            "class": "",
+            "type": {
+              "Text": {
+                "text": "Hover for details"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### ShareResult
 
@@ -172,6 +805,130 @@ Display conditions see responses only. Compute booleans in your bot and test the
 - `variant`: `default`, `destructive`, `outline`, `secondary`, `ghost`, `hoveronly`, `link`, `iconButton`. `size`: `default`, `sm`, `md`, `lg`, `icon`, `icon-lg`, `icon-sm`, `icon-xs`. Your class is merged on top, so conflicting classes in it win.
 - A class token `scroll-to-<name>` scrolls the page to the element carrying `scroll-target-<name>` after the click.
 
+```display
+{
+  "display": {
+    "class": "flex flex-wrap gap-2",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "Button": {
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "Default"
+                      }
+                    }
+                  }
+                ],
+                "input_map": null,
+                "action_id": "example",
+                "variant": "default",
+                "size": "default",
+                "type": "button"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Button": {
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "Secondary"
+                      }
+                    }
+                  }
+                ],
+                "input_map": null,
+                "action_id": "example",
+                "variant": "secondary",
+                "size": "default",
+                "type": "button"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Button": {
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "Outline"
+                      }
+                    }
+                  }
+                ],
+                "input_map": null,
+                "action_id": "example",
+                "variant": "outline",
+                "size": "default",
+                "type": "button"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Button": {
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "Ghost"
+                      }
+                    }
+                  }
+                ],
+                "input_map": null,
+                "action_id": "example",
+                "variant": "ghost",
+                "size": "default",
+                "type": "button"
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Button": {
+                "content": [
+                  {
+                    "class": "",
+                    "type": {
+                      "Text": {
+                        "text": "Delete"
+                      }
+                    }
+                  }
+                ],
+                "input_map": null,
+                "action_id": "example",
+                "variant": "destructive",
+                "size": "sm",
+                "type": "button"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ### TooltipButton
 
 `TooltipButton { tooltip_content, content, input_map, action_id, variant, size }`, builder `.tooltip_button(tooltip_content, content, input_map, action_id, variant, size)`. A button with a hover tooltip made of displays. Fires `action_id` with `input_map` values interpolated as strings. It has no pending state, so use it for actions that are safe to repeat.
@@ -183,6 +940,83 @@ Display conditions see responses only. Compute booleans in your bot and test the
 - Renders a `<form>` with your class around `content`, which usually holds `Input` displays and a `.submit` button.
 - `SubmitWhen::OnSubmit`: pressing Enter or the submit button fires the action with every input in the form, keyed by input id. Text fields are cleared afterwards.
 - `SubmitWhen::OnChange`: each change fires the action 350 ms after the last keystroke, sending only `{ <input id>: value }` for the field that changed. Useful for live search.
+
+```display
+{
+  "responses": {
+    "name": "there"
+  },
+  "display": {
+    "class": "flex flex-col gap-3",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "text-lg font-semibold",
+            "type": {
+              "Text": {
+                "text": "Hello, {name}!"
+              }
+            }
+          },
+          {
+            "class": "flex gap-2",
+            "type": {
+              "Form": {
+                "server_action_id": "wave",
+                "content": [
+                  {
+                    "class": "flex-1",
+                    "type": {
+                      "Input": {
+                        "id": "name",
+                        "input": {
+                          "readonly": null,
+                          "type": {
+                            "Text": {
+                              "placeholder": "Your name"
+                            }
+                          },
+                          "default_value": null,
+                          "required": false,
+                          "on_change_action": null
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "class": "",
+                    "type": {
+                      "Button": {
+                        "content": [
+                          {
+                            "class": "",
+                            "type": {
+                              "Text": {
+                                "text": "Wave"
+                              }
+                            }
+                          }
+                        ],
+                        "input_map": null,
+                        "action_id": "wave",
+                        "variant": "default",
+                        "size": "default",
+                        "type": "submit"
+                      }
+                    }
+                  }
+                ],
+                "submit_when": "OnSubmit"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Input
 
@@ -209,6 +1043,110 @@ Input types:
 | `Switch` | `InputTypeBuilder::switch()` | Through `on_change_action`, which it needs to do anything. |
 | `Wysiwyg` | `InputTypeBuilder::wysiwyg()` | Through `on_change_action`. A rich text editor producing TipTap JSON. |
 | `ServerActionLoader { target }` | `InputTypeBuilder::server_action_loader(target)` | Fires `target` once when it appears, sending all current responses, and shows "Loading data...". Handy for loading a section lazily. |
+
+```display
+{
+  "responses": {
+    "guess": 42,
+    "fruits": [
+      {
+        "id": "apple",
+        "name": "Apple"
+      },
+      {
+        "id": "pear",
+        "name": "Pear"
+      },
+      {
+        "id": "plum",
+        "name": "Plum"
+      }
+    ],
+    "pick": "pear"
+  },
+  "display": {
+    "class": "flex flex-col gap-3",
+    "type": {
+      "Div": {
+        "content": [
+          {
+            "class": "",
+            "type": {
+              "Input": {
+                "id": "note",
+                "input": {
+                  "readonly": null,
+                  "type": {
+                    "Text": {
+                      "placeholder": "A text input"
+                    }
+                  },
+                  "default_value": null,
+                  "required": false,
+                  "on_change_action": null
+                }
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Input": {
+                "id": "guess",
+                "input": {
+                  "readonly": null,
+                  "type": {
+                    "Number": {
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  "default_value": null,
+                  "required": false,
+                  "on_change_action": null
+                }
+              }
+            }
+          },
+          {
+            "class": "",
+            "type": {
+              "Input": {
+                "id": "pick",
+                "input": {
+                  "readonly": null,
+                  "type": {
+                    "SelectFromList": {
+                      "items_key": "fruits",
+                      "as": "f",
+                      "value": "{f.id}",
+                      "class": "flex gap-2",
+                      "selected_class": "border-primary text-primary",
+                      "content": [
+                        {
+                          "class": "rounded-md border px-3 py-1 text-sm",
+                          "type": {
+                            "Text": {
+                              "text": "{f.name}"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "default_value": null,
+                  "required": false,
+                  "on_change_action": null
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### CommandPalette
 

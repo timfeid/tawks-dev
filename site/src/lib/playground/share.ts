@@ -1,4 +1,7 @@
-import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
+import lz from 'lz-string';
+
+// lz-string is CommonJS, so named imports fail during server rendering.
+const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = lz;
 
 export type Shared = { definition: unknown; mocks: unknown };
 

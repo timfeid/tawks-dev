@@ -1,5 +1,28 @@
 <script lang="ts">
+  import { mount, tick, unmount } from 'svelte';
+  import DisplayExample from '$lib/DisplayExample.svelte';
+
   let { data } = $props();
+  let article = $state<HTMLElement | null>(null);
+
+  // Examples in the Display reference arrive as placeholders in the HTML and
+  // are drawn here, in the browser, with the real renderer.
+  $effect(() => {
+    void data.html;
+    const mounted: Record<string, unknown>[] = [];
+    void tick().then(() => {
+      for (const el of article?.querySelectorAll<HTMLElement>('[data-display-example]') ?? []) {
+        el.replaceChildren();
+        mounted.push(
+          mount(DisplayExample, {
+            target: el,
+            props: { example: JSON.parse(el.dataset.displayExample!), playground: el.dataset.playground! },
+          }),
+        );
+      }
+    });
+    return () => mounted.forEach((m) => unmount(m));
+  });
 </script>
 
 <svelte:head>
@@ -19,7 +42,7 @@
       {/each}
     </nav>
   </aside>
-  <article class="prose prose-invert min-w-0 max-w-3xl flex-1 prose-headings:scroll-mt-20 prose-a:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:bg-card prose-img:rounded-lg prose-img:border">
+  <article bind:this={article} class="prose prose-invert min-w-0 max-w-3xl flex-1 prose-headings:scroll-mt-20 prose-a:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:bg-card prose-img:rounded-lg prose-img:border">
     <!-- The docs are this repository's own markdown, rendered with raw HTML disabled. -->
     {@html data.html}
     <div class="not-prose mt-12 flex justify-between gap-4 border-t pt-6 text-sm">
