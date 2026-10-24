@@ -1,6 +1,6 @@
 # tawks-dev
 
-SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs, try the playground and call the API from your browser at [tawks-dev.vercel.app](https://tawks-dev.vercel.app).
+SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs, try the playground, call the API and play the sandbox's games from your browser at [tawks-dev.vercel.app](https://tawks-dev.vercel.app).
 
 | Path | What it is |
 | --- | --- |
@@ -20,7 +20,7 @@ SDKs, examples and docs for building bots and games on [tawks](https://tawks.app
 | `games/tracklines` | Tracklines, a 3D railway game for lobbies |
 | `games/canvases` | `@tawks/game-canvases`, the 3D canvases that draw Cards and Tracklines |
 | `sdk/data` | `tawks-data`, small Postgres helpers for cursor pagination |
-| `tools/devhost` | a local stand-in for tawks: run your bot and play your game as several fake players |
+| `tools/devhost` | a stand-in for tawks: run your bot and play your game as several fake players, on your machine or as the hosted sandbox |
 | `tools/gen-types` | generates `web/workflow-types` and the playground's templates from the Rust model |
 | `web` | the workflow renderer, UI kit and editor that tawks draws pages with |
 | `site` | the docs site and the workflow playground |

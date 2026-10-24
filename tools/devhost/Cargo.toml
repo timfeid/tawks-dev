@@ -2,7 +2,7 @@
 name = "tawks-devhost"
 version = "0.1.0"
 edition = "2024"
-description = "A local stand-in for tawks: run your bot and your game's web client against it."
+description = "A stand-in for tawks: run your bot and your game's web client against it, on your machine or as a hosted sandbox."
 license = "MIT"
 
 [[bin]]
@@ -15,9 +15,12 @@ axum = { version = "0.7.9", features = ["ws"] }
 futures = "0.3.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "fs"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ulid = "1.2.0"
+sha2 = "0.10"
+hex = "0.4"
+reqwest = { version = "0.12.15", default-features = false, features = ["json", "rustls-tls"] }
 workflow-model = { path = "../../sdk/workflow-model" }

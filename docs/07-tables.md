@@ -231,6 +231,29 @@ Open `http://localhost:8787`, pick your game, choose how many players, and press
 
 The examples register their app at a `localhost` address by default. Set `CLIENT_URL` when you run one to point it somewhere else, such as another port or a deployed `https` build.
 
+### In the sandbox
+
+The sandbox at `https://sandbox.tawks.app` is devhost hosted for everyone. Your bot runs wherever you run it, with its own database and services, and connects to the sandbox instead of tawks. Anyone can then play your game on the [Play page](https://tawks-dev.vercel.app/play), every seat side by side, and share a link to a lobby, all without a niche of your own.
+
+1. Make a sandbox bot at [sandbox.tawks.app/sandbox/token](https://sandbox.tawks.app/sandbox/token). You sign in with your tawks account, pick a bot name, and get a token, shown once.
+2. Run your bot against the sandbox:
+
+```sh
+RSPC_URL=https://sandbox.tawks.app/rspc EVENTS_WS_URL=wss://sandbox.tawks.app/events BOT_TOKEN=sbx_... cargo run
+```
+
+3. Register your activity with an `https` client URL, so every player's browser can load it.
+4. Open the Play page, pick your game, choose the seats and press Start.
+
+The sandbox behaves like devhost, with a few differences:
+
+- Lobbies live in memory and close after half an hour without use. Each visitor gets lobbies of their own, and the Copy link button shares one.
+- A sandbox bot can register 20 workflows and 50 server actions, and each workflow can be at most 256 KB. An activity must use one of the bot's own workflows.
+- Each tawks account can have five sandbox bots. Delete one on the token page to make another; deleting it stops its token at once.
+- Nothing reaches real tawks: no niches, no notifications, no score.
+
+The sandbox is devhost with `DEVHOST_PUBLIC_HOST` set, so you can run one yourself from the tawks-dev repository with `docker build -f tools/devhost/Dockerfile .`.
+
 ### On tawks
 
 1. Run your app on `http://localhost` with a dev server that sends `Access-Control-Allow-Origin: *`.

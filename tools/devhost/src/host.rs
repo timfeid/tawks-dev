@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -36,6 +36,8 @@ impl Player {
 #[derive(Clone, Debug, Serialize)]
 pub struct Instance {
     pub id: String,
+    /// The visitor whose lobby this is. Locally there is one, `local`.
+    pub session: String,
     pub workflow_id: String,
     pub user_id: String,
     pub responses: HashMap<String, Value>,
@@ -49,7 +51,7 @@ pub struct Instance {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PageEvent {
     Instance { instance: Instance },
-    Log { level: &'static str, text: String },
+    Log { level: &'static str, text: String, session: Option<String> },
     Activities { activities: Vec<Value> },
 }
 
@@ -84,6 +86,21 @@ struct State {
     bots: HashMap<String, mpsc::UnboundedSender<String>>,
     /// Every Start opens a new lobby, so bots start a fresh game.
     lobby: u32,
+    /// Each session's current lobby, and when the session was last used.
+    lobbies: HashMap<String, String>,
+    touched: HashMap<String, Instant>,
+}
+
+impl State {
+    fn lobby_for(&mut self, session: &str) -> String {
+        if let Some(lobby) = self.lobbies.get(session) {
+            return lobby.clone();
+        }
+        self.lobby += 1;
+        let lobby = lobby_id(self.lobby);
+        self.lobbies.insert(session.to_string(), lobby.clone());
+        lobby
+    }
 }
 
 pub struct Host {
@@ -97,13 +114,53 @@ impl Host {
     }
 
     pub fn log(&self, level: &'static str, text: impl Into<String>) {
+        self.log_to(None, level, text);
+    }
+
+    /// A log line for one session's page, or for every page when `session` is None.
+    pub fn log_to(&self, session: Option<&str>, level: &'static str, text: impl Into<String>) {
         let text = text.into();
         match level {
             "error" => tracing::error!("{text}"),
             "warn" => tracing::warn!("{text}"),
             _ => tracing::info!("{text}"),
         }
-        let _ = self.page.send(PageEvent::Log { level, text });
+        let _ = self.page.send(PageEvent::Log { level, text, session: session.map(String::from) });
+    }
+
+    pub async fn touch(&self, session: &str) {
+        self.state.lock().await.touched.insert(session.to_string(), Instant::now());
+    }
+
+    pub async fn session_count(&self) -> usize {
+        self.state.lock().await.touched.len()
+    }
+
+    pub async fn session_of(&self, instance_id: &str) -> Option<String> {
+        self.state.lock().await.instances.get(instance_id).map(|i| i.session.clone())
+    }
+
+    /// Forgets sessions nobody has used for `idle`, with their lobbies and instances.
+    pub async fn expire(&self, idle: Duration) -> usize {
+        let mut state = self.state.lock().await;
+        let now = Instant::now();
+        let stale: Vec<String> =
+            state.touched.iter().filter(|(_, at)| now.duration_since(**at) > idle).map(|(s, _)| s.clone()).collect();
+        for session in &stale {
+            state.touched.remove(session);
+            state.lobbies.remove(session);
+            state.instances.retain(|_, i| &i.session != session);
+        }
+        stale.len()
+    }
+
+    /// Counts what one bot has registered, for limits on a public sandbox.
+    pub async fn registrations_of(&self, bot: &str) -> (usize, usize) {
+        let state = self.state.lock().await;
+        let suffix = format!("-{bot}");
+        let workflows = state.definitions.keys().filter(|id| id.ends_with(&suffix)).count();
+        let actions = state.actions.values().filter(|(_, owner)| owner == bot).count();
+        (workflows, actions)
     }
 
     pub async fn connect_bot(&self, token: &str, sender: mpsc::UnboundedSender<String>) {
@@ -111,9 +168,11 @@ impl Host {
         self.log("info", format!("bot {token} connected to the events socket"));
     }
 
-    pub async fn snapshot(&self) -> (Vec<Value>, Vec<Instance>, String) {
-        let state = self.state.lock().await;
-        (state.activities.clone(), state.instances.values().cloned().collect(), lobby_id(state.lobby))
+    pub async fn snapshot(&self, session: &str) -> (Vec<Value>, Vec<Instance>, String) {
+        let mut state = self.state.lock().await;
+        let lobby = state.lobby_for(session);
+        let instances = state.instances.values().filter(|i| i.session == session).cloned().collect();
+        (state.activities.clone(), instances, lobby)
     }
 
     /// Ids are scoped to the bot the way tawks scopes them, with the bot's
@@ -161,18 +220,21 @@ impl Host {
     /// Starts one player's instance of a workflow and runs its starting action.
     pub async fn start(
         &self,
+        session: &str,
         workflow_id: &str,
         user: &Player,
         input: HashMap<String, Value>,
         mut context: HashMap<String, Value>,
     ) -> Result<Instance, String> {
         let (starting, lobby) = {
-            let state = self.state.lock().await;
-            let definition = state
+            let mut state = self.state.lock().await;
+            let starting = state
                 .definitions
                 .get(workflow_id)
-                .ok_or_else(|| format!("no workflow {workflow_id} is registered"))?;
-            (definition.starting_server_action.clone(), lobby_id(state.lobby))
+                .ok_or_else(|| format!("no workflow {workflow_id} is registered"))?
+                .starting_server_action
+                .clone();
+            (starting, state.lobby_for(session))
         };
         context.insert("$user".into(), json!(user));
         context.insert("$anonymous".into(), json!(false));
@@ -180,6 +242,7 @@ impl Host {
         responses.entry("lobby_id".into()).or_insert(json!(lobby));
         let instance = Instance {
             id: ulid::Ulid::new().to_string(),
+            session: session.to_string(),
             workflow_id: workflow_id.to_string(),
             user_id: user.id.clone(),
             responses,
@@ -196,11 +259,11 @@ impl Host {
         Ok(started.unwrap_or(instance))
     }
 
-    pub async fn start_players(&self, workflow_id: &str, players: usize) -> Result<Vec<Instance>, String> {
+    pub async fn start_players(&self, session: &str, workflow_id: &str, players: usize) -> Result<Vec<Instance>, String> {
         let mut started = Vec::new();
         for n in 1..=players.clamp(1, 8) {
             let player = Player::numbered(n);
-            started.push(self.start(workflow_id, &player, HashMap::new(), HashMap::new()).await?);
+            started.push(self.start(session, workflow_id, &player, HashMap::new(), HashMap::new()).await?);
         }
         Ok(started)
     }
@@ -272,6 +335,7 @@ impl Host {
         context.entry("$anonymous".into()).or_insert(json!(false));
         let instance = Instance {
             id: format!("playground-{}", ulid::Ulid::new()),
+            session: "playground".to_string(),
             workflow_id: workflow_id.to_string(),
             user_id: user.id.clone(),
             responses,
@@ -439,7 +503,7 @@ impl Host {
         let user = self.user_of(instance_id).await;
         let old = self.state.lock().await.instances.remove(instance_id).ok_or("Workflow instance not found")?;
         let user = user.unwrap_or(Player { id: old.user_id.clone(), ..Player::numbered(0) });
-        self.start(&old.workflow_id, &user, HashMap::new(), HashMap::new()).await
+        self.start(&old.session, &old.workflow_id, &user, HashMap::new(), HashMap::new()).await
     }
 
     pub async fn user_of(&self, instance_id: &str) -> Option<Player> {
@@ -455,11 +519,29 @@ impl Host {
         }
     }
 
-    pub async fn reset(&self) {
+    /// Clears one session's instances and gives it a new lobby, so its next Start is a fresh game.
+    pub async fn reset(&self, session: &str) {
         let mut state = self.state.lock().await;
-        state.instances.clear();
-        state.pending.clear();
-        state.lobby += 1;
+        let gone: Vec<String> = state.instances.values().filter(|i| i.session == session).map(|i| i.id.clone()).collect();
+        state.instances.retain(|_, i| i.session != session);
+        state.pending.retain(|_, p| !gone.contains(&p.instance_id));
+        state.lobbies.remove(session);
+    }
+
+    /// The session a bot means when it starts a workflow for a player: the
+    /// newest one that player has an instance in.
+    pub async fn session_of_lobby(&self, lobby_id: &str) -> Option<String> {
+        let state = self.state.lock().await;
+        state.lobbies.iter().find(|(_, lobby)| lobby.as_str() == lobby_id).map(|(session, _)| session.clone())
+    }
+
+    pub async fn definition(&self, workflow_id: &str) -> Option<CreateWorkflowDefinition> {
+        self.state.lock().await.definitions.get(workflow_id).cloned()
+    }
+
+    pub async fn session_of_player(&self, user_id: &str) -> Option<String> {
+        let state = self.state.lock().await;
+        state.instances.values().filter(|i| i.user_id == user_id).max_by(|a, b| a.id.cmp(&b.id)).map(|i| i.session.clone())
     }
 }
 

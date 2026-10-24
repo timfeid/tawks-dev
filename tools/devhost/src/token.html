@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandbox bots - tawks sandbox</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #141821; --line: #262c3a; --text: #e6e8ee; --muted: #8a93a6; --accent: #34d058; --bad: #ff7a7a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p { color: var(--muted); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 20px; }
+  button, input { font: inherit; border-radius: 8px; }
+  button { background: var(--accent); color: #04130a; border: 0; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 4px 10px; font-weight: 400; }
+  input { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 8px 10px; width: 100%; }
+  form { display: flex; gap: 8px; margin-top: 12px; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  ul { list-style: none; padding: 0; margin: 12px 0 0; }
+  li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  .error { color: var(--bad); }
+  .hidden { display: none; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sandbox bots</h1>
+  <p>The sandbox is a hosted stand-in for tawks. Point a bot at it and anyone can play your game from the
+    <a href="https://tawks-dev.vercel.app/play">Play page</a>, without a tawks niche or a server of your own.
+    Each sandbox bot gets a token; sign in with your tawks account to make one.</p>
+
+  <section id="signin" class="hidden">
+    <p>Sign in with tawks to make or manage your sandbox bots. You come straight back here.</p>
+    <button id="signin-button">Sign in with tawks</button>
+  </section>
+
+  <section id="bots" class="hidden">
+    <div>Signed in as <strong id="username"></strong>.</div>
+    <ul id="bot-list"></ul>
+    <form id="new-bot">
+      <input id="bot-name" placeholder="New bot name, such as mygame" maxlength="24" autocomplete="off" required>
+      <button>Make a token</button>
+    </form>
+    <p id="error" class="error"></p>
+  </section>
+
+  <section id="made" class="hidden">
+    <p>Here is the token for <strong id="made-bot"></strong>. Copy it now; it is not shown again.</p>
+    <pre id="made-env"></pre>
+  </section>
+</main>
+<script>
+  const TAWKS_APP = '{{TAWKS_APP}}';
+  const $ = (id) => document.getElementById(id);
+  let access = null;
+
+  // tawks hands the sign-in back in the address fragment; take it and clear it at once.
+  const fragment = new URLSearchParams(location.hash.slice(1));
+  if (fragment.get('access')) access = fragment.get('access');
+  history.replaceState(null, '', location.pathname);
+
+  $('signin-button').onclick = () => {
+    const back = location.origin + location.pathname;
+    location.href = `${TAWKS_APP}/auth/external?scope=access&return_to=${encodeURIComponent(back)}`;
+  };
+
+  async function call(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: { authorization: `Bearer ${access}`, 'content-type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ ok: false, error: 'The sandbox did not answer.' }));
+    if (!data.ok) throw new Error(data.error);
+    return data;
+  }
+
+  function showBots(username, bots) {
+    $('username').textContent = username;
+    const list = $('bot-list');
+    list.replaceChildren(
+      ...bots.map((bot) => {
+        const li = document.createElement('li');
+        const name = document.createElement('span');
+        name.textContent = bot;
+        const remove = document.createElement('button');
+        remove.className = 'ghost';
+        remove.textContent = 'Delete';
+        remove.onclick = async () => {
+          if (!confirm(`Delete ${bot}? Its token stops working.`)) return;
+          try {
+            await call('POST', '/sandbox/tokens/delete', { bot });
+            await load();
+          } catch (e) {
+            $('error').textContent = e.message;
+          }
+        };
+        li.append(name, remove);
+        return li;
+      }),
+    );
+  }
+
+  async function load() {
+    if (!access) {
+      $('signin').classList.remove('hidden');
+      return;
+    }
+    try {
+      const data = await call('GET', '/sandbox/tokens');
+      $('bots').classList.remove('hidden');
+      showBots(data.username, data.bots);
+    } catch (e) {
+      access = null;
+      $('signin').classList.remove('hidden');
+      $('bots').classList.add('hidden');
+    }
+  }
+
+  $('new-bot').onsubmit = async (event) => {
+    event.preventDefault();
+    $('error').textContent = '';
+    const bot = $('bot-name').value.trim();
+    try {
+      const data = await call('POST', '/sandbox/tokens', { bot });
+      $('made').classList.remove('hidden');
+      $('made-bot').textContent = data.bot;
+      $('made-env').textContent =
+        `RSPC_URL=${location.origin}/rspc\nEVENTS_WS_URL=${location.origin.replace(/^http/, 'ws')}/events\nBOT_TOKEN=${data.token}`;
+      $('bot-name').value = '';
+      await load();
+    } catch (e) {
+      $('error').textContent = e.message;
+    }
+  };
+
+  load();
+</script>
+</body>
+</html>
