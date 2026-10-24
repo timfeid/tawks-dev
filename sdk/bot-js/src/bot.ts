@@ -41,6 +41,30 @@ export type Activity = {
   max_players?: number;
 };
 
+export type NotificationKind = {
+  /** Unique across all bots, so prefix it with your bot's name, such as `hellobot.daily`. */
+  key: string;
+  label: string;
+  description?: string | null;
+  /** `reminder` for a nudge on a schedule, `event` for something that happened. */
+  kind: 'reminder' | 'event';
+  sort_order?: number | null;
+};
+
+export type Notification = {
+  eventKey: string;
+  /** One delivery per person per key, so put the date or an event id in it. */
+  dedupeKey: string;
+  title: string;
+  body?: string | null;
+  /** Where tapping the notification goes, such as the channel's path. */
+  url?: string | null;
+  /** A push icon URL, or `none` for no icon. */
+  icon?: string | null;
+  /** Narrows the send to these people. Anyone who has not turned the kind on is skipped. */
+  userIds?: string[];
+};
+
 type Events = {
   connect: () => void;
   disconnect: (reason: string) => void;
@@ -153,6 +177,40 @@ export class TawksBot {
   /** Posts a message in a chat. For a chat channel, the chat id is the channel id. */
   say(chatId: string, text: string): Promise<unknown> {
     return this.api.mutate('chat_create_message', { chat_id: chatId, contents: { text, attachments: null } });
+  }
+
+  /** Declares the notifications a channel offers. The bot must be a member of the channel's niche. */
+  registerNotifications(channelId: string, kinds: NotificationKind[]): Promise<number> {
+    return this.api.mutate<number>('bot_notifications_register_kinds', {
+      channel_id: channelId,
+      kinds: kinds.map((k, i) => ({
+        key: k.key,
+        label: k.label,
+        description: k.description ?? null,
+        kind: k.kind,
+        default_state: 'off',
+        sort_order: k.sort_order ?? i,
+      })),
+    });
+  }
+
+  /** Sends on one of your kinds to the people who turned it on, and returns how many it reached. */
+  notify(channelId: string, notification: Notification): Promise<number> {
+    return this.api.mutate<number>('bot_notifications_send', {
+      channel_id: channelId,
+      event_key: notification.eventKey,
+      dedupe_key: notification.dedupeKey,
+      title: notification.title,
+      body: notification.body ?? null,
+      url: notification.url ?? null,
+      icon: notification.icon ?? null,
+      ...(notification.userIds ? { user_ids: notification.userIds } : {}),
+    });
+  }
+
+  /** Who turned one of your kinds on, for building a different message per person. */
+  notificationSubscribers(channelId: string, eventKey: string): Promise<string[]> {
+    return this.api.query<string[]>('bot_notifications_subscribers', { channel_id: channelId, event_key: eventKey });
   }
 
   /** Registers a server action and returns its full id, which workflow actions target. */

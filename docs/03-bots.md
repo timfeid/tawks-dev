@@ -478,7 +478,40 @@ let _: serde_json::Value = bot.sdk.web_client.mutate("workflow_broadcast_updates
 
 ## Notifications
 
-`tawks_bot::notify::Notifier` sends push and in-app notifications for one channel. You declare notification kinds, people turn each kind on from the channel's bell menu, and you send on a kind. tawks delivers only to the people who turned it on: your bot never decides who can receive a notification.
+A bot can send push and in-app notifications about one of its channels, such as a morning reminder for a daily puzzle or a player's result when a week of picks closes. People decide what reaches them, and tawks enforces it. A bot never chooses who can receive a notification.
+
+### How people stay in control
+
+- A bot declares notification **kinds** for a channel: a key, a label people see, an optional description, and whether it is a `reminder` or an `event`. Declaring a kind sends nothing.
+- Every kind starts off for everyone. People turn each kind on or off from the channel's bell menu, and a bot has no way to turn one on for them.
+- People can also mute a whole niche, or everything for a while. tawks applies those mutes on every send.
+- A send goes to a kind, not to a list of people. tawks looks up who turned the kind on and delivers to them, minus anyone who has muted it.
+- A kind belongs to the bot that registered it first. Only that bot can change the kind, send on it or see who turned it on, and the bot must be a member of the channel's niche. The app's own kinds, such as chat mentions, belong to no bot and can't be claimed.
+
+So a bot can't reach someone who has not asked to hear from it, and no bot can send on another bot's kinds or read their subscribers.
+
+### Declaring kinds
+
+Register your kinds when your bot starts. Registering again with the same key updates the label and description.
+
+| Field | Meaning |
+| --- | --- |
+| `key` | Unique across every bot on tawks, so prefix it with your bot's name: `hellobot.daily`. Registering a key another bot owns fails. |
+| `label` | What people see in the bell menu, such as "Daily hello". |
+| `description` | Optional. A line under the label saying what to expect. |
+| `kind` | `reminder` for a nudge on a schedule, `event` for something that happened. |
+| `sort_order` | Optional. Where the kind sits in the bell menu. |
+
+### Sending
+
+There are two ways to send:
+
+- **To everyone who turned the kind on.** Use this for messages that are the same for everyone, such as "Today's puzzle is up".
+- **To some of them, with a different message each.** Use this for personal messages, such as each player's own score. List who turned the kind on, build each message, and send each one with that person's id. The ids only narrow the send: anyone in the list who has not turned the kind on is skipped.
+
+Every send has a `dedupe_key`. The same key delivers to the same person once, however often you send it, so put the date or an event id in it: `hellobot.daily:2026-10-24`. That makes a send safe to retry after a crash or a restart. A send returns how many people it reached.
+
+In Rust, `tawks_bot::notify::Notifier` does this for one channel:
 
 ```rust
 use tawks_bot::notify::{KindInput, Notifier};
@@ -497,31 +530,49 @@ let notifier = Notifier::new(
         sort_order: Some(0),
     }],
 )?;
-
 notifier.register_kinds().await?;
 
+// The same message for everyone who turned it on.
 notifier
-    .send_to_subscribers(
-        "hellobot.daily",
-        "hellobot.daily:2026-10-22",
-        "Good morning",
-        Some("Come say hello"),
-        Some(notifier.channel_url()),
-    )
+    .send_to_subscribers("hellobot.daily", "hellobot.daily:2026-10-24", "Good morning", Some("Come say hello"), Some(notifier.channel_url()))
     .await?;
+
+// A different message for each of them.
+for user_id in notifier.subscribers("hellobot.daily").await? {
+    let body = format!("You have waved {} times", waves_for(&user_id));
+    notifier
+        .send("hellobot.daily", &format!("hellobot.daily:2026-10-24:{user_id}"), &[user_id], "Your waves", Some(&body), None)
+        .await?;
+}
 ```
 
-Things to know:
+`Notifier::new` takes the full `Authorization` header value (`Bot <token>`), not the bare token. `default_state` is always treated as `"off"`. `send_with_icon` takes one more argument: a push icon URL, or `Some("none")` for no icon. Build the `Notifier` once at startup, outside the reconnect loop, and run your send schedule on its own task.
 
-- `Notifier::new` takes the full `Authorization` header value (`Bot <token>`), not the bare token.
-- `kind` is `"event"` or `"reminder"`.
-- Every kind starts off for every person. People turn it on and off themselves.
-- A kind belongs to the bot that registered it first. Keys share one namespace across all bots, so prefix them with your bot's name; registering a key another bot owns fails. Your bot must be a member of the channel's niche.
-- `send_to_subscribers` reaches everyone who turned the kind on. For a message that differs per person, such as each player's own score, call `send` with the people to send it to; tawks skips anyone in the list who has not turned the kind on. `subscribers(event_key)` lists who has, so you can build those messages.
-- `dedupe_key` is unique per person. Sending the same key to the same person twice delivers once, so put the date or an event id in it.
-- `send_with_icon` takes one more argument: a push icon URL, or `Some("none")` for no icon.
+In JavaScript, the bot has the same three calls:
 
-Build the `Notifier` once at startup, outside the reconnect loop, and run your send schedule on its own task.
+```js
+await bot.registerNotifications('hello-channel', [
+  { key: 'hellobot.daily', label: 'Daily hello', description: 'A greeting every morning', kind: 'reminder' },
+]);
+
+await bot.notify('hello-channel', {
+  eventKey: 'hellobot.daily',
+  dedupeKey: 'hellobot.daily:2026-10-24',
+  title: 'Good morning',
+  body: 'Come say hello',
+  url: '/niche/hello/hello-channel',
+});
+
+for (const userId of await bot.notificationSubscribers('hello-channel', 'hellobot.daily')) {
+  await bot.notify('hello-channel', {
+    eventKey: 'hellobot.daily',
+    dedupeKey: `hellobot.daily:2026-10-24:${userId}`,
+    title: 'Your waves',
+    body: `You have waved ${wavesFor(userId)} times`,
+    userIds: [userId],
+  });
+}
+```
 
 ## Share cards
 
@@ -618,6 +669,7 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 | `bot.run()` | Connects and stays connected until `bot.stop()`. Register before calling it. |
 | `bot.onChat(listener)` | Chat messages from people. Messages from bots, yours included, are skipped. |
 | `bot.say(chatId, text)` | Posts a chat message. For a chat channel, the chat id is the channel id. |
+| `bot.registerNotifications`, `bot.notify`, `bot.notificationSubscribers` | Notifications for your channels. See [Notifications](#notifications). |
 | `bot.on('connect' \| 'disconnect' \| 'error' \| 'message', listener)` | Connection events, and any event from tawks that is not a server action request for one of your handlers. |
 | `bot.api.query(name, input)`, `bot.api.mutate(name, input)` | Any API procedure by name, as in the [API explorer](https://tawks-dev.vercel.app/api). |
 

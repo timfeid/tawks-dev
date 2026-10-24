@@ -8,6 +8,8 @@ export {
   type ChatMessage,
   type BotOptions,
   type Logger,
+  type Notification,
+  type NotificationKind,
   type ServerActionHandler,
 } from './bot.js';
 export type {

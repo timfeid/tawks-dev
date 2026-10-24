@@ -64,3 +64,14 @@ test('a server action request runs its handler once and answers with the result'
   assert.deepEqual(answer.input, { token: 'tok1', result: { UpdateResponses: { reply: 'hi Ada' } } });
   server.close();
 });
+
+test('notify sends to the kind, and narrows only when asked', async () => {
+  const { server, calls, url } = await fakeTawks(() => 2);
+  const bot = new TawksBot({ rspcUrl: url, eventsUrl: 'ws://localhost:1/', token: 't', logger: null });
+  await bot.notify('c1', { eventKey: 'hellobot.daily', dedupeKey: 'hellobot.daily:1', title: 'Hi' });
+  await bot.notify('c1', { eventKey: 'hellobot.daily', dedupeKey: 'hellobot.daily:2', title: 'Hi', userIds: ['u1'] });
+  const [all, narrowed] = calls.filter((c) => c.procedure === 'bot_notifications_send').map((c) => c.input);
+  assert.equal('user_ids' in all, false);
+  assert.deepEqual(narrowed.user_ids, ['u1']);
+  server.close();
+});
