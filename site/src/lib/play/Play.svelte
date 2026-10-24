@@ -1,14 +1,25 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, type Component } from 'svelte';
   import { toast } from 'svelte-sonner';
-  import { Gamepad2, Link2, Play as PlayIcon } from '@lucide/svelte';
+  import { Code, Gamepad2, Link2, Play as PlayIcon } from '@lucide/svelte';
   import type { CreateWorkflowDefinition, WorkflowNode, WorkflowResource } from '@tawks/workflow-types';
   import Preview from '../playground/Preview.svelte';
   import { nextNode } from '../playground/runtime';
-  import { DEFAULT_SANDBOX, Sandbox, newSession, type Activity, type Instance, type LogLine } from './sandbox';
+  import {
+    DEFAULT_SANDBOX,
+    Sandbox,
+    newSession,
+    pageGames,
+    type Activity,
+    type Instance,
+    type LogLine,
+    type RegisteredWorkflow,
+  } from './sandbox';
 
   let sandbox = $state<Sandbox | null>(null);
   let activities = $state<Activity[]>([]);
+  let registered = $state<RegisteredWorkflow[]>([]);
+  let canvases = $state<Record<string, Component<any>>>({});
   let definitions = $state<Record<string, CreateWorkflowDefinition | null>>({});
   let instances = $state<Instance[]>([]);
   let logs = $state<LogLine[]>([]);
@@ -21,10 +32,23 @@
   // Spelled out so Tailwind sees every class.
   const WIDE_COLUMNS = ['', 'xl:grid-cols-1', 'xl:grid-cols-2', 'xl:grid-cols-3', 'xl:grid-cols-4'];
 
-  const game = $derived(activities.find((a) => a.workflow_id === gameId) ?? null);
+  const games = $derived([...activities, ...pageGames(registered)]);
+  const game = $derived(games.find((a) => a.workflow_id === gameId) ?? null);
   const minSeats = $derived(Math.max(1, game?.min_players ?? 1));
   const maxSeats = $derived(Math.min(8, game?.max_players ?? 8));
-  const seated = $derived([...instances].sort((a, b) => a.user_id.localeCompare(b.user_id, undefined, { numeric: true })));
+  const seated = $derived(
+    instances
+      .filter((i) => !i.parent_instance_id)
+      .sort((a, b) => a.user_id.localeCompare(b.user_id, undefined, { numeric: true })),
+  );
+
+  /** What the game started inside a seat's page, such as a night ability. */
+  function injectedInto(seat: Instance): WorkflowResource[] {
+    return instances
+      .filter((i) => i.parent_instance_id === seat.id)
+      .map(resourceFor)
+      .filter((r): r is WorkflowResource => r !== null);
+  }
 
   function resourceFor(instance: Instance): WorkflowResource | null {
     const definition = definitions[instance.workflow_id];
@@ -32,7 +56,7 @@
     const nodeId = nextNode(definition, '', { responses: instance.responses as never, context: instance.context as never });
     const node = nodeId ? (definition.nodes[nodeId] as WorkflowNode) : undefined;
     return {
-      inject: null,
+      inject: (instance.inject ?? null) as WorkflowResource['inject'],
       instance_id: instance.id,
       workflow_id: instance.workflow_id,
       stale_definition: false,
@@ -48,7 +72,7 @@
       current_node_id: nodeId ?? '',
       waiting: false,
       attached_workflows: {},
-      parent: null,
+      parent: (instance.parent_instance_id ?? null) as WorkflowResource['parent'],
       created_at: '',
       updated_at: '',
       completed_at: null,
@@ -66,9 +90,9 @@
     return user?.display_name ?? instance.user_id;
   }
 
-  async function act(instance: Instance, actionId: string, inputs: Record<string, unknown>) {
+  async function act(instanceId: string, actionId: string, inputs: Record<string, unknown>) {
     try {
-      await sandbox?.act(instance.id, actionId, inputs);
+      await sandbox?.act(instanceId, actionId, inputs);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
       throw e;
@@ -76,7 +100,7 @@
   }
 
   async function findActivity(workflowId: string) {
-    const found = activities.find((a) => a.workflow_id === workflowId);
+    const found = games.find((a) => a.workflow_id === workflowId && a.client_url);
     return found ? { workflow_id: found.workflow_id, name: found.name, client_url: found.client_url } : null;
   }
 
@@ -85,6 +109,7 @@
     starting = true;
     logs = [];
     try {
+      await loadWorkflows(sandbox);
       // The start's own answer holds each seat as it was when that player sat
       // down; the stream has newer views by now, so ask for the lobby as it is.
       await sandbox.start(game.workflow_id, seats);
@@ -108,8 +133,18 @@
 
   function pickGame(id: string) {
     gameId = id;
-    const picked = activities.find((a) => a.workflow_id === id);
+    const picked = games.find((a) => a.workflow_id === id);
     seats = Math.min(Math.max(seats, picked?.min_players ?? 1), picked?.max_players ?? 8);
+  }
+
+  /** Bots register page games without telling the page, so ask for the list again when it may have changed. */
+  async function loadWorkflows(client: Sandbox) {
+    try {
+      registered = await client.workflows();
+      definitions = { ...definitions, ...Object.fromEntries(registered.map((w) => [w.id, w.definition])) };
+    } catch {
+      // An older sandbox without the list still offers its activities.
+    }
   }
 
   onMount(() => {
@@ -134,15 +169,21 @@
     const client = new Sandbox(url, session);
     sandbox = client;
 
-    client
-      .state()
-      .then((state) => {
+    Promise.all([
+      import('@tawks/game-canvases/battlefield-canvas.svelte'),
+      import('@tawks/game-canvases/tracklines-canvas.svelte'),
+    ]).then(([battlefield, tracklines]) => {
+      canvases = { BattlefieldCanvas: battlefield.default, TracklinesCanvas: tracklines.default };
+    });
+
+    Promise.all([client.state(), loadWorkflows(client)])
+      .then(([state]) => {
         activities = state.activities;
-        definitions = state.definitions;
+        definitions = { ...definitions, ...state.definitions };
         instances = state.instances;
-        const running = state.instances[0]?.workflow_id;
-        pickGame(running ?? state.activities[0]?.workflow_id ?? '');
-        if (running) seats = state.instances.length;
+        const running = state.instances.find((i) => !i.parent_instance_id)?.workflow_id;
+        pickGame(running ?? games[0]?.workflow_id ?? '');
+        if (running) seats = state.instances.filter((i) => !i.parent_instance_id).length;
       })
       .catch((e) => (unreachable = e instanceof Error ? e.message : String(e)))
       .finally(() => (loading = false));
@@ -155,7 +196,7 @@
       },
       activities: (list) => {
         activities = list;
-        void client.state().then((state) => (definitions = state.definitions));
+        void loadWorkflows(client);
       },
       log: (line) => (logs = [...logs, line].slice(-100)),
     });
@@ -165,13 +206,13 @@
 <div class="flex min-h-[calc(100vh-3.5rem)] flex-col">
   <div class="flex flex-wrap items-center gap-3 border-b px-4 py-3">
     <Gamepad2 class="size-5 text-primary" />
-    {#if activities.length}
+    {#if games.length}
       <select
         class="h-9 min-w-0 max-w-xs flex-1 rounded-md border bg-card px-2 text-sm"
         value={gameId}
         onchange={(e) => pickGame((e.currentTarget as HTMLSelectElement).value)}
       >
-        {#each activities as a (a.workflow_id)}<option value={a.workflow_id}>{a.name}</option>{/each}
+        {#each games as a (a.workflow_id)}<option value={a.workflow_id}>{a.name}</option>{/each}
       </select>
       <label class="flex items-center gap-2 text-sm text-muted-foreground">
         Seats
@@ -188,6 +229,16 @@
       <button class="flex h-9 items-center gap-1 rounded-md border px-3 text-sm text-muted-foreground hover:text-foreground" onclick={share}>
         <Link2 class="size-4" /> Copy link
       </button>
+      {#if game?.source_url}
+        <a
+          class="flex h-9 items-center gap-1 rounded-md border px-3 text-sm text-muted-foreground hover:text-foreground"
+          href={game.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Code class="size-4" /> View the code
+        </a>
+      {/if}
       {#if game?.description}<span class="text-sm text-muted-foreground">{game.description}</span>{/if}
     {/if}
   </div>
@@ -199,7 +250,7 @@
       <p class="text-foreground">{unreachable}</p>
       <p class="mt-2">The sandbox may be restarting. Try again in a minute.</p>
     </div>
-  {:else if !activities.length}
+  {:else if !games.length}
     <div class="mx-auto max-w-lg p-8 text-sm text-muted-foreground">
       <p class="text-foreground">No games are connected to the sandbox right now.</p>
       <p class="mt-2">
@@ -220,7 +271,13 @@
           <div class="border-b bg-card px-3 py-1.5 text-xs font-medium">{playerName(instance)}</div>
           <div class="relative min-h-0 flex-1">
             {#if resource}
-              <Preview {resource} onAction={(actionId, inputs) => act(instance, actionId, inputs)} {findActivity} />
+              <Preview
+                {resource}
+                injected={injectedInto(instance)}
+                customComponents={canvases}
+                onAction={(actionId, inputs, instanceId) => act(instanceId, actionId, inputs)}
+                {findActivity}
+              />
             {:else}
               <p class="p-4 text-sm text-muted-foreground">This game's page is not registered right now.</p>
             {/if}

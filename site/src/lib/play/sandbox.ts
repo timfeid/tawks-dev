@@ -10,6 +10,7 @@ export type Activity = {
   icon?: string | null;
   min_players?: number | null;
   max_players?: number | null;
+  source_url?: string | null;
   bot?: string;
 };
 
@@ -22,6 +23,8 @@ export type Instance = {
   context: Record<string, unknown>;
   completed: boolean;
   complete_message: string | null;
+  parent_instance_id?: string;
+  inject?: unknown;
 };
 
 export type SandboxState = {
@@ -37,6 +40,39 @@ type PageEvent =
   | { type: 'instance'; instance: Instance }
   | { type: 'log'; level: string; text: string }
   | { type: 'activities'; activities: Activity[] };
+
+const SOURCE = 'https://github.com/timfeid/tawks-dev/tree/main/';
+
+/**
+ * The open-source games whose players use workflow pages rather than an
+ * activity frame. Like tawks' own game menu, the page knows them by their
+ * workflow key, whichever bot registered them.
+ */
+const PAGE_GAMES = [
+  { key: 'view_midnight_lobby', name: 'Midnight', description: 'A hidden-role party game', min: 1, max: 10, source: 'games/midnight' },
+  { key: 'trivia_multiplayer', name: 'Trivia', description: 'Answer together, fastest scores most', min: 1, max: 8, source: 'games/trivia' },
+  { key: 'tracklines_board', name: 'Tracklines', description: 'Claim railways across North America', min: 1, max: 5, source: 'games/tracklines' },
+  { key: 'cardgame_table', name: 'Cards', description: 'Draft a deck and duel', min: 2, max: 8, source: 'games/cards' },
+];
+
+export type RegisteredWorkflow = { id: string; definition: CreateWorkflowDefinition };
+
+/** The page games among the registered workflows, as entries for the game picker. */
+export function pageGames(workflows: RegisteredWorkflow[]): Activity[] {
+  return PAGE_GAMES.flatMap((game) =>
+    workflows
+      .filter((w) => w.id.startsWith(`wf-${game.key}-`))
+      .map((w) => ({
+        workflow_id: w.id,
+        name: game.name,
+        client_url: '',
+        description: game.description,
+        min_players: game.min,
+        max_players: game.max,
+        source_url: SOURCE + game.source,
+      })),
+  );
+}
 
 /** A lobby id of our own, kept so a reload or a shared link returns to the same lobby. */
 export function newSession(): string {
@@ -72,6 +108,11 @@ export class Sandbox {
 
   state(): Promise<SandboxState> {
     return this.request(`/dev/state?session=${this.session}`);
+  }
+
+  /** Every workflow the sandbox's bots registered, with its definition. */
+  async workflows(): Promise<RegisteredWorkflow[]> {
+    return (await this.request<{ workflows: RegisteredWorkflow[] }>('/dev/workflows')).workflows;
   }
 
   start(workflowId: string, players: number): Promise<{ instances: Instance[] }> {

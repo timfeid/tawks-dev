@@ -147,6 +147,8 @@ struct StartFromInstanceArgs {
     context: HashMap<String, Value>,
     #[serde(default)]
     inputs: HashMap<String, Value>,
+    #[serde(default)]
+    inject: Option<Value>,
 }
 
 fn bearer(headers: &HeaderMap) -> Option<String> {
@@ -282,13 +284,26 @@ async fn call(app: &Shared, bot: &str, procedure: &str, input: Value) -> Result<
             };
             let n = args.user_id.trim_start_matches("player-").parse().unwrap_or(1);
             let user = host::Player { id: args.user_id.clone(), ..host::player(n) };
-            Ok(json!(host.start(&session, &args.workflow_definition_id, &user, args.input, args.context).await?))
+            let workflow_id = host.resolve_workflow(&args.workflow_definition_id, bot).await;
+            Ok(json!(host.start(&session, &workflow_id, &user, args.input, args.context).await?))
         }
         "workflow_start_from_instance" => {
             let args: StartFromInstanceArgs = parse(input)?;
             let user = host.user_of(&args.instance_id).await.ok_or("Workflow instance not found")?;
             let session = host.session_of(&args.instance_id).await.ok_or("Workflow instance not found")?;
-            Ok(json!(host.start(&session, &args.workflow_definition_id, &user, args.inputs, args.context).await?))
+            let workflow_id = host.resolve_workflow(&args.workflow_definition_id, bot).await;
+            let started = host
+                .start_within(
+                    &session,
+                    &workflow_id,
+                    &user,
+                    args.inputs,
+                    args.context,
+                    Some(args.instance_id),
+                    args.inject,
+                )
+                .await?;
+            Ok(json!(started))
         }
         "workflow_restart" => {
             let id = input.get("instance_id").and_then(Value::as_str).ok_or("instance_id is required")?;
@@ -713,6 +728,14 @@ async fn main() -> anyhow::Result<()> {
     let public_host = public.as_ref().map(|p| p.host.clone());
 
     let app: Shared = Arc::new(App { host: Host::new(), public, port, docs_origins });
+    let scheduler = app.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_millis(250));
+        loop {
+            tick.tick().await;
+            scheduler.host.run_due_jobs().await;
+        }
+    });
     if app.public.is_some() {
         let janitor = app.clone();
         tokio::spawn(async move {

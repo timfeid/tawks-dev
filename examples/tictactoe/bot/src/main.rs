@@ -109,6 +109,7 @@ async fn main() -> Result<()> {
             let workflow_id = bot.register_workflow(workflow(&routes)).await?;
             bot.register_activity(
                 &Activity::new(&workflow_id, "Tic-tac-toe", &client_url)
+                    .source("https://github.com/timfeid/tawks-dev/tree/main/examples/tictactoe")
                     .description("Three in a row")
                     .icon("game")
                     .players(2, 2),

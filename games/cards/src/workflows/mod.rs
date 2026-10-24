@@ -20,6 +20,7 @@ pub async fn register(bot: &TawksBot, actions: &CardGameActionIds) -> Result<()>
         let workflow_id = bot.register_workflow(activity_definition(actions)).await?;
         bot.register_activity(
             &Activity::new(workflow_id, "Cards (beta)", client_url)
+                .source("https://github.com/timfeid/tawks-dev/tree/main/games/cards")
                 .description("Mana Clash running as an activity")
                 .icon("layers")
                 .players(1, 4),

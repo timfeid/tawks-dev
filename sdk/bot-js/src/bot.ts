@@ -39,6 +39,8 @@ export type Activity = {
   icon?: string;
   min_players?: number;
   max_players?: number;
+  /** Where people can read the game's code; the Play page links to it. */
+  source_url?: string;
 };
 
 export type NotificationKind = {

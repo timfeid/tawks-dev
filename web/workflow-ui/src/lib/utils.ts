@@ -1,5 +1,10 @@
 import type { JsonValue } from '@tawks/workflow-types';
 
+/** A compared value may name another response, as `{game.owner_user_id}` does. */
+function expected(value: unknown, inputs: Record<string, any>): unknown {
+  return typeof value === 'string' && /\{[^}]+\}/.test(value) ? interpolate(inputs, value) : value;
+}
+
 export function evaluateCondition(condition: any, inputs: Record<string, any>): boolean {
   if (condition === 'Always') return true;
   if (!condition) return true;
@@ -16,15 +21,25 @@ export function evaluateCondition(condition: any, inputs: Record<string, any>): 
     
     if ('ResponseEquals' in condition) {
       const val = getNestedValue(inputs, condition.ResponseEquals.field);
-      return deepEqual(val, condition.ResponseEquals.value);
+      return deepEqual(val, expected(condition.ResponseEquals.value, inputs));
     }
 
     if ('ContextEquals' in condition) {
         // For preview, we might not have context, but let's try to find it in inputs
         const val = getNestedValue(inputs, condition.ContextEquals.field);
-        return deepEqual(val, condition.ContextEquals.value);
+        return deepEqual(val, expected(condition.ContextEquals.value, inputs));
     }
     
+    if ('Gte' in condition) {
+      const val = getNestedValue(inputs, condition.Gte.field);
+      const min = expected(condition.Gte.value, inputs);
+      const number = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+      if (!Number.isNaN(number(val)) && !Number.isNaN(number(min))) return number(val) >= number(min);
+      if (typeof val === 'string' && typeof min === 'string') return val >= min;
+      if (typeof val === 'boolean' && typeof min === 'boolean') return val || !min;
+      return false;
+    }
+
     if ('ResponseListEmpty' in condition) {
       const val = getNestedValue(inputs, condition.ResponseListEmpty);
       return Array.isArray(val) && val.length === 0;

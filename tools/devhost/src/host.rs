@@ -4,8 +4,11 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
+use workflow_model::condition::eval_condition;
+use workflow_model::schedule::job::{ScheduledAction, ScheduledJob};
 use workflow_model::server_action::ServerActionResult;
 use workflow_model::service::{WorkflowResource, WorkflowResourceWithContext};
+use workflow_model::transform::{apply_input_map_into_responses, apply_transform_ops};
 use workflow_model::{ActionType, CreateWorkflowDefinition, WorkflowRuntimeStatus};
 
 const ACTION_TIMEOUT: Duration = Duration::from_secs(15);
@@ -26,12 +29,18 @@ impl Player {
             id: format!("player-{n}"),
             username: format!("player{n}"),
             display_name: format!("Player {n}"),
-            avatar_url: "default/1.png".into(),
+            avatar_url: format!("default/default-{}.png", (n - 1) % 5 + 1),
             db_score: 0,
             is_bot: false,
         }
     }
 }
+
+/// Server actions tawks itself answers, which devhost only notes.
+const BUILT_IN_ACTIONS: [&str; 1] = ["db_score.added"];
+
+/// The niche every devhost lobby belongs to.
+pub const DEV_NICHE: &str = "dev-niche";
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Instance {
@@ -44,6 +53,12 @@ pub struct Instance {
     pub context: HashMap<String, Value>,
     pub completed: bool,
     pub complete_message: Option<String>,
+    /// For a workflow a game started inside a player's page: that page's
+    /// instance, and where in it the new one shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_instance_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inject: Option<Value>,
 }
 
 /// What the page hears about: instance changes and a running log.
@@ -91,6 +106,8 @@ struct State {
     /// Each session's current lobby, and when the session was last used.
     lobbies: HashMap<String, String>,
     touched: HashMap<String, Instant>,
+    /// Jobs games scheduled with a ScheduleJobs result, by when they are due.
+    jobs: Vec<(Instant, String, ScheduledJob)>,
 }
 
 impl State {
@@ -201,6 +218,13 @@ impl Host {
         state.actions.values().filter(|(r, _)| r.as_deref() == Some(registrar)).count() as u32
     }
 
+    /// A bot may name its own workflow by its bare key, as tawks allows.
+    pub async fn resolve_workflow(&self, id: &str, bot: &str) -> String {
+        let scoped = format!("wf-{id}-{bot}");
+        let state = self.state.lock().await;
+        if !state.definitions.contains_key(id) && state.definitions.contains_key(&scoped) { scoped } else { id.to_string() }
+    }
+
     pub async fn has_workflow(&self, id: &str) -> bool {
         self.state.lock().await.definitions.contains_key(id)
     }
@@ -230,7 +254,21 @@ impl Host {
         workflow_id: &str,
         user: &Player,
         input: HashMap<String, Value>,
+        context: HashMap<String, Value>,
+    ) -> Result<Instance, String> {
+        self.start_within(session, workflow_id, user, input, context, None, None).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_within(
+        &self,
+        session: &str,
+        workflow_id: &str,
+        user: &Player,
+        input: HashMap<String, Value>,
         mut context: HashMap<String, Value>,
+        parent_instance_id: Option<String>,
+        inject: Option<Value>,
     ) -> Result<Instance, String> {
         let (starting, lobby) = {
             let mut state = self.state.lock().await;
@@ -246,6 +284,8 @@ impl Host {
         context.insert("$anonymous".into(), json!(false));
         let mut responses = input;
         responses.entry("lobby_id".into()).or_insert(json!(lobby));
+        // tawks starts lobby games with the lobby's niche too.
+        responses.entry("niche_id".into()).or_insert(json!(DEV_NICHE));
         let instance = Instance {
             id: ulid::Ulid::new().to_string(),
             session: session.to_string(),
@@ -255,6 +295,8 @@ impl Host {
             context,
             completed: false,
             complete_message: None,
+            parent_instance_id,
+            inject,
         };
         self.state.lock().await.instances.insert(instance.id.clone(), instance.clone());
         self.publish(&instance.id).await;
@@ -279,26 +321,48 @@ impl Host {
     pub async fn act(&self, instance_id: &str, action_id: &str, inputs: HashMap<String, Value>) -> Result<(), String> {
         let target = {
             let mut state = self.state.lock().await;
-            let instance = state.instances.get_mut(instance_id).ok_or("no such instance")?;
-            instance.responses.extend(inputs);
-            let workflow_id = instance.workflow_id.clone();
+            let workflow_id = state.instances.get(instance_id).ok_or("no such instance")?.workflow_id.clone();
             let definition = state.definitions.get(&workflow_id).ok_or("the workflow is gone")?;
             let action = definition
                 .actions
                 .iter()
                 .find(|a| a.id == action_id)
-                .ok_or_else(|| format!("the workflow has no action {action_id}"))?;
+                .ok_or_else(|| format!("the workflow has no action {action_id}"))?
+                .clone();
+            let instance = state.instances.get_mut(instance_id).ok_or("no such instance")?;
+            instance.responses.extend(inputs);
             match (&action.action_type, &action.target) {
-                (ActionType::RunServerAction, Some(target)) => target.clone(),
-                (other, _) => return Err(format!("devhost only runs server actions, not {other:?}")),
+                (ActionType::RunServerAction, Some(target)) => Some(target.clone()),
+                (ActionType::TransformThenRun { ops, input_map, server_action_id, .. }, _) => {
+                    apply_transform_ops(&mut instance.responses, ops, &mut instance.context)?;
+                    if let Some(map) = input_map {
+                        apply_input_map_into_responses(&mut instance.responses, &instance.context, map);
+                    }
+                    Some(server_action_id.clone())
+                }
+                (ActionType::TransformResponses { ops, .. }, _) => {
+                    apply_transform_ops(&mut instance.responses, ops, &mut instance.context)?;
+                    None
+                }
+                (ActionType::NextNode | ActionType::PreviousNode | ActionType::Noop, _) => None,
+                (other, _) => return Err(format!("devhost does not run {other:?} actions yet")),
             }
         };
         self.publish(instance_id).await;
-        self.dispatch(instance_id, &target).await
+        match target {
+            Some(target) => self.dispatch(instance_id, &target).await,
+            None => Ok(()),
+        }
     }
 
     /// Hands a server action to the bot and waits for its answer.
     pub async fn dispatch(&self, instance_id: &str, action_id: &str) -> Result<(), String> {
+        // tawks runs some server actions itself, such as awarding score.
+        if BUILT_IN_ACTIONS.contains(&action_id) {
+            let session = self.session_of(instance_id).await;
+            self.log_to(session.as_deref(), "info", format!("{action_id} (tawks would handle this)"));
+            return Ok(());
+        }
         let (done, wait) = oneshot::channel();
         match self.request(instance_id, action_id, Reply::Apply(done), wait).await {
             Ok(Ok(outcome)) => outcome,
@@ -348,6 +412,8 @@ impl Host {
             context,
             completed: false,
             complete_message: None,
+            parent_instance_id: None,
+            inject: None,
         };
         let id = instance.id.clone();
         self.state.lock().await.instances.insert(id.clone(), instance);
@@ -453,6 +519,21 @@ impl Host {
                     instance.completed = true;
                     instance.complete_message = Some(message);
                 }
+                ServerActionResult::ScheduleJobs { inputs, context, jobs, .. } => {
+                    instance.responses.extend(inputs);
+                    instance.context.extend(context);
+                    let now = Instant::now();
+                    for job in jobs {
+                        let duplicate = state
+                            .jobs
+                            .iter()
+                            .any(|(_, id, queued)| id == instance_id && queued.idempotency_key == job.idempotency_key);
+                        if !duplicate {
+                            let due = now + Duration::from_millis(job.after_ms.into());
+                            state.jobs.push((due, instance_id.to_string(), job));
+                        }
+                    }
+                }
                 other => {
                     let kind = serde_json::to_value(&other)
                         .ok()
@@ -464,6 +545,53 @@ impl Host {
         }
         self.publish(instance_id).await;
         Ok(())
+    }
+
+    /// Runs the scheduled jobs that are due, as tawks' scheduler would.
+    pub async fn run_due_jobs(&self) {
+        let due: Vec<(String, ScheduledJob)> = {
+            let mut state = self.state.lock().await;
+            let now = Instant::now();
+            let (ready, waiting): (Vec<_>, Vec<_>) = state.jobs.drain(..).partition(|(at, _, _)| *at <= now);
+            state.jobs = waiting;
+            ready.into_iter().map(|(_, id, job)| (id, job)).collect()
+        };
+        for (instance_id, job) in due {
+            let runs = {
+                let state = self.state.lock().await;
+                state.instances.get(&instance_id).is_some_and(|i| {
+                    job.guard.as_ref().is_none_or(|guard| eval_condition(guard, &i.responses, &i.context))
+                })
+            };
+            if !runs {
+                continue;
+            }
+            let outcome = match job.action {
+                ScheduledAction::RunServerAction { action_id, payload } => {
+                    let inputs = payload.as_object().map(|o| o.clone().into_iter().collect()).unwrap_or_default();
+                    self.act(&instance_id, &action_id, inputs).await
+                }
+                ScheduledAction::UpdateResponses { updates, .. } => {
+                    if let Some(instance) = self.state.lock().await.instances.get_mut(&instance_id) {
+                        instance.responses.extend(updates);
+                    }
+                    self.publish(&instance_id).await;
+                    Ok(())
+                }
+                ScheduledAction::TransformResponses { ops, .. } => {
+                    let applied = match self.state.lock().await.instances.get_mut(&instance_id) {
+                        Some(instance) => apply_transform_ops(&mut instance.responses, &ops, &mut instance.context).map(|_| ()),
+                        None => Ok(()),
+                    };
+                    self.publish(&instance_id).await;
+                    applied
+                }
+            };
+            if let Err(error) = outcome {
+                let session = self.session_of(&instance_id).await;
+                self.log_to(session.as_deref(), "error", format!("scheduled job {}: {error}", job.idempotency_key));
+            }
+        }
     }
 
     /// The game framework pushes each player's view this way.

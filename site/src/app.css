@@ -2,6 +2,8 @@
 @import '../../web/ui/src/theme.css';
 @source "../../web/ui/src/lib";
 @source "../../web/workflow-ui/src/lib";
+/* The open-source games describe their pages in Rust; the Play page draws them. */
+@source "../../games";
 @source "./";
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:where(.dark, .dark *));

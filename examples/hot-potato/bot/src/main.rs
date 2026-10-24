@@ -108,6 +108,7 @@ async fn main() -> Result<()> {
             let workflow_id = bot.register_workflow(workflow(&routes)).await?;
             bot.register_activity(
                 &Activity::new(&workflow_id, "Hot Potato", &client_url)
+                    .source("https://github.com/timfeid/tawks-dev/tree/main/examples/hot-potato")
                     .description("Pass it before it blows")
                     .icon("sparkles")
                     .players(2, MAX_PLAYERS as i32),

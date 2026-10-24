@@ -68,6 +68,7 @@ Register on every start, as you do with workflows. Registering again updates the
 
 - `icon` is shown in the game menu. Use a name from the icon list in the [Display reference](05-displays.md); other names draw a placeholder.
 - `players(min, max)` is shown to players. Enforcing it is up to your game.
+- `source(url)` is optional: where people can read your game's code. The Play page shows a "View the code" link to it.
 - The URL must use `https`. While you develop, `http://localhost` and `http://127.0.0.1` are allowed too, and only you will be able to load them.
 - The URL can't be on `tawks.app` or any of its subdomains.
 
@@ -229,6 +230,8 @@ Open `http://localhost:8787`, pick your game, choose how many players, and press
 
 ![devhost running the tic-tac-toe example with two players side by side, mid-game](https://tawks-dev.vercel.app/img/docs/devhost.webp)
 
+The [Play page](https://tawks-dev.vercel.app/play) works with your devhost too: open `https://tawks-dev.vercel.app/play?sandbox=http://localhost:8787` (or your `DEVHOST_PORT`). It lists the games your bots registered and lays every seat side by side, the same as with the sandbox. Your browser may ask whether the site can reach apps on your device; allow it.
+
 The examples register their app at a `localhost` address by default. Set `CLIENT_URL` when you run one to point it somewhere else, such as another port or a deployed `https` build.
 
 ### In the sandbox
@@ -244,6 +247,8 @@ RSPC_URL=https://sandbox.tawks.app/rspc EVENTS_WS_URL=wss://sandbox.tawks.app/ev
 
 3. Register your activity with an `https` client URL, so every player's browser can load it.
 4. Open the Play page, pick your game, choose the seats and press Start.
+
+The Play page also lists the open-source games whose players use workflow pages instead of an activity frame: Midnight, Trivia, Tracklines and Cards. Each game with a source link has a "View the code" button.
 
 The sandbox behaves like devhost, with a few differences:
 

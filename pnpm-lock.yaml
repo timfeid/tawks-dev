@@ -170,6 +170,9 @@ importers:
       '@tawks/editor':
         specifier: workspace:^
         version: link:../web/editor
+      '@tawks/game-canvases':
+        specifier: workspace:^
+        version: link:../games/canvases
       '@tawks/ui':
         specifier: workspace:^
         version: link:../web/ui
@@ -185,6 +188,9 @@ importers:
       markdown-it:
         specifier: ^14.1.0
         version: 14.3.3
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
     devDependencies:
       '@lucide/svelte':
         specifier: ^0.561.0

@@ -14,6 +14,9 @@ pub struct Activity {
     pub min_players: Option<i32>,
     pub max_players: Option<i32>,
     pub client_url: String,
+    /// Where people can read the game's code; the Play page links to it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
 }
 
 impl Activity {
@@ -27,6 +30,7 @@ impl Activity {
             min_players: None,
             max_players: None,
             client_url: client_url.into(),
+            source_url: None,
         }
     }
 
@@ -38,6 +42,11 @@ impl Activity {
     /// A Lucide icon name, shown in the lobby's game menu.
     pub fn icon(mut self, icon: impl Into<String>) -> Self {
         self.icon = Some(icon.into());
+        self
+    }
+
+    pub fn source(mut self, url: impl Into<String>) -> Self {
+        self.source_url = Some(url.into());
         self
     }
 

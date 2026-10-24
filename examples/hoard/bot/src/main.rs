@@ -142,6 +142,7 @@ async fn main() -> Result<()> {
             let workflow_id = bot.register_workflow(workflow(&routes)).await?;
             bot.register_activity(
                 &Activity::new(&workflow_id, "Hoard", &client_url)
+                    .source("https://github.com/timfeid/tawks-dev/tree/main/examples/hoard")
                     .description("Bank treasure, rob vaults, wake the dragon")
                     .icon("gem")
                     .players(2, 4),
