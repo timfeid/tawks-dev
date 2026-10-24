@@ -18,7 +18,7 @@ async function call<T>(url: string, path: string, body?: unknown): Promise<T> {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new Error(`devhost did not answer at ${base(url)}. Is it running?`);
+    throw new Error(`devhost did not answer at ${base(url)}. Check that it is running. If your browser asked whether this site may reach apps on your device, allow it.`);
   }
   if (response.status === 403) throw new Error('devhost refused this page. Update devhost, or add this address to DEVHOST_PLAYGROUND_ORIGINS.');
   if (!response.ok) throw new Error(`devhost answered ${response.status}.`);

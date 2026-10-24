@@ -77,7 +77,7 @@
         ms: Math.round(performance.now() - started),
         body:
           target === 'devhost'
-            ? 'devhost did not answer. Is it running on port 8787, and up to date?'
+            ? 'devhost did not answer. Check that it is running on port 8787 and up to date. If your browser asked whether this site may reach apps on your device, allow it; Chrome blocks the request until you do.'
             : 'The request did not reach tawks. Check your connection.',
         ok: false,
       };
