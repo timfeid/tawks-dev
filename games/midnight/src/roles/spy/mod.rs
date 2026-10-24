@@ -189,6 +189,13 @@ pub fn spy_observe_workflow(start_action_target_id: String) -> CreateWorkflowDef
             WorkflowNodeBuilder::new("Target Acquisition")
                 // We remove title_visual here to implement a custom header inside the tile for better control
                 .visual(spy_target_acquisition_visual())
+                // Stops holding once the Spy waits or hears back, so the page
+                // moves on to the node that shows it.
+                .condition(Cond::and(vec![
+                    Cond::not(Cond::response_equals("$waiting", json!(true))),
+                    Cond::not(Cond::response_exists("observed_results")),
+                    Cond::not(Cond::response_equals("no_results", json!(true))),
+                ]))
                 .build(),
         )
         .add_node(
@@ -322,6 +329,14 @@ pub fn spy_start_observe(
         .into_iter()
         .find(|r| r.role_id == effective_chosen_role_id)
         .ok_or_else(|| anyhow!("Invalid role selected"))?;
+
+    // A role whose turn has passed will not act again, so there is nothing to wait for.
+    let acts_later = game.stages_queue.iter().any(|stage| stage.role.role_id == effective_role.role_id);
+    if !acts_later {
+        let mut r = HashMap::new();
+        r.insert("no_results".into(), json!(true));
+        return Ok(ServerActionResult::UpdateResponses(r));
+    }
 
     let effective_target = match game.get_player_by_role(&effective_role.role_id, None) {
         Ok(p) => p,

@@ -102,10 +102,14 @@ pub fn game_tile() -> WorkflowVisual {
                         WorkflowDisplay {
                             class: "".into(),
                             r#type: DisplayType::Condition {
-                                condition: NodeCondition::Not(Box::new(NodeCondition::ResponseEquals {
-                                    field: "game.turn.role".into(),
-                                    value: json!(null).into(),
-                                })),
+                                // Between turns, as while voting, there is no turn at all.
+                                condition: NodeCondition::And(vec![
+                                    NodeCondition::ResponseExists("game.turn.role".into()),
+                                    NodeCondition::Not(Box::new(NodeCondition::ResponseEquals {
+                                        field: "game.turn.role".into(),
+                                        value: json!(null).into(),
+                                    })),
+                                ]),
                                 content: vec![
                                     WorkflowDisplay {
                                         class: "font-halloween items-center justify-center flex flex-col".into(),

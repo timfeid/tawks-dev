@@ -5,6 +5,9 @@ pub mod roles;
 mod visuals;
 pub mod workflows;
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::{Result, anyhow};
 use serde::Serialize;
 use serde_json::{Value, json};

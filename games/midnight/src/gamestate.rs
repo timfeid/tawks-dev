@@ -423,15 +423,12 @@ impl GameLogic for GameState {
                 info!("Toggling role enable: {role_id} by {player_id}");
                 self.ensure_host(player_id)?;
                 if let Some(r) = self.all_roles.iter_mut().find(|r| r.id == role_id) {
-                    println!("hi");
-                    if let Some(m) = Arc::get_mut(r) {
-                        println!("hi2");
-                        m.enabled = !m.enabled;
-                        if m.enabled {
-                            println!("speak plszcll");
-                            if let Some(text) = m.enabled_texts.get(0) {
-                                effects.push(GameEffect::Speak { text: text.clone() });
-                            }
+                    // Views hold clones of the card, so copy it rather than give up.
+                    let card = Arc::make_mut(r);
+                    card.enabled = !card.enabled;
+                    if card.enabled {
+                        if let Some(text) = card.enabled_texts.first() {
+                            effects.push(GameEffect::Speak { text: text.clone() });
                         }
                     }
                 }

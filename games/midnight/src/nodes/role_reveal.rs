@@ -60,8 +60,9 @@ pub fn reveal_card_display(var: &str) -> WorkflowDisplay {
                                     // Decorative separator
                                     WorkflowDisplayBuilder::new("h-px w-8 bg-white/20 mx-auto mb-3").build(),
 
+                                    // Descriptions are HTML, so they render rather than show as text.
                                     WorkflowDisplayBuilder::new("text-sm font-serif text-white/70 leading-relaxed italic drop-shadow-md")
-                                        .text(format!("{{{var}.description}}"))
+                                        .wysiyg(format!("{var}.description"))
                                         .build(),
                                 ])
                                 .build(),

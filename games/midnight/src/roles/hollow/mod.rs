@@ -166,7 +166,8 @@ pub fn hollow_card(enabled: bool) -> Arc<RoleCard> {
             let hollows = game
                 .players
                 .values()
-                .filter(|p| p.is_alive && p.effective_role_card(None).alliance == Alliance::Hollow)
+                // The Follower is on the Hollows' side but does not wake with them.
+                .filter(|p| p.is_alive && p.effective_role_card(None).role_id == HOLLOW_ROLE_ID)
                 .count();
 
             if hollows != 1 {
