@@ -1,6 +1,6 @@
 # What you can build on tawks
 
-Tawks is a community app in the style of Discord. People join niches, talk in channels, hang out in lobbies and play games together. Most of what a user sees inside a channel is drawn from a **workflow**: a description of a page that a bot sends to tawks as data. Tawks renders that page on the web, on desktop and on mobile. Your bot never ships any client code.
+Tawks is a community app. People gather in niches around shared interests, keep up with their own people in friend groups, talk in channels, hang out in lobbies and play games together. Most of what a user sees inside a channel is drawn from a **workflow**: a description of a page that a bot sends to tawks as data. Tawks renders that page on the web, on desktop and on mobile. Your bot never ships any client code.
 
 A bot is a program you write and run yourself, in your own repository, on your own machine or server. It connects to the hosted tawks at https://tawks.app, registers the pages and handlers it provides, and reacts when people use them.
 
@@ -8,11 +8,31 @@ This page explains the concepts you build against. [Your first bot](02-first-bot
 
 ## The community model
 
+Tawks splits what a Discord server does into two things: niches for interests, and friend groups for people. If you know Discord, the friend group is the closer match to a server.
+
 ### Niches
 
-A niche is a community, like a Discord server. It has a name, a logo, an owner and a short slug that appears in its URLs, for example `https://tawks.app/niche/<niche slug>/<channel slug>`. A niche can be public or private.
+A niche is a broad community built around an interest, such as hockey, cooking or word puzzles. Niches are meant to be big and open: one niche per topic, shared by everyone who cares about it, rather than one per circle of friends. That is where pages, puzzles, feeds and games live, and where people who don't know each other yet meet.
+
+A niche has a name, a logo, an owner and a short slug that appears in its URLs, for example `https://tawks.app/niche/<niche slug>/<channel slug>`.
+
+- **Public niches** are listed in Explore. Anyone with an account can join one with a single click, and guests can look around without joining.
+- **Private niches** are not listed and can't be joined from Explore. The only way in is an invite from someone who manages the niche.
+- **Creating niches.** People can't create niches themselves, public or private. The tawks team creates them, so that each topic has one home instead of many small copies.
 
 The niche owner, and anyone with an admin role, manages the niche from its settings: the profile, roles, channels, invites, flairs and emojis.
+
+### Friend groups
+
+A friend group is a small, invite-only space for people who already know each other, and it is what makes tawks feel like a Discord server for your friends. Anyone can create one, name it and add people. It has:
+
+- A group chat, with a member list that shows who is online.
+- Its own custom emojis and invite links.
+- A place in your conversations, next to direct messages. A direct message is a friend group with exactly two people in it.
+
+Friend groups don't have channels. When a group wants to play, its members open a lobby in a niche channel together, and the lobby shows them side by side as a group. Recordings of the games they play there are shared with the group.
+
+For a bot this means your pages and games always run in niche channels, and friend groups are how people bring their friends to them. Design for strangers meeting in a public niche and for a group of friends who arrive together.
 
 ### Categories and channels
 
@@ -113,7 +133,7 @@ The bot platform is open to outside developers as a preview. A few things are st
 
 - **Bot accounts.** Making bots is by invitation: a niche's admins grant the Create Bots permission, and you make the bot and its tokens under Settings, then Bots. Each person owns one bot unless the tawks team raises the limit. Ask in `dev-chat` if you need access.
 - **SDKs.** The Rust SDK (`tawks-bot`), the game framework and the TypeScript packages are open source in the [tawks-dev repository](https://github.com/timfeid/tawks-dev), with examples and a local stand-in for tawks. They are not on crates.io or npm yet, so depend on them by git.
-- **Test niches and channels.** Niches and channels are created by the tawks team today. Ask in `dev-chat` for a niche to test in, and you can manage it from its settings once you own it.
+- **Test niches and channels.** Only the tawks team creates niches, and that includes private ones. Ask in `dev-chat` for a private niche to test in; once you own it you can add channels, attach your workflows and invite testers from its settings.
 - **Lobby picker.** The in-lobby game menu lists first-party games and the game activities a niche has turned on. A game built from workflow displays starts from a channel page instead.
 - **Tawks score.** Awarding tawks score is limited to first-party games for now.
 - **First-party games.** The games that ship with tawks will be open-sourced, so you can read real bots end to end.
