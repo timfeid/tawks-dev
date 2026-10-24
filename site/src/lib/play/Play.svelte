@@ -55,6 +55,12 @@
     };
   }
 
+  /** Views carry an increasing $rev; an older one must never replace a newer one. */
+  function revision(instance: Instance): number {
+    const rev = instance.responses.$rev;
+    return typeof rev === 'number' ? rev : 0;
+  }
+
   function playerName(instance: Instance): string {
     const user = instance.context.$user as { display_name?: string } | undefined;
     return user?.display_name ?? instance.user_id;
@@ -79,8 +85,10 @@
     starting = true;
     logs = [];
     try {
-      const started = await sandbox.start(game.workflow_id, seats);
-      instances = started.instances;
+      // The start's own answer holds each seat as it was when that player sat
+      // down; the stream has newer views by now, so ask for the lobby as it is.
+      await sandbox.start(game.workflow_id, seats);
+      instances = (await sandbox.state()).instances;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -141,8 +149,9 @@
 
     return client.listen({
       instance: (changed) => {
-        const others = instances.filter((i) => i.id !== changed.id);
-        instances = [...others, changed];
+        const current = instances.find((i) => i.id === changed.id);
+        if (current && revision(current) > revision(changed)) return;
+        instances = [...instances.filter((i) => i.id !== changed.id), changed];
       },
       activities: (list) => {
         activities = list;
