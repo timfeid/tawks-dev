@@ -3521,7 +3521,7 @@
   {#if isDraftMode && draftView}
     <DraftOverlay
       {draftView}
-      canAutoDraft={!!viewer?.is_host}
+      canAutoDraft={!!viewer}
       onAutoDraft={() => submitAction("games.cardgame.draft_auto_pick", {})}
     />
   {/if}
