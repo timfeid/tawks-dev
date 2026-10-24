@@ -2,6 +2,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { Toaster } from 'svelte-sonner';
+  import TawksText from '$lib/tawks-text.svelte';
 
   let { children } = $props();
   const links = [
@@ -12,7 +13,11 @@
 
 <div class="flex min-h-screen flex-col bg-background text-foreground">
   <header class="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-6 border-b bg-background/90 px-4 backdrop-blur md:px-6">
-    <a href="/" class="font-semibold tracking-tight">tawks <span class="text-primary">dev</span></a>
+    <a href="/" class="flex items-center gap-2" aria-label="tawks developers home">
+      <img src="/logo.png" alt="" class="size-7" />
+      <TawksText class="h-5 text-foreground" />
+      <span class="text-sm font-semibold text-primary">dev</span>
+    </a>
     <nav class="flex items-center gap-4 text-sm">
       {#each links as link (link.href)}
         <a
