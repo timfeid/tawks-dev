@@ -190,6 +190,10 @@ impl Host {
         id
     }
 
+    pub async fn has_action(&self, id: &str) -> bool {
+        self.state.lock().await.actions.contains_key(id)
+    }
+
     pub async fn renew(&self, registrar: &str) -> u32 {
         let state = self.state.lock().await;
         state.actions.values().filter(|(r, _)| r.as_deref() == Some(registrar)).count() as u32

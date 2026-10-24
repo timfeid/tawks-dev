@@ -43,7 +43,7 @@ const LOCAL_SESSION: &str = "local";
 const MAX_BODY_BYTES: usize = 512 * 1024;
 const MAX_DEFINITION_BYTES: usize = 256 * 1024;
 const MAX_WORKFLOWS_PER_BOT: usize = 20;
-const MAX_ACTIONS_PER_BOT: usize = 50;
+const MAX_ACTIONS_PER_BOT: usize = 100;
 const MAX_SESSIONS: usize = 500;
 const SESSION_IDLE: Duration = Duration::from_secs(30 * 60);
 
@@ -204,7 +204,10 @@ async fn call(app: &Shared, bot: &str, procedure: &str, input: Value) -> Result<
         }
         "server_action_register" => {
             let action_id = input.get("action_id").and_then(Value::as_str).ok_or("action_id is required")?;
-            if public && host.registrations_of(bot).await.1 >= MAX_ACTIONS_PER_BOT {
+            if public
+                && !host.has_action(&format!("sa-{action_id}-{bot}")).await
+                && host.registrations_of(bot).await.1 >= MAX_ACTIONS_PER_BOT
+            {
                 return Err(format!("A sandbox bot can register {MAX_ACTIONS_PER_BOT} server actions."));
             }
             let registrar = input.get("registrar_id").and_then(Value::as_str).map(String::from);
