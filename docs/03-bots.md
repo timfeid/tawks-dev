@@ -478,7 +478,7 @@ let _: serde_json::Value = bot.sdk.web_client.mutate("workflow_broadcast_updates
 
 ## Notifications
 
-`tawks_bot::notify::Notifier` sends push and in-app notifications for one channel. You declare notification kinds, users opt in to each kind from the channel's bell menu, and you send to the users who opted in.
+`tawks_bot::notify::Notifier` sends push and in-app notifications for one channel. You declare notification kinds, people turn each kind on from the channel's bell menu, and you send on a kind. tawks delivers only to the people who turned it on: your bot never decides who can receive a notification.
 
 ```rust
 use tawks_bot::notify::{KindInput, Notifier};
@@ -500,12 +500,10 @@ let notifier = Notifier::new(
 
 notifier.register_kinds().await?;
 
-let users = notifier.subscribers("hellobot.daily").await?;
 notifier
-    .send(
+    .send_to_subscribers(
         "hellobot.daily",
         "hellobot.daily:2026-10-22",
-        &users,
         "Good morning",
         Some("Come say hello"),
         Some(notifier.channel_url()),
@@ -517,10 +515,10 @@ Things to know:
 
 - `Notifier::new` takes the full `Authorization` header value (`Bot <token>`), not the bare token.
 - `kind` is `"event"` or `"reminder"`.
-- Every kind starts off for every user. Users turn it on themselves.
-- Kind keys share one namespace across all bots, so prefix them with your bot's name.
-- Always send to the list from `subscribers(event_key)`, so only people who opted in hear from you.
-- `dedupe_key` is unique per user. Sending the same key to the same user twice delivers once, so put the date or an event id in it.
+- Every kind starts off for every person. People turn it on and off themselves.
+- A kind belongs to the bot that registered it first. Keys share one namespace across all bots, so prefix them with your bot's name; registering a key another bot owns fails. Your bot must be a member of the channel's niche.
+- `send_to_subscribers` reaches everyone who turned the kind on. For a message that differs per person, such as each player's own score, call `send` with the people to send it to; tawks skips anyone in the list who has not turned the kind on. `subscribers(event_key)` lists who has, so you can build those messages.
+- `dedupe_key` is unique per person. Sending the same key to the same person twice delivers once, so put the date or an event id in it.
 - `send_with_icon` takes one more argument: a push icon URL, or `Some("none")` for no icon.
 
 Build the `Notifier` once at startup, outside the reconnect loop, and run your send schedule on its own task.

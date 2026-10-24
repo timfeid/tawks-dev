@@ -31,7 +31,8 @@ struct SendArgs<'a> {
     channel_id: &'a str,
     event_key: &'a str,
     dedupe_key: &'a str,
-    user_ids: &'a [String],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_ids: Option<&'a [String]>,
     title: &'a str,
     body: Option<&'a str>,
     url: Option<&'a str>,
@@ -98,6 +99,20 @@ impl Notifier {
             .await
     }
 
+    /// Sends to everyone who turned `event_key` on.
+    pub async fn send_to_subscribers(
+        &self,
+        event_key: &str,
+        dedupe_key: &str,
+        title: &str,
+        body: Option<&str>,
+        url: Option<&str>,
+    ) -> Result<usize> {
+        self.deliver(event_key, dedupe_key, None, title, body, url, None).await
+    }
+
+    /// Sends to the people in `user_ids` who turned `event_key` on, for a
+    /// message that differs per person. tawks skips anyone else.
     pub async fn send(
         &self,
         event_key: &str,
@@ -126,6 +141,20 @@ impl Notifier {
         if user_ids.is_empty() {
             return Ok(0);
         }
+        self.deliver(event_key, dedupe_key, Some(user_ids), title, body, url, icon).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn deliver(
+        &self,
+        event_key: &str,
+        dedupe_key: &str,
+        user_ids: Option<&[String]>,
+        title: &str,
+        body: Option<&str>,
+        url: Option<&str>,
+        icon: Option<&str>,
+    ) -> Result<usize> {
         self.client
             .mutate(
                 "bot_notifications_send",
