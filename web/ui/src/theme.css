@@ -6,8 +6,8 @@
   @theme {
       --breakpoint-3xl: 120rem;
 
-    --default-font-family: 'Noto Sans', 'Commissioner', 'Nunito Sans';
-    --font-mono: 'IBM Plex Mono';
+    --default-font-family: 'Noto Sans Variable', 'Noto Sans', 'Commissioner', 'Nunito Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
     --color-background: hsl(0, 0%, 95%);
     --color-foreground: hsl(0, 0%, 3.9%);
