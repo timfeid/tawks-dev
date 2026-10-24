@@ -3,26 +3,21 @@
 //! OpenAI (OPENAI_MODEL picks the model); without it every quiz is a built-in
 //! sample, which is enough to play and develop against.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::Result;
 use game_framework::engine::GameEngine;
 use sqlx::PgPool;
-use tawks_bot::types::{BotOptions, Event};
-use tawks_bot::{TawksBot, shutdown_token, with_jitter};
+use tawks_bot::TawksBot;
+use tawks_bot::types::BotOptions;
 use tawks_data::database::create_connection;
-use tokio::{select, time::sleep};
-use tracing::{error, info, warn};
+use tracing::warn;
 use trivia::{
     Generator,
     generator::{local::LocalMockGenerator, openai::OpenAiGenerator},
     multiplayer::{TriviaGameState, TriviaInitArgs},
     state::TriviaState,
 };
-
-fn env(key: &str) -> Result<String> {
-    std::env::var(key).map_err(|_| anyhow::anyhow!("{key} is required"))
-}
 
 fn generator() -> Result<Arc<dyn Generator + Send + Sync>> {
     if std::env::var("OPENAI_API_KEY").is_ok_and(|key| !key.is_empty()) {
@@ -61,52 +56,16 @@ async fn main() -> Result<()> {
         ))
         .init();
 
-    let opts = BotOptions {
-        rspc_url: env("RSPC_URL")?,
-        events_ws_url: env("EVENTS_WS_URL")?,
-        token: env("BOT_TOKEN")?,
-        token_type: Some(std::env::var("BOT_TOKEN_TYPE").unwrap_or_else(|_| "Bot".to_string())),
-    };
-    let pool = create_connection(&env("TRIVIA_DATABASE_URL")?).await;
+    let opts = BotOptions::from_env()?;
+    let url = std::env::var("TRIVIA_DATABASE_URL")
+        .map_err(|_| anyhow::anyhow!("TRIVIA_DATABASE_URL is required"))?;
+    let pool = create_connection(&url).await;
     sqlx::migrate!().run(pool.as_ref()).await?;
     let generator = generator()?;
 
-    let shutdown = shutdown_token();
-    let mut backoff = Duration::from_secs(1);
-    let backoff_max = Duration::from_secs(30);
-
-    loop {
-        let session = async {
-            let bot = TawksBot::new(opts.clone()).await?;
-            register(&bot, pool.clone(), generator.clone()).await?;
-            info!("trivia registered");
-            bot.start(|event, _| async move {
-                match event {
-                    Event::Connect => info!("connected"),
-                    Event::Disconnect => warn!("disconnected"),
-                    Event::Error { error } => error!(%error, "event stream error"),
-                    Event::Message { .. } => {}
-                }
-            })
-            .await
-        };
-
-        select! {
-            _ = shutdown.cancelled() => return Ok(()),
-            result = session => {
-                match result {
-                    Ok(()) => backoff = Duration::from_secs(1),
-                    Err(error) => error!(%error, "bot stopped"),
-                }
-            }
-        }
-
-        let wait = with_jitter(backoff);
-        warn!(?wait, "reconnecting");
-        select! {
-            _ = shutdown.cancelled() => return Ok(()),
-            _ = sleep(wait) => {}
-        }
-        backoff = (backoff * 2).min(backoff_max);
-    }
+    tawks_bot::run(opts, |bot| {
+        let (pool, generator) = (pool.clone(), generator.clone());
+        async move { register(&bot, pool, generator).await }
+    })
+    .await
 }

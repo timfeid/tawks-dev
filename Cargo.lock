@@ -1485,6 +1485,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "dotenvy",
  "game-framework",
  "rand 0.9.5",
  "rand_chacha 0.9.0",
@@ -1494,6 +1495,7 @@ dependencies = [
  "tawks-bot",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "ulid",
  "workflow-model",
 ]
@@ -3261,6 +3263,7 @@ name = "tracklines"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dotenvy",
  "game-framework",
  "rand 0.9.5",
  "rand_chacha 0.9.0",
@@ -3269,6 +3272,7 @@ dependencies = [
  "tawks-bot",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "workflow-model",
 ]
 

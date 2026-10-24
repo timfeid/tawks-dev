@@ -10,6 +10,19 @@ pub struct BotOptions {
     pub token_type: Option<String>,
 }
 
+impl BotOptions {
+    /// Reads RSPC_URL, EVENTS_WS_URL, BOT_TOKEN and BOT_TOKEN_TYPE (default `Bot`).
+    pub fn from_env() -> anyhow::Result<Self> {
+        let var = |key: &str| std::env::var(key).map_err(|_| anyhow::anyhow!("{key} is required"));
+        Ok(Self {
+            rspc_url: var("RSPC_URL")?,
+            events_ws_url: var("EVENTS_WS_URL")?,
+            token: var("BOT_TOKEN")?,
+            token_type: Some(std::env::var("BOT_TOKEN_TYPE").unwrap_or_else(|_| "Bot".to_string())),
+        })
+    }
+}
+
 impl std::fmt::Debug for BotOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BotOptions")

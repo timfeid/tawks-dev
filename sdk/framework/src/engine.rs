@@ -480,6 +480,37 @@ where
 // Core processing inside lobby actor
 // =========================================================================
 
+/// Sends a player's view. The API refuses a write that raced another one to
+/// the same instance, so those are tried again; a view that never lands would
+/// leave the player looking at an old stage until the next change.
+async fn reconcile(bot: &TawksBot, payload: serde_json::Value) -> Result<()> {
+    let mut attempt = 0;
+    loop {
+        match bot
+            .sdk()
+            .web_client
+            .mutate::<_, ()>("workflow_reconcile_instance", &payload)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(error) if attempt < 4 && error.to_string().contains("changed by another request") => {
+                attempt += 1;
+                tracing::debug!(instance = %payload["instance_id"], attempt, "view write raced another; retrying");
+                tokio::time::sleep(std::time::Duration::from_millis(50 * attempt)).await;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    instance = %payload["instance_id"],
+                    user = %payload["target_user_id"],
+                    %error,
+                    "a player's view was not delivered"
+                );
+                return Err(error);
+            }
+        }
+    }
+}
+
 async fn process_and_fanout<G>(
     lobby_id: &str,
     game: &mut G,
@@ -620,15 +651,13 @@ where
             continue;
         };
 
-        // Skip reconciling players that have pending cleanup/restart effects --
-        // reconcile_node: true would fight with the workflow_restart.
+        // Players whose game is ending get their final view from that effect
+        // below, without reconcile_node, which would fight the restart.
         let has_cleanup = user_effects.get(&user_id).map_or(false, |effs| {
             effs.iter().any(|e| {
                 matches!(
                     e,
-                    GameEffect::EndGameCleanup { .. }
-                        | GameEffect::ClearWorkflow { .. }
-                        | GameEffect::CompleteWorkflow { .. }
+                    GameEffect::EndGameCleanup { .. } | GameEffect::CompleteWorkflow { .. }
                 )
             })
         });
@@ -637,21 +666,17 @@ where
         let view = game.view_for(&user_id);
 
         if !has_cleanup {
-            // reconcile...
-            bot.sdk()
-                .web_client
-                .mutate::<_, ()>(
-                    "workflow_reconcile_instance",
-                    &json!({
-                        "instance_id": instance_id,
-                        "inputs": { "game": view, "lobby_id": lobby_id, "$rev": rev },
-                        "context": {},
-                        "reconcile_node": true,
-                        "target_user_id": user_id
-                    }),
-                )
-                .await
-                .ok();
+            let _ = reconcile(
+                &bot,
+                json!({
+                    "instance_id": instance_id,
+                    "inputs": { "game": view, "lobby_id": lobby_id, "$rev": rev },
+                    "context": {},
+                    "reconcile_node": true,
+                    "target_user_id": user_id
+                }),
+            )
+            .await;
         }
 
         // injects...
@@ -680,20 +705,17 @@ where
                         // Final reconcile with reconcile_node=false so the
                         // client sees the end state. Previously workflow_restart
                         // caused zombie loops.
-                        let _ = bot
-                            .sdk()
-                            .web_client
-                            .mutate::<_, ()>(
-                                "workflow_reconcile_instance",
-                                &json!({
-                                    "instance_id": instance_id,
-                                    "inputs": { "game": view, "lobby_id": lobby_id, "$rev": rev },
-                                    "context": {},
-                                    "reconcile_node": false,
-                                    "target_user_id": user_id
-                                }),
-                            )
-                            .await;
+                        let _ = reconcile(
+                            &bot,
+                            json!({
+                                "instance_id": instance_id,
+                                "inputs": { "game": view, "lobby_id": lobby_id, "$rev": rev },
+                                "context": {},
+                                "reconcile_node": false,
+                                "target_user_id": user_id
+                            }),
+                        )
+                        .await;
                     }
                     GameEffect::CompleteWorkflow {
                         message, responses, ..

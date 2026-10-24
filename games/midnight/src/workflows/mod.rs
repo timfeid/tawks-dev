@@ -36,6 +36,7 @@ pub async fn register(
     roles::spy::register(bot, engine.clone()).await?;
     roles::witness::register(bot, engine.clone()).await?;
     roles::follower::register(bot, engine.clone()).await?;
+    roles::lucid::register(bot, engine.clone()).await?;
 
     Ok(())
 }

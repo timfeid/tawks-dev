@@ -20,6 +20,10 @@ cargo run --release -p cardgame --bin cards-bot
 
 `scripts/playground-db.sh` writes the schema, the card catalog, the starter decks and the pack types. Run it again after changing the catalog. Store products live in the tawks database and are only written when `TAWKS_DATABASE_URL` is set.
 
+## Client
+
+`client` is the game's web client, the 3D battlefield in a tawks activity frame. `pnpm --filter @tawks/cards-activity dev` serves it on port 5191; point `CARDS_ACTIVITY_URL` at it to play your local build. `pnpm --filter @tawks/cards-activity build` writes a static site to `client/dist` that any host can serve, as long as it allows cross-origin requests.
+
 ## Tools
 
 Each is a binary in `src/bin`, run with `cargo run -p cardgame --bin <name>`. `cards-migrate`, `manage_packs`, `validate_data` and the `check_*` tools read `CARDGAME_DATABASE_URL`. `balance_check`, `run_gauntlet` and `operator_autotune` simulate games without a database.

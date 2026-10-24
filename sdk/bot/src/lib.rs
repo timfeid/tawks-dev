@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 pub mod activity;
 pub mod bot;
 pub mod notify;
+mod run;
 pub mod sdk;
 pub mod share;
 pub mod services;
@@ -15,6 +16,7 @@ pub mod web_client;
 
 pub use activity::Activity;
 pub use bot::*;
+pub use run::run;
 pub use sdk::*;
 pub use workflow;
 
