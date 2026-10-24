@@ -562,7 +562,7 @@ Users have a tawks score that shows on their profile. Score is awarded by first-
 
 It is not on npm yet, so depend on it by git. The `examples/hello-js` folder in the repository is a working bot to copy.
 
-### A complete bot
+### A complete JavaScript bot
 
 ```js
 import { TawksBot, result, ui } from '@tawks/bot';

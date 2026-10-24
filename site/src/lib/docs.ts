@@ -57,7 +57,7 @@ md.renderer.rules.link_open = (tokens, i, options, env, self) => {
 const headingOpen = md.renderer.rules.heading_open ?? ((tokens, i, options, _env, self) => self.renderToken(tokens, i, options));
 md.renderer.rules.heading_open = (tokens, i, options, env, self) => {
   const inline = tokens[i + 1];
-  if (inline?.type === 'inline') tokens[i].attrSet('id', anchor(inline.content));
+  if (inline?.type === 'inline') tokens[i].attrSet('id', uniqueAnchor(inline.content, env));
   return headingOpen(tokens, i, options, env, self);
 };
 
@@ -65,16 +65,26 @@ export function findDoc(slug: string): Doc | undefined {
   return bySlug.get(slug);
 }
 
+/** Repeated headings get `-2`, `-3` and so on, the way GitHub numbers them. */
+function uniqueAnchor(text: string, env: { seen?: Map<string, number> }): string {
+  env.seen ??= new Map();
+  const id = anchor(text);
+  const count = env.seen.get(id) ?? 0;
+  env.seen.set(id, count + 1);
+  return count ? `${id}-${count + 1}` : id;
+}
+
 export function render(doc: Doc): string {
-  return md.render(doc.markdown);
+  return md.render(doc.markdown, {});
 }
 
 export function headings(doc: Doc): { level: number; text: string; id: string }[] {
+  const env = {};
   return md
     .parse(doc.markdown, {})
-    .flatMap((t, i, all) =>
-      t.type === 'heading_open' && (t.tag === 'h2' || t.tag === 'h3')
-        ? [{ level: Number(t.tag[1]), text: all[i + 1].content, id: anchor(all[i + 1].content) }]
-        : [],
-    );
+    .flatMap((t, i, all) => {
+      if (t.type !== 'heading_open') return [];
+      const id = uniqueAnchor(all[i + 1].content, env);
+      return t.tag === 'h2' || t.tag === 'h3' ? [{ level: Number(t.tag[1]), text: all[i + 1].content, id }] : [];
+    });
 }
