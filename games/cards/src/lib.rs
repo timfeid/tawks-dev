@@ -17,6 +17,8 @@ use crate::types::{
 use game_framework::engine::GameEngine;
 
 pub mod action;
+#[cfg(feature = "art")]
+pub mod art;
 pub mod builder;
 pub mod card;
 pub mod card_catalog;

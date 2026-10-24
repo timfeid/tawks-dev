@@ -454,11 +454,11 @@ fn migrate_script_covers_all_catalog_effect_kinds() {
         }
     }
 
-    let migrate_script = include_str!("bin/migrate.rs");
+    let migrate_script = include_str!("bin/cards-migrate.rs");
     for kind in kinds {
         assert!(
             migrate_script.contains(&format!("'{kind}'")),
-            "migrate.rs is missing card_effect_kind enum value '{kind}'"
+            "cards-migrate.rs is missing card_effect_kind enum value '{kind}'"
         );
     }
 }

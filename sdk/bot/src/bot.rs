@@ -13,7 +13,6 @@ use tokio::sync::Notify;
 use tokio::sync::RwLock;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tracing::debug;
-use tracing::error;
 use url::Url;
 use workflow::CreateWorkflowDefinition;
 use workflow::service::ProcessWorkflowActionArgs;
@@ -350,7 +349,9 @@ impl TawksBot {
                     });
                                                                             }
                                                                             None => {
-                                                                                error!("no handler found");
+                                                                                // Bots split across processes share one token, so the
+                                                                                // action may belong to another process of this bot.
+                                                                                debug!(%action_id, "no handler for server action here");
                                                                                 let message = MessageEvent::WorkflowRequestServerAction { action_id, id, workflow };
                                                                                 on_event(Event::Message { message }, &sdk).await;
                                                                             }

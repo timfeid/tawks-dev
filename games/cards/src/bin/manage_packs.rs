@@ -48,7 +48,7 @@ COMMANDS:
 
 ENVIRONMENT:
     CARDGAME_DATABASE_URL    PostgreSQL connection string (cardgame DB)
-    DATABASE_URL             PostgreSQL connection string (tawks DB, for store products)
+    TAWKS_DATABASE_URL       Optional tawks database, for store products
 "#
     );
 }
@@ -64,17 +64,16 @@ fn cardgame_pool() -> impl std::future::Future<Output = Result<sqlx::PgPool>> {
     }
 }
 
-fn tawks_pool() -> impl std::future::Future<Output = Result<sqlx::PgPool>> {
-    async {
-        let url = env::var("TAWKS_DATABASE_URL")
-            .or_else(|_| env::var("DATABASE_URL"))
-            .expect("TAWKS_DATABASE_URL or DATABASE_URL must be set");
-        let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&url)
-            .await?;
-        Ok(pool)
-    }
+/// The tawks database holds the store, which a playground does not have.
+async fn tawks_pool() -> Result<Option<sqlx::PgPool>> {
+    let Ok(url) = env::var("TAWKS_DATABASE_URL") else {
+        return Ok(None);
+    };
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await?;
+    Ok(Some(pool))
 }
 
 /// The server only seeds decks it has never seen, so an edited catalog card
@@ -216,7 +215,12 @@ async fn seed_defaults() -> Result<()> {
     upsert_pack_slots(&cg_pool, starter_id, &starter_slots).await?;
     println!("  Starter Pack: 15 slots");
 
-    // Store products (tawks DB) — only Standard and Premium are purchasable
+    let Some(tw_pool) = tw_pool else {
+        println!("\nTAWKS_DATABASE_URL is not set; skipping store products.");
+        return Ok(());
+    };
+
+    // Only Standard and Premium are purchasable.
     println!("\nSeeding store products...\n");
 
     upsert_store_product(

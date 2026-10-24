@@ -28,7 +28,7 @@ fn print_help() {
 Cardgame Migration Tool
 
 USAGE:
-    migrate <COMMAND>
+    cards-migrate <COMMAND>
 
 COMMANDS:
     create      Generate SQL migration from Rust types
@@ -54,7 +54,7 @@ async fn create_migration() -> Result<()> {
 
     println!("✓ Generated migration: {}", migration_path);
     println!("\nTo apply:");
-    println!("  migrate apply");
+    println!("  cards-migrate apply");
 
     Ok(())
 }
@@ -591,6 +591,11 @@ CREATE TABLE IF NOT EXISTS pack_inventory (
     opened_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- A purchase grants its pack once, even if the grant runs twice.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pack_inventory_source_ref
+    ON pack_inventory (source, source_ref)
+    WHERE source_ref IS NOT NULL;
 
 -- Pack opening results
 CREATE TABLE IF NOT EXISTS pack_opening_results (

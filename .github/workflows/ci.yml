@@ -11,11 +11,31 @@ permissions:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    # A throwaway Postgres; the games build their playground databases in it.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CARDGAME_DATABASE_URL: postgres://postgres@localhost:5432/cards
+      TRIVIA_DATABASE_URL: postgres://postgres@localhost:5432/trivia
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: |
+          psql -h localhost -U postgres -c "CREATE DATABASE cards" -c "CREATE DATABASE trivia"
       - run: cargo test --workspace --locked
+      - name: Cards playground database
+        env:
+          PLAYGROUND_PROFILE: dev
+        run: |
+          games/cards/scripts/playground-db.sh
+          psql -h localhost -U postgres -d cards -Atc "SELECT count(*) FROM cards" | awk '$1 < 100 { print "only " $1 " cards"; exit 1 }'
 
   typescript:
     runs-on: ubuntu-latest

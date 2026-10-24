@@ -1,0 +1,29 @@
+[package]
+name = "trivia"
+version = "0.1.0"
+edition = "2024"
+description = "Trivia for tawks: daily quizzes in channels and live multiplayer rounds in lobbies."
+license = "MIT"
+
+[dependencies]
+game-framework = { path = "../../sdk/framework" }
+workflow = { package = "workflow-model", path = "../../sdk/workflow-model" }
+tawks-bot = { path = "../../sdk/bot" }
+tawks-data = { path = "../../sdk/data" }
+
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros", "migrate", "time"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }
+tokio = { workspace = true, features = ["process", "io-util", "rt-multi-thread", "macros", "signal"] }
+tracing = { workspace = true }
+ulid = { workspace = true }
+reqwest = { workspace = true }
+base64 = { workspace = true }
+specta = { workspace = true }
+async-trait = { workspace = true }
+time = { workspace = true }
+dotenvy = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

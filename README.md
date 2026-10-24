@@ -16,6 +16,7 @@ SDKs, examples and docs for building bots and games on [tawks](https://tawks.app
 | `examples/hoard` | a 2 to 4 player card game: hidden hands, a shared market, cards that steal and shield, spectators and animated moves |
 | `examples/bumper-balls` | the Tawkathon bout tawks itself runs, simulation and renderer |
 | `games/cards` | Cards, the collectible card game tawks runs in lobbies: rules engine, card catalog, AI, draft, simulator and balance tools |
+| `games/trivia` | Trivia, daily quizzes in channels and live rounds in lobbies |
 | `games/midnight` | Midnight, a hidden-role party game for lobbies, built from workflow pages |
 | `games/tracklines` | Tracklines, a 3D railway game for lobbies |
 | `games/canvases` | `@tawks/game-canvases`, the 3D canvases that draw Cards and Tracklines |
@@ -45,6 +46,10 @@ pnpm --filter @tawks/example-tictactoe dev
 ```
 
 To build a page from workflow displays, open the [playground](https://tawks-dev.vercel.app/playground), or run it yourself with `pnpm --filter @tawks/site dev` and open `http://localhost:5300/playground`. It runs pages in the browser, answers server actions from mocks you write, and gives you the Rust for what you built. With devhost running, the plug button loads the pages your bot registered and sends their server actions to your bot.
+
+## Running the games
+
+`games/cards` and `games/trivia` each run as a bot of their own (`cards-bot`, `trivia-bot`) with a Postgres database, against tawks or devhost. Their READMEs list the settings. CI builds both databases from scratch in a throwaway Postgres, so a pull request is tested the same way. `games/Dockerfile` builds an image with both bots.
 
 ## Contributing
 

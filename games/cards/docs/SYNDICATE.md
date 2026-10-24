@@ -81,4 +81,4 @@ ALTER TYPE card_effect_kind ADD VALUE IF NOT EXISTS 'heat_opponents';
 ALTER TYPE card_effect_kind ADD VALUE IF NOT EXISTS 'cash_opponents';
 ```
 
-Fresh databases get them from `src/bin/migrate.rs`.
+Fresh databases get them from `src/bin/cards-migrate.rs`.

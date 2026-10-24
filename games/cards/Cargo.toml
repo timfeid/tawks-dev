@@ -21,9 +21,23 @@ rand_chacha = "0.9.0"
 strsim = "0.11.1"
 tokio = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 ulid = { workspace = true }
 dashmap = "6.1.0"
 base64 = { workspace = true }
 tawks-data = { path = "../../sdk/data" }
 libc = "0.2"
 rayon = "1.10"
+reqwest = { workspace = true, optional = true }
+rust-s3 = { workspace = true, optional = true }
+
+[features]
+art = ["dep:reqwest", "dep:rust-s3"]
+
+[[bin]]
+name = "generate_card_images"
+required-features = ["art"]
+
+[[bin]]
+name = "generate_deck_images"
+required-features = ["art"]
