@@ -317,17 +317,18 @@
   });
 </script>
 
-<div class="grid h-[calc(100vh-3.5rem)] min-h-0 grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)_20rem]">
-  <section class="flex min-h-0 flex-col border-r">
+<div class="grid grid-cols-1 lg:h-[calc(100vh-3.5rem)] lg:min-h-0 lg:grid-cols-[22rem_minmax(0,1fr)_20rem]">
+  <section class="flex h-[70vh] min-w-0 flex-col border-b lg:h-auto lg:min-h-0 lg:border-r lg:border-b-0">
     <div class="flex items-center gap-2 border-b p-2">
       <select
-        class="h-8 flex-1 rounded-md border bg-card px-2 text-sm"
+        class="h-8 w-0 min-w-0 flex-1 rounded-md border bg-card px-2 text-sm"
+        title={templates.find((t) => t.key === templateKey)?.description ?? ''}
         value={templateKey ?? ''}
         onchange={(e) => loadTemplate((e.currentTarget as HTMLSelectElement).value)}
       >
         {#if templateKey === null}<option value="">Shared page</option>{/if}
         <optgroup label="Templates">
-          {#each templates as t (t.key)}<option value={t.key}>{t.name}: {t.description}</option>{/each}
+          {#each templates as t (t.key)}<option value={t.key} title={t.description}>{t.name}</option>{/each}
         </optgroup>
         {#if devhostWorkflows.length}
           <optgroup label="From devhost">
@@ -431,7 +432,7 @@
     {/if}
   </section>
 
-  <section class="flex min-h-0 flex-col">
+  <section class="flex min-h-[60vh] min-w-0 flex-col border-b lg:min-h-0 lg:border-b-0">
     <div class="flex items-center gap-3 border-b px-3 py-2 text-xs text-muted-foreground">
       <span>Node <span class="text-foreground">{runtime.nodeId ?? 'none'}</span></span>
       <span>Status <span class="text-foreground">{runtime.status}</span></span>
@@ -447,7 +448,7 @@
     </div>
   </section>
 
-  <section class="flex min-h-0 flex-col border-l">
+  <section class="flex h-[60vh] min-w-0 flex-col lg:h-auto lg:min-h-0 lg:border-l">
     <div class="flex border-b text-sm">
       {#each [['mocks', live ? 'Bot' : 'Mocks'], ['state', 'State'], ['log', `Log${log.length ? ` (${log.length})` : ''}`]] as [key, label] (key)}
         <button
