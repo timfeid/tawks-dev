@@ -149,3 +149,58 @@ fn two_hollows_wake_without_inspecting() {
     deal(&mut game, "cy", "unmarked");
     assert!(!ability_for(&game, "ada"));
 }
+
+fn vote_out(game: &mut GameState, votes: &[(&str, &str)]) {
+    for (voter, target) in votes {
+        game.update(voter, MidnightAction::Vote { target_id: target.to_string() }).unwrap();
+        game.update(voter, MidnightAction::ToggleLock).unwrap();
+    }
+    assert_eq!(game.stage, GameStage::Results);
+}
+
+/// Starts a three-player game and gives each player the named role.
+fn night_over(roles: [&str; 3]) -> GameState {
+    let mut game = table(&["ada", "bo", "cy"]);
+    enable_exactly(&mut game, "ada", 6);
+    game.update("ada", MidnightAction::StartGame).unwrap();
+    for (player, role) in ["ada", "bo", "cy"].into_iter().zip(roles) {
+        deal(&mut game, player, role);
+    }
+    run_night(&mut game);
+    game
+}
+
+#[test]
+fn the_village_wins_by_voting_out_a_hollow() {
+    let mut game = night_over(["hollow", "unmarked", "unmarked"]);
+    vote_out(&mut game, &[("ada", "bo"), ("bo", "ada"), ("cy", "ada")]);
+    assert!(!game.players["ada"].is_alive);
+    assert_eq!(game.winner, Some(crate::roles::Alliance::Unmarked));
+}
+
+#[test]
+fn the_hollows_win_when_an_innocent_is_voted_out() {
+    let mut game = night_over(["hollow", "unmarked", "unmarked"]);
+    vote_out(&mut game, &[("ada", "bo"), ("bo", "cy"), ("cy", "bo")]);
+    assert!(!game.players["bo"].is_alive);
+    assert_eq!(game.winner, Some(crate::roles::Alliance::Hollow));
+}
+
+#[test]
+fn nobody_dies_when_no_one_draws_more_than_one_vote() {
+    let mut game = night_over(["hollow", "unmarked", "unmarked"]);
+    vote_out(&mut game, &[("ada", "bo"), ("bo", "cy"), ("cy", "ada")]);
+    assert!(game.players.values().all(|p| p.is_alive));
+    assert_eq!(game.winner, Some(crate::roles::Alliance::Hollow), "a Hollow survived");
+}
+
+#[test]
+fn with_no_hollow_in_play_the_village_wins_by_sparing_everyone() {
+    let mut game = night_over(["unmarked", "unmarked", "unmarked"]);
+    vote_out(&mut game, &[("ada", "bo"), ("bo", "cy"), ("cy", "ada")]);
+    assert_eq!(game.winner, Some(crate::roles::Alliance::Unmarked));
+
+    let mut game = night_over(["unmarked", "unmarked", "unmarked"]);
+    vote_out(&mut game, &[("ada", "bo"), ("bo", "cy"), ("cy", "bo")]);
+    assert_eq!(game.winner, Some(crate::roles::Alliance::Hollow));
+}

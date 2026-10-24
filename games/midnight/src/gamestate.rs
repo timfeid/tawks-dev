@@ -543,7 +543,7 @@ impl GameLogic for GameState {
         let max_votes = vote_counts.values().max().cloned().unwrap_or(0);
         let dying_ids: Vec<String> = vote_counts
             .iter()
-            .filter(|(_, c)| **c > 0 && **c == max_votes)
+            .filter(|(_, c)| **c > 1 && **c == max_votes)
             .map(|(k, _)| k.clone())
             .collect();
 
@@ -950,12 +950,17 @@ impl GameState {
             }
         }
 
+        // As in the classic game, nobody dies unless someone draws more than one vote.
         let max_votes = vote_counts.values().max().cloned().unwrap_or(0);
-        let executed_ids: Vec<String> = vote_counts
-            .iter()
-            .filter(|(_, c)| **c > 0 && **c == max_votes)
-            .map(|(id, _)| id.clone())
-            .collect();
+        let executed_ids: Vec<String> = if max_votes > 1 {
+            vote_counts.iter().filter(|(_, c)| **c == max_votes).map(|(id, _)| id.clone()).collect()
+        } else {
+            vec![]
+        };
+
+        let is_hollow = |p: &Player| p.effective_role_card(None).role_id == roles::hollow::HOLLOW_ROLE_ID;
+        let hollows_in_play = self.players.values().any(|p| p.is_alive && is_hollow(p));
+        let hollow_executed = executed_ids.iter().any(|id| self.players.get(id).is_some_and(is_hollow));
 
         for id in &executed_ids {
             if let Some(p) = self.players.get_mut(id) {
@@ -963,17 +968,14 @@ impl GameState {
             }
         }
 
-        let mut alliance_counts: HashMap<Alliance, usize> = HashMap::new();
-        for p in self.players.values().filter(|p| p.is_alive) {
-            let a = p.effective_role_card(None).alliance.clone();
-            *alliance_counts.entry(a).or_default() += 1;
-        }
-        let winning_team = alliance_counts
-            .into_iter()
-            .max_by_key(|(_, c)| *c)
-            .map(|(a, _)| a);
-
-        self.winner = winning_team;
+        // The village wins by taking out a Hollow. With no Hollow among the
+        // players, it wins only by sparing everyone; an innocent dying hands
+        // the night to the Hollows' side, the Follower.
+        self.winner = Some(if hollow_executed || (!hollows_in_play && executed_ids.is_empty()) {
+            Alliance::Unmarked
+        } else {
+            Alliance::Hollow
+        });
 
         self.stage = GameStage::Results;
         self.timer_expires_at = None;
