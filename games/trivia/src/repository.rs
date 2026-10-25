@@ -919,6 +919,10 @@ impl WithPagination for ListTriviaArgsWithCommunityId {
 }
 
 impl Repository<Trivia, ListTriviaArgsWithCommunityId> for TriviaRepository {
+    fn before_pages_ascending(&self) -> bool {
+        true
+    }
+
     #[instrument(skip_all, fields(community_id = %args.community_id))]
     async fn count(&self, args: &ListTriviaArgsWithCommunityId) -> Result<i32> {
         let mut qb = QueryBuilder::<Postgres>::new("SELECT count(*) as count FROM trivia");

@@ -16,4 +16,10 @@ pub trait Repository<T, Y> {
         take: i32,
         args: &Y,
     ) -> impl std::future::Future<Output = Result<Vec<T>>> + Send;
+
+    /// Whether `find` returns a `Before` page oldest first, which puts the
+    /// extra row fetched past the page at the front instead of the end.
+    fn before_pages_ascending(&self) -> bool {
+        false
+    }
 }

@@ -133,13 +133,10 @@ where
 
     let more_in_this_direction = entities.len() as i32 > take;
     if more_in_this_direction {
-        // Your chat repo returns ASC for forward paging (None/Before).
-        // That means the extra row is the OLDEST, at index 0.
-        if paging_forward {
+        // A first page comes back oldest first, so its extra row is at index 0.
+        if paging_forward || repository.before_pages_ascending() {
             entities.remove(0);
         } else {
-            // Backward paging typically returns DESC/whatever you decided;
-            // for safety keep pop() here.
             entities.pop();
         }
     }
