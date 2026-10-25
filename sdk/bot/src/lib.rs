@@ -5,6 +5,7 @@ use crate::types::UserResource;
 use tokio_util::sync::CancellationToken;
 
 pub mod activity;
+pub mod channel_action;
 pub mod bot;
 pub mod notify;
 mod run;

@@ -43,6 +43,23 @@ export type Activity = {
   source_url?: string;
 };
 
+/** A button on a channel's sidebar row, shown while the bot is online. Give a url or a command. */
+export type ChannelAction = {
+  channel_id: string;
+  /** Names the action within the bot and channel; setting it again updates it. */
+  key: string;
+  label: string;
+  /** A Lucide icon name, such as trophy. */
+  icon: string;
+  /** A path in the app, or an https link. */
+  url?: string;
+  /** Run in the channel as if typed, such as /standings. */
+  command?: string;
+  position?: number;
+  /** Seconds until the action goes away on its own. */
+  expires_in?: number;
+};
+
 export type NotificationKind = {
   /** Unique across all bots, so prefix it with your bot's name, such as `hellobot.daily`. */
   key: string;
@@ -237,6 +254,15 @@ export class TawksBot {
   async activity(activity: Activity): Promise<void> {
     await this.api.mutate('activity_register', activity);
     this.activities.set(activity.workflow_id, activity);
+  }
+
+  /** Adds or updates a button on a channel's sidebar row. */
+  async channelAction(action: ChannelAction): Promise<void> {
+    await this.api.mutate('channel_action_set', action);
+  }
+
+  async removeChannelAction(channelId: string, key: string): Promise<void> {
+    await this.api.mutate('channel_action_remove', { channel_id: channelId, key });
   }
 
   /** Connects and stays connected until `stop()`. Resolves once stopped. */

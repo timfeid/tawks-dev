@@ -170,6 +170,22 @@ export const procedures: Procedure[] = [
     returns: 'whether anything changed',
   },
   {
+    name: 'channel_action_set',
+    kind: 'mutation',
+    group: 'Channels',
+    summary: "Adds or updates a button on a channel's row in the sidebar, shown while your bot is online. It opens a link (a path in the app or an https link) or runs one of your commands in the channel. Up to four per bot and channel; expires_in removes it on its own.",
+    input: { channel_id: 'your-channel', key: 'live-game', label: 'Live: BOS 2, TOR 1', icon: 'tv', url: '/niche/hockey/tonight', expires_in: 600 },
+    returns: 'the action',
+  },
+  {
+    name: 'channel_action_remove',
+    kind: 'mutation',
+    group: 'Channels',
+    summary: 'Removes one of your channel buttons by its key.',
+    input: { channel_id: 'your-channel', key: 'live-game' },
+    returns: 'whether it existed',
+  },
+  {
     name: 'lobby_speak',
     kind: 'query',
     group: 'Lobbies and games',

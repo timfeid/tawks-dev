@@ -4,6 +4,7 @@ export {
   ServerActionContext,
   result,
   type Activity,
+  type ChannelAction,
   type BotMessage,
   type ChatMessage,
   type BotOptions,
