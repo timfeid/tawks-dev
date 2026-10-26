@@ -198,7 +198,7 @@ export const procedures: Procedure[] = [
     name: 'activity_register',
     kind: 'mutation',
     group: 'Lobbies and games',
-    summary: 'Registers a game activity, a web game that runs in lobbies. Niche admins turn it on under Settings, then Games.',
+    summary: 'Registers a lobby game. With a client_url it is a web game run in a sandboxed frame; without one, tawks draws the workflow. Niche admins turn it on under Settings, then Games.',
     input: { workflow_id: 'wf-mygame-yourbot', name: 'My game', description: 'Three in a row', icon: 'game', min_players: 2, max_players: 2, client_url: 'https://example.com/mygame/' },
     returns: 'the activity',
     doc: ['Game activities', 'tables'],

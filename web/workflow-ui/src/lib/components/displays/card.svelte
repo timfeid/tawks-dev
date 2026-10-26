@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mediaUrl } from '../../media.js';
   import * as Card from '@tawks/ui/card/index.js';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
@@ -68,7 +69,7 @@
     {#if renderCard.image}
       <div class="relative aspect-[16/9] w-full overflow-hidden">
         <img
-          src={renderCard.image || '/placeholder.svg'}
+          src={mediaUrl(renderCard.image) || '/placeholder.svg'}
           alt="Card image"
           class="object-cover transition-transform"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

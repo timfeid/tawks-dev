@@ -127,7 +127,11 @@ impl WebClient {
             .await?;
 
         let text = resp.text().await?;
-        debug!("Received response: {}", text);
+        if path == "game_session_launch" {
+            debug!("Received private game launch response (redacted)");
+        } else {
+            debug!("Received response: {}", text);
+        }
         match parse_rspc(&text) {
             Ok(res) => Ok(res),
             Err(e) => {

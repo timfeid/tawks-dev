@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mediaUrl } from '../../media.js';
   import { interpolate } from '../../utils.js';
   import type { Props } from '../workflow-display.svelte';
 
@@ -23,5 +24,5 @@
 </script>
 
 {#if resolved && resolved.src}
-  <img class={display.class} src={resolved.src} alt={resolved.alt} />
+  <img class={display.class} src={mediaUrl(resolved.src)} alt={resolved.alt} />
 {/if}

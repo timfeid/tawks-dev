@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
-use tawks_bot::TawksBot;
+use tawks_bot::{Activity, TawksBot};
 use workflow::CreateWorkflowDefinition;
 use workflow::builder::{
     Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,
@@ -51,6 +51,14 @@ pub fn definition(actions: &TracklinesActionIds) -> CreateWorkflowDefinition {
 }
 
 pub async fn register(bot: &TawksBot, actions: &TracklinesActionIds) -> Result<()> {
-    bot.register_workflow(definition(actions)).await?;
+    let workflow_id = bot.register_workflow(definition(actions)).await?;
+    bot.register_activity(
+        &Activity::workflow(workflow_id, "Rails")
+            .source("https://github.com/timfeid/tawks-dev/tree/main/games/tracklines")
+            .description("Build rail lines across North America")
+            .icon("train-front")
+            .players(2, 6),
+    )
+    .await?;
     Ok(())
 }

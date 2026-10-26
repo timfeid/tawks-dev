@@ -1,0 +1,959 @@
+[
+  {
+    "id": 0,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 1,
+    "title": "$1"
+  },
+  {
+    "id": 1,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 1,
+    "title": "$1"
+  },
+  {
+    "id": 2,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 1,
+    "title": "$1"
+  },
+  {
+    "id": 3,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 1,
+    "title": "$1"
+  },
+  {
+    "id": 4,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 1,
+    "title": "$1"
+  },
+  {
+    "id": 5,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 1,
+    "title": "$1"
+  },
+  {
+    "id": 6,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 2,
+    "title": "$2"
+  },
+  {
+    "id": 7,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 2,
+    "title": "$2"
+  },
+  {
+    "id": 8,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 2,
+    "title": "$2"
+  },
+  {
+    "id": 9,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 2,
+    "title": "$2"
+  },
+  {
+    "id": 10,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 2,
+    "title": "$2"
+  },
+  {
+    "id": 11,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 3,
+    "title": "$3"
+  },
+  {
+    "id": 12,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 3,
+    "title": "$3"
+  },
+  {
+    "id": 13,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 3,
+    "title": "$3"
+  },
+  {
+    "id": 14,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 4,
+    "title": "$4"
+  },
+  {
+    "id": 15,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 4,
+    "title": "$4"
+  },
+  {
+    "id": 16,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 4,
+    "title": "$4"
+  },
+  {
+    "id": 17,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 5,
+    "title": "$5"
+  },
+  {
+    "id": 18,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 5,
+    "title": "$5"
+  },
+  {
+    "id": 19,
+    "kind": {
+      "kind": "cash"
+    },
+    "value": 10,
+    "title": "$10"
+  },
+  {
+    "id": 20,
+    "kind": {
+      "kind": "property",
+      "group": "docks"
+    },
+    "value": 1,
+    "title": "Pier Nine"
+  },
+  {
+    "id": 21,
+    "kind": {
+      "kind": "property",
+      "group": "docks"
+    },
+    "value": 1,
+    "title": "Salt Wharf"
+  },
+  {
+    "id": 22,
+    "kind": {
+      "kind": "property",
+      "group": "cannery"
+    },
+    "value": 1,
+    "title": "Cannery Row"
+  },
+  {
+    "id": 23,
+    "kind": {
+      "kind": "property",
+      "group": "cannery"
+    },
+    "value": 1,
+    "title": "Net Loft"
+  },
+  {
+    "id": 24,
+    "kind": {
+      "kind": "property",
+      "group": "cannery"
+    },
+    "value": 1,
+    "title": "Tide Street"
+  },
+  {
+    "id": 25,
+    "kind": {
+      "kind": "property",
+      "group": "old_town"
+    },
+    "value": 2,
+    "title": "Chapel Lane"
+  },
+  {
+    "id": 26,
+    "kind": {
+      "kind": "property",
+      "group": "old_town"
+    },
+    "value": 2,
+    "title": "Cobbler's Court"
+  },
+  {
+    "id": 27,
+    "kind": {
+      "kind": "property",
+      "group": "old_town"
+    },
+    "value": 2,
+    "title": "Ferry Gate"
+  },
+  {
+    "id": 28,
+    "kind": {
+      "kind": "property",
+      "group": "market"
+    },
+    "value": 2,
+    "title": "Market Square"
+  },
+  {
+    "id": 29,
+    "kind": {
+      "kind": "property",
+      "group": "market"
+    },
+    "value": 2,
+    "title": "Grain Exchange"
+  },
+  {
+    "id": 30,
+    "kind": {
+      "kind": "property",
+      "group": "market"
+    },
+    "value": 2,
+    "title": "Butcher's Row"
+  },
+  {
+    "id": 31,
+    "kind": {
+      "kind": "property",
+      "group": "foundry"
+    },
+    "value": 3,
+    "title": "Foundry Gate"
+  },
+  {
+    "id": 32,
+    "kind": {
+      "kind": "property",
+      "group": "foundry"
+    },
+    "value": 3,
+    "title": "Ironworks Lane"
+  },
+  {
+    "id": 33,
+    "kind": {
+      "kind": "property",
+      "group": "foundry"
+    },
+    "value": 3,
+    "title": "Furnace Street"
+  },
+  {
+    "id": 34,
+    "kind": {
+      "kind": "property",
+      "group": "strip"
+    },
+    "value": 3,
+    "title": "Sunset Strip"
+  },
+  {
+    "id": 35,
+    "kind": {
+      "kind": "property",
+      "group": "strip"
+    },
+    "value": 3,
+    "title": "Neon Alley"
+  },
+  {
+    "id": 36,
+    "kind": {
+      "kind": "property",
+      "group": "strip"
+    },
+    "value": 3,
+    "title": "Marquee Row"
+  },
+  {
+    "id": 37,
+    "kind": {
+      "kind": "property",
+      "group": "parkside"
+    },
+    "value": 4,
+    "title": "Parkside Terrace"
+  },
+  {
+    "id": 38,
+    "kind": {
+      "kind": "property",
+      "group": "parkside"
+    },
+    "value": 4,
+    "title": "Elm Avenue"
+  },
+  {
+    "id": 39,
+    "kind": {
+      "kind": "property",
+      "group": "parkside"
+    },
+    "value": 4,
+    "title": "Orchard Walk"
+  },
+  {
+    "id": 40,
+    "kind": {
+      "kind": "property",
+      "group": "hilltop"
+    },
+    "value": 4,
+    "title": "Hilltop Manor"
+  },
+  {
+    "id": 41,
+    "kind": {
+      "kind": "property",
+      "group": "hilltop"
+    },
+    "value": 4,
+    "title": "Crown Heights"
+  },
+  {
+    "id": 42,
+    "kind": {
+      "kind": "property",
+      "group": "rails"
+    },
+    "value": 2,
+    "title": "North Line"
+  },
+  {
+    "id": 43,
+    "kind": {
+      "kind": "property",
+      "group": "rails"
+    },
+    "value": 2,
+    "title": "Harbor Line"
+  },
+  {
+    "id": 44,
+    "kind": {
+      "kind": "property",
+      "group": "rails"
+    },
+    "value": 2,
+    "title": "Valley Line"
+  },
+  {
+    "id": 45,
+    "kind": {
+      "kind": "property",
+      "group": "rails"
+    },
+    "value": 2,
+    "title": "Express Line"
+  },
+  {
+    "id": 46,
+    "kind": {
+      "kind": "property",
+      "group": "works"
+    },
+    "value": 2,
+    "title": "Water Works"
+  },
+  {
+    "id": 47,
+    "kind": {
+      "kind": "property",
+      "group": "works"
+    },
+    "value": 2,
+    "title": "Power Station"
+  },
+  {
+    "id": 48,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "docks",
+        "cannery"
+      ]
+    },
+    "value": 1,
+    "title": "Deed: The Docks or Cannery Row"
+  },
+  {
+    "id": 49,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "old_town",
+        "market"
+      ]
+    },
+    "value": 2,
+    "title": "Deed: Old Town or Market Square"
+  },
+  {
+    "id": 50,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "old_town",
+        "market"
+      ]
+    },
+    "value": 2,
+    "title": "Deed: Old Town or Market Square"
+  },
+  {
+    "id": 51,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "foundry",
+        "strip"
+      ]
+    },
+    "value": 3,
+    "title": "Deed: Foundry District or Sunset Strip"
+  },
+  {
+    "id": 52,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "foundry",
+        "strip"
+      ]
+    },
+    "value": 3,
+    "title": "Deed: Foundry District or Sunset Strip"
+  },
+  {
+    "id": 53,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "parkside",
+        "hilltop"
+      ]
+    },
+    "value": 4,
+    "title": "Deed: Parkside or Hilltop"
+  },
+  {
+    "id": 54,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "rails",
+        "parkside"
+      ]
+    },
+    "value": 4,
+    "title": "Deed: Rail Lines or Parkside"
+  },
+  {
+    "id": 55,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "rails",
+        "cannery"
+      ]
+    },
+    "value": 4,
+    "title": "Deed: Rail Lines or Cannery Row"
+  },
+  {
+    "id": 56,
+    "kind": {
+      "kind": "wild",
+      "groups": [
+        "rails",
+        "works"
+      ]
+    },
+    "value": 2,
+    "title": "Deed: Rail Lines or The Works"
+  },
+  {
+    "id": 57,
+    "kind": {
+      "kind": "wild",
+      "groups": []
+    },
+    "value": 0,
+    "title": "Blank Deed"
+  },
+  {
+    "id": 58,
+    "kind": {
+      "kind": "wild",
+      "groups": []
+    },
+    "value": 0,
+    "title": "Blank Deed"
+  },
+  {
+    "id": 59,
+    "kind": {
+      "kind": "takeover"
+    },
+    "value": 5,
+    "title": "Hostile Takeover"
+  },
+  {
+    "id": 60,
+    "kind": {
+      "kind": "takeover"
+    },
+    "value": 5,
+    "title": "Hostile Takeover"
+  },
+  {
+    "id": 61,
+    "kind": {
+      "kind": "lawyer_up"
+    },
+    "value": 4,
+    "title": "Lawyer Up"
+  },
+  {
+    "id": 62,
+    "kind": {
+      "kind": "lawyer_up"
+    },
+    "value": 4,
+    "title": "Lawyer Up"
+  },
+  {
+    "id": 63,
+    "kind": {
+      "kind": "lawyer_up"
+    },
+    "value": 4,
+    "title": "Lawyer Up"
+  },
+  {
+    "id": 64,
+    "kind": {
+      "kind": "backroom_deal"
+    },
+    "value": 3,
+    "title": "Backroom Deal"
+  },
+  {
+    "id": 65,
+    "kind": {
+      "kind": "backroom_deal"
+    },
+    "value": 3,
+    "title": "Backroom Deal"
+  },
+  {
+    "id": 66,
+    "kind": {
+      "kind": "backroom_deal"
+    },
+    "value": 3,
+    "title": "Backroom Deal"
+  },
+  {
+    "id": 67,
+    "kind": {
+      "kind": "trade_up"
+    },
+    "value": 3,
+    "title": "Trade Up"
+  },
+  {
+    "id": 68,
+    "kind": {
+      "kind": "trade_up"
+    },
+    "value": 3,
+    "title": "Trade Up"
+  },
+  {
+    "id": 69,
+    "kind": {
+      "kind": "trade_up"
+    },
+    "value": 3,
+    "title": "Trade Up"
+  },
+  {
+    "id": 70,
+    "kind": {
+      "kind": "repo_man"
+    },
+    "value": 3,
+    "title": "Repo Man"
+  },
+  {
+    "id": 71,
+    "kind": {
+      "kind": "repo_man"
+    },
+    "value": 3,
+    "title": "Repo Man"
+  },
+  {
+    "id": 72,
+    "kind": {
+      "kind": "repo_man"
+    },
+    "value": 3,
+    "title": "Repo Man"
+  },
+  {
+    "id": 73,
+    "kind": {
+      "kind": "fundraiser"
+    },
+    "value": 2,
+    "title": "Fundraiser"
+  },
+  {
+    "id": 74,
+    "kind": {
+      "kind": "fundraiser"
+    },
+    "value": 2,
+    "title": "Fundraiser"
+  },
+  {
+    "id": 75,
+    "kind": {
+      "kind": "fundraiser"
+    },
+    "value": 2,
+    "title": "Fundraiser"
+  },
+  {
+    "id": 76,
+    "kind": {
+      "kind": "rent_hike"
+    },
+    "value": 1,
+    "title": "Rent Hike"
+  },
+  {
+    "id": 77,
+    "kind": {
+      "kind": "rent_hike"
+    },
+    "value": 1,
+    "title": "Rent Hike"
+  },
+  {
+    "id": 78,
+    "kind": {
+      "kind": "renovation"
+    },
+    "value": 3,
+    "title": "Renovation"
+  },
+  {
+    "id": 79,
+    "kind": {
+      "kind": "renovation"
+    },
+    "value": 3,
+    "title": "Renovation"
+  },
+  {
+    "id": 80,
+    "kind": {
+      "kind": "renovation"
+    },
+    "value": 3,
+    "title": "Renovation"
+  },
+  {
+    "id": 81,
+    "kind": {
+      "kind": "tower"
+    },
+    "value": 4,
+    "title": "Tower"
+  },
+  {
+    "id": 82,
+    "kind": {
+      "kind": "tower"
+    },
+    "value": 4,
+    "title": "Tower"
+  },
+  {
+    "id": 83,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 84,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 85,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 86,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 87,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 88,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 89,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 90,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 91,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 92,
+    "kind": {
+      "kind": "payday"
+    },
+    "value": 1,
+    "title": "Payday"
+  },
+  {
+    "id": 93,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "docks",
+        "cannery"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: The Docks & Cannery Row"
+  },
+  {
+    "id": 94,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "docks",
+        "cannery"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: The Docks & Cannery Row"
+  },
+  {
+    "id": 95,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "old_town",
+        "market"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Old Town & Market Square"
+  },
+  {
+    "id": 96,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "old_town",
+        "market"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Old Town & Market Square"
+  },
+  {
+    "id": 97,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "foundry",
+        "strip"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Foundry District & Sunset Strip"
+  },
+  {
+    "id": 98,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "foundry",
+        "strip"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Foundry District & Sunset Strip"
+  },
+  {
+    "id": 99,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "parkside",
+        "hilltop"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Parkside & Hilltop"
+  },
+  {
+    "id": 100,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "parkside",
+        "hilltop"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Parkside & Hilltop"
+  },
+  {
+    "id": 101,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "rails",
+        "works"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Rail Lines & The Works"
+  },
+  {
+    "id": 102,
+    "kind": {
+      "kind": "rent",
+      "groups": [
+        "rails",
+        "works"
+      ]
+    },
+    "value": 1,
+    "title": "Rent: Rail Lines & The Works"
+  },
+  {
+    "id": 103,
+    "kind": {
+      "kind": "rent",
+      "groups": []
+    },
+    "value": 3,
+    "title": "Rent Notice"
+  },
+  {
+    "id": 104,
+    "kind": {
+      "kind": "rent",
+      "groups": []
+    },
+    "value": 3,
+    "title": "Rent Notice"
+  },
+  {
+    "id": 105,
+    "kind": {
+      "kind": "rent",
+      "groups": []
+    },
+    "value": 3,
+    "title": "Rent Notice"
+  }
+]

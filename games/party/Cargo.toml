@@ -1,0 +1,25 @@
+[package]
+name = "party"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+base64 = { workspace = true }
+bumper-balls = { path = "../../examples/bumper-balls/bout" }
+dashmap = "6.1.0"
+futures = { workspace = true }
+hmac = "0.12"
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = "0.10"
+tawks-bot = { path = "../../sdk/bot" }
+tawks-bout = { path = "../../sdk/bout" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workflow = { package = "workflow-model", path = "../../sdk/workflow-model" }
+
+[dev-dependencies]
+tokio-tungstenite = { workspace = true }

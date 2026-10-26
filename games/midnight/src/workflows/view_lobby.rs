@@ -1,6 +1,6 @@
 
 use anyhow::Result;
-use tawks_bot::TawksBot;
+use tawks_bot::{Activity, TawksBot};
 use workflow::{
     CreateWorkflowDefinition,
     builder::{WorkflowActionBuilder, WorkflowDefinitionBuilder},
@@ -80,6 +80,14 @@ pub fn definition(actions: &MidnightActionIds) -> CreateWorkflowDefinition {
 }
 
 pub async fn register(bot: &TawksBot, actions: &MidnightActionIds) -> Result<()> {
-    bot.register_workflow(definition(actions)).await?;
+    let workflow_id = bot.register_workflow(definition(actions)).await?;
+    bot.register_activity(
+        &Activity::workflow(workflow_id, "Midnight")
+            .source("https://github.com/timfeid/tawks-dev/tree/main/games/midnight")
+            .description("A hidden-role game of night and day")
+            .icon("moon")
+            .players(4, 16),
+    )
+    .await?;
     Ok(())
 }

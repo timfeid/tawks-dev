@@ -1,12 +1,14 @@
 {
   "name": "@tawks/game-canvases",
   "version": "0.1.0",
-  "description": "The 3D canvases for the open-source tawks lobby games: Cards and Tracklines.",
+  "description": "The canvases for the open-source tawks lobby games: Cards, Tracklines, and the party games Tawkathon, Coven and Landlord.",
   "type": "module",
   "exports": {
     "./*": "./src/*"
   },
   "dependencies": {
+    "@tawks/bout-sdk": "workspace:^",
+    "@tawks/example-bumper-balls": "workspace:^",
     "@tawks/ui": "workspace:^",
     "@tawks/workflow-types": "workspace:^",
     "@tawks/workflow-ui": "workspace:^",

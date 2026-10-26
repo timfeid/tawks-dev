@@ -1,6 +1,9 @@
 // import Reddit from '@icons-pack/svelte-simple-icons/icons/SiReddit';
 // import Twitter from '@icons-pack/svelte-simple-icons/icons/SiX';
 import {
+  Download,
+  Phone,
+  MessageSquareText,
   Play,
   Tv,
   Popcorn,
@@ -95,6 +98,9 @@ import D from './d.svelte';
 
 export const LUCIDE_REGISTRY: Record<string, any> = {
   play: Play,
+  download: Download,
+  phone: Phone,
+  'message-square-text': MessageSquareText,
   'receipt-text': ReceiptText,
   newspaper: Newspaper,
   'refresh-cw': RefreshCw,

@@ -34,7 +34,8 @@ export type ServerActionHandler = (ctx: ServerActionContext) => ServerActionResu
 export type Activity = {
   workflow_id: string;
   name: string;
-  client_url: string;
+  /** The web app run in a sandboxed frame. Leave out for a game drawn by its workflow. */
+  client_url?: string;
   description?: string;
   icon?: string;
   min_players?: number;

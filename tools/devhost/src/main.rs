@@ -235,6 +235,10 @@ async fn call(app: &Shared, bot: &str, procedure: &str, input: Value) -> Result<
             Ok(json!(rows))
         }
         "activity_register" => {
+            // Devhost only runs games with a web app; ones drawn by their workflow need tawks.
+            if input.get("client_url").and_then(Value::as_str).is_none() {
+                return Ok(Value::Null);
+            }
             if public {
                 let workflow = input.get("workflow_id").and_then(Value::as_str).unwrap_or_default();
                 if !workflow.ends_with(&format!("-{bot}")) {

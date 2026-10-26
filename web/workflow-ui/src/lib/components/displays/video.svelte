@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mediaUrl } from '../../media.js';
   import Hls from 'hls.js';
 
   import { onDestroy } from 'svelte';
@@ -29,7 +30,7 @@
   }
 
   let resolvedSrc = $derived(safeInterpolate(video?.src));
-  let posterSrc = $derived(safeInterpolate(video?.poster_src));
+  let posterSrc = $derived(mediaUrl(safeInterpolate(video?.poster_src)));
 
   let isDirectVideo = $derived.by(() => {
     const lower = resolvedSrc.toLowerCase();

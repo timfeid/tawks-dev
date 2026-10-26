@@ -27,3 +27,4 @@ tokio-util = { workspace = true }
 rand = { workspace = true }
 ulid = { workspace = true }
 base64 = { workspace = true }
+tawks-game-model = { path = "../game-model" }

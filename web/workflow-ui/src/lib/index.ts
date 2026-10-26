@@ -8,3 +8,4 @@ export { default as Icon } from './components/displays/icon/icon.svelte';
 export { default as Wysiwyg } from './components/displays/wysiwyg.svelte';
 export * from './workflow';
 export * from './utils';
+export * from './media';

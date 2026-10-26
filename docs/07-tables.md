@@ -72,11 +72,23 @@ Register on every start, as you do with workflows. Registering again updates the
 - The URL must use `https`. While you develop, `http://localhost` and `http://127.0.0.1` are allowed too, and only you will be able to load them.
 - The URL can't be on `tawks.app` or any of its subdomains.
 
+### Games drawn by their workflow
+
+A game doesn't need a web app. If its workflow draws everything with displays, register it with `Activity::workflow` and no URL, and it goes in the game menu the same way:
+
+```rust
+let workflow_id = bot.register_workflow(board(&routes)).await?;
+bot.register_activity(&Activity::workflow(&workflow_id, "Rails").icon("train-front").players(2, 6))
+    .await?;
+```
+
+From the JavaScript SDK, leave `client_url` out of `bot.activity({ ... })`. Every lobby game on tawks, including the ones tawks runs itself, is registered this way, and the code for most of them is in [the tawks-dev repository](https://github.com/timfeid/tawks-dev/tree/main/games).
+
 ## Turning it on in a niche
 
 An activity shows up in a niche only when both of these are true:
 
-1. Your bot is a member of the niche.
+1. Your bot is a member of the niche. A game drawn by its workflow skips this one, since it loads nothing from your server.
 2. A niche owner or admin has turned the game on under **Settings → Games**.
 
 Players then open a lobby, open its game menu and pick your game. Everyone in the lobby gets the game tab, each with their own frame.

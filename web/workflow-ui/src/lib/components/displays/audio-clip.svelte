@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mediaUrl } from '../../media.js';
   import { onDestroy } from 'svelte';
   import { interpolate } from '../../utils.js';
   import type { Props } from '../workflow-display.svelte';
@@ -17,7 +18,7 @@
     return /\{[^{}]+\}/.test(out) ? '' : out;
   }
 
-  let src = $derived(resolved(clip?.src));
+  let src = $derived(mediaUrl(resolved(clip?.src)));
   let limit = $derived(Number(resolved(clip?.seconds)) || 0);
   let marks = $derived(clip?.marks ?? []);
   let span = $derived(Math.max(...marks, 1));

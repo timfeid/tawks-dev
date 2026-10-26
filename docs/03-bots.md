@@ -665,7 +665,7 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 | `new TawksBot({ rspcUrl, eventsUrl, token })` | `tokenType` defaults to `Bot`. Pass `logger: null` to silence the SDK's own log lines. |
 | `bot.serverAction(id, handler)` | Registers a server action and returns its full id, `sa-<id>-<your bot's user id>`, for workflow actions to target. |
 | `bot.workflow(definition)` | Registers a workflow and returns its full id, which appears in channel settings. |
-| `bot.activity({ workflow_id, name, client_url, ... })` | Registers a game activity. See [Game activities](07-tables.md). |
+| `bot.activity({ workflow_id, name, client_url?, ... })` | Registers a lobby game, with a web app or drawn by its workflow. See [Game activities](07-tables.md). |
 | `bot.run()` | Connects and stays connected until `bot.stop()`. Register before calling it. |
 | `bot.onChat(listener)` | Chat messages from people. Messages from bots, yours included, are skipped. |
 | `bot.say(chatId, text)` | Posts a chat message. For a chat channel, the chat id is the channel id. |

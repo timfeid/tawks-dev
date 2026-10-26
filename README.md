@@ -19,7 +19,8 @@ SDKs, examples and docs for building bots and games on [tawks](https://tawks.app
 | `games/trivia` | Trivia, daily quizzes in channels and live rounds in lobbies |
 | `games/midnight` | Midnight, a hidden-role party game for lobbies, built from workflow pages |
 | `games/tracklines` | Tracklines, a 3D railway game for lobbies |
-| `games/canvases` | `@tawks/game-canvases`, the 3D canvases that draw Cards and Tracklines |
+| `games/party` | The party games: Tawkathon, a board game with a bout after every round, and the table games Coven and Landlord |
+| `games/canvases` | `@tawks/game-canvases`, the canvases that draw Cards, Tracklines and the party games |
 | `sdk/data` | `tawks-data`, small Postgres helpers for cursor pagination |
 | `tools/devhost` | a stand-in for tawks: run your bot and play your game as several fake players, on your machine or as the hosted sandbox |
 | `tools/gen-types` | generates `web/workflow-types` and the playground's templates from the Rust model |

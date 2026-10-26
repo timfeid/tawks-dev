@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mediaUrl } from '../../media.js';
   import { getNestedValue, interpolate, resolveInputValue, evaluateCondition, formatDate, cn, debounce, deepEqual, objectInterpolate } from '../../utils.js';
   import type { Props } from '../workflow-display.svelte';
 
@@ -31,7 +32,7 @@
   <img
     {style}
     class="object-cover"
-    src={getNestedValue(inputs, coverImageDisplay.src_key)}
+    src={mediaUrl(getNestedValue(inputs, coverImageDisplay.src_key))}
     alt={getNestedValue(inputs, coverImageDisplay.alt_key)}
   />
 {/if}

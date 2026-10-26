@@ -14,7 +14,15 @@ pub use builder_workflow::builder_definition;
 pub use game_workflow::{activity_definition, definition};
 
 pub async fn register(bot: &TawksBot, actions: &CardGameActionIds) -> Result<()> {
-    bot.register_workflow(definition(actions)).await?;
+    let table = bot.register_workflow(definition(actions)).await?;
+    bot.register_activity(
+        &Activity::workflow(table, "Cards")
+            .source("https://github.com/timfeid/tawks-dev/tree/main/games/cards")
+            .description("Mana Clash, the collectible card game")
+            .icon("layers")
+            .players(1, 4),
+    )
+    .await?;
     bot.register_workflow(builder_definition(actions)).await?;
     if let Ok(client_url) = std::env::var("CARDS_ACTIVITY_URL") {
         let workflow_id = bot.register_workflow(activity_definition(actions)).await?;

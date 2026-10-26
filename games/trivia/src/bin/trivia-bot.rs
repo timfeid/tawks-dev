@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use game_framework::engine::GameEngine;
 use sqlx::PgPool;
-use tawks_bot::TawksBot;
+use tawks_bot::{Activity, TawksBot};
 use tawks_bot::types::BotOptions;
 use tawks_data::database::create_connection;
 use tracing::warn;
@@ -42,7 +42,15 @@ async fn register(
     trivia.register().await?;
     let actions = trivia::multiplayer::register_routes(engine, "games.trivia").await?;
     if let Some(server_actions) = trivia.server_actions.get().cloned() {
-        trivia::workflows::register_multiplayer_workflow(bot, &server_actions, &actions).await?;
+        let workflow_id = trivia::workflows::register_multiplayer_workflow(bot, &server_actions, &actions).await?;
+        bot.register_activity(
+            &Activity::workflow(workflow_id, "Trivia")
+                .source("https://github.com/timfeid/tawks-dev/tree/main/games/trivia")
+                .description("Race your lobby to the right answer")
+                .icon("brain")
+                .players(1, 16),
+        )
+        .await?;
     }
     Ok(())
 }

@@ -16,12 +16,14 @@ members = [
     "games/tracklines",
     "games/cards",
     "games/trivia",
+    "games/party",
 ]
 resolver = "2"
 
 [workspace.dependencies]
 anyhow = "1.0.97"
 async-trait = "0.1.88"
+axum = { version = "0.7.9", features = ["multipart"] }
 base64 = "0.22.1"
 chrono = { version = "0.4.40", features = ["serde"] }
 clap = "4.5.36"
