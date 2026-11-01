@@ -67,7 +67,6 @@
   import ItemsBlock from './displays/items.svelte';
   import Backdrop from './displays/backdrop.svelte';
   import Calendar from './displays/calendar.svelte';
-  import WordCloud from './displays/word-cloud.svelte';
   import ActionBlock from './displays/action.svelte';
   import PlayGame from './displays/play-game.svelte';
   import Discussion from './displays/discussion.svelte';
@@ -193,7 +192,6 @@
     Media: MediaBlock,
     Backdrop,
     Calendar,
-    WordCloud,
     Items: ItemsBlock,
     Overlay: OverlayBlock,
     Action: ActionBlock,

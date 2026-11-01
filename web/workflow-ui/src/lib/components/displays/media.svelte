@@ -23,7 +23,6 @@
   });
   let tint = $derived(media?.tint ? look.tint(look.toneOf(media.tint, inputs)) : '');
   let shape = $derived(media?.shape === 'Round' ? 'rounded-full' : media?.shape === 'Square' ? 'rounded-none' : media?.size === 'ExtraSmall' || media?.size === 'Small' ? 'rounded-md' : 'rounded-xl');
-  let framed = $derived(media?.fit === 'Cover' && media.size !== 'ExtraSmall' && media.size !== 'Small' && media.shape !== 'Round');
 </script>
 
 {#snippet picture()}
@@ -53,7 +52,7 @@
     </div>
   </div>
 {:else if media}
-  <div class={['relative shrink-0 overflow-hidden', box, shape, media.fit === 'Cover' && 'bg-foreground/5', framed && 'border border-foreground/10']}>
+  <div class={['relative shrink-0 overflow-hidden', box, shape, media.fit === 'Cover' && 'bg-foreground/5']}>
     {@render picture()}
     {#if media.caption.length}
       <div class="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-3 pt-8">

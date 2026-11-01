@@ -249,13 +249,6 @@ tint?: string; caption_placement?: CaptionPlacement } } |
  */
 { Calendar: { items_key: string } } | 
 /**
- * Words sized by how much they matter, wrapped in a block. Each item of
- * `items_key` is one word: `text`, `weight` (0 to 1, the largest word
- * being 1), and optionally `href` to open on press and `detail` for a
- * hover note.
- */
-{ WordCloud: { items_key: string } } | 
-/**
  * Repeats `content` for each item of `items_key`, laid out by `layout`.
  */
 { Items: { items_key: string; as: string; layout: Layout; content: WorkflowDisplay[] } } | 

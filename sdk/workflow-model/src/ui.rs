@@ -427,10 +427,6 @@ pub fn calendar(items_key: impl Into<String>) -> WorkflowDisplay {
     display(DisplayType::Calendar { items_key: items_key.into() })
 }
 
-pub fn word_cloud(items_key: impl Into<String>) -> WorkflowDisplay {
-    display(DisplayType::WordCloud { items_key: items_key.into() })
-}
-
 pub fn items(
     items_key: impl Into<String>,
     r#as: impl Into<String>,
