@@ -111,7 +111,7 @@
           look.backdrop[visual.display.Page.backdrop ?? 'Default'],
           look.typeface[visual.display.Page.typeface ?? 'Default'],
           (visual.display.Page.center || endsWithBottomTabs(visual.display.Page.content)) && (firstMain ? 'flex-1' : 'min-h-full'),
-          visual.display.Page.center && 'justify-center',
+          visual.display.Page.center && 'justify-center-safe',
         ]}
       >
         {#if hostTitle && title}

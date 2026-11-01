@@ -656,6 +656,7 @@ mod tests {
                     text: "Closest planet to the sun?".into(),
                     points: 100,
                     correct_value: "a1".into(),
+                    annotation_url: None,
                     options: vec![
                         OptionResource {
                             value: "a1".into(),
@@ -678,6 +679,7 @@ mod tests {
                     text: "Largest planet?".into(),
                     points: 100,
                     correct_value: "b2".into(),
+                    annotation_url: None,
                     options: vec![
                         OptionResource {
                             value: "b1".into(),

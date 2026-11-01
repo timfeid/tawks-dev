@@ -2,7 +2,7 @@ import type { JsonValue } from '@tawks/workflow-types';
 
 /** A compared value may name another response, as `{game.owner_user_id}` does. */
 function expected(value: unknown, inputs: Record<string, any>): unknown {
-  return typeof value === 'string' && /\{[^}]+\}/.test(value) ? interpolate(inputs, value) : value;
+  return typeof value === 'string' && /\{[^}]+\}/.test(value) ? fill(inputs, value).text : value;
 }
 
 export function evaluateCondition(condition: any, inputs: Record<string, any>): boolean {
@@ -139,18 +139,37 @@ export function objectInterpolate(values: object, text: string) {
   }
 }
 
+const warnedTemplates = new Set<string>();
+
+function fill(values: object, text: string): { text: string; missing: string[] } {
+  const missing: string[] = [];
+  const out = text.replace(/\{([^\{\}]+)\}/g, (raw, key) => {
+    const value = getNestedValue(values, key.trim());
+    if (value === undefined || value === null) {
+      missing.push(key);
+      return raw;
+    }
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  });
+  return { text: out, missing };
+}
+
+/**
+ * Resolves every `{key}` in a template. A template with any missing or null key
+ * renders as an empty string, so users never see a raw `{key}` and URLs are never half built.
+ */
 export function interpolate(values: object, text: string | undefined | null): string {
   if (!text) {
     return '';
   }
-  return text.replace(/\{([^\{\}]+)\}/g, (_, key) => {
-    let value = getNestedValue(values, key.trim());
-    // Treat null and undefined identically — both indicate "no value", and
-    // we don't want String(null) → "null" appearing in URLs/templates.
-    if (value === undefined || value === null) return `{${key}}`;
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
-  });
+  const { text: out, missing } = fill(values, text);
+  if (missing.length === 0) return out;
+  if ((import.meta as any).env?.DEV && !warnedTemplates.has(text)) {
+    warnedTemplates.add(text);
+    console.warn(`[workflow-ui] template "${text}" has no value for ${missing.map((k) => `{${k}}`).join(', ')}; rendering it empty`);
+  }
+  return '';
 }
 
 export function resolveInputValue(inputs: any, val: any): any {

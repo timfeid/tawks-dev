@@ -304,11 +304,12 @@ export const pageEnd = 'pb-[calc(1rem+var(--workflow-dock-height,0px))] sm:pb-[c
 // Long unbroken text such as a pasted URL wraps instead of running out of its card.
 const wrapAnywhere = '[overflow-wrap:anywhere]';
 
+// shrink-0: a full-height (centred) page squeezed to its box would push its top out of scroll reach and its padding off its end.
 export const page: Record<PageWidth, string> = {
-  Narrow: `mx-auto flex w-full max-w-2xl flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
-  Normal: `mx-auto flex w-full max-w-4xl flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
-  Wide: `mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
-  Full: `flex w-full flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
+  Narrow: `mx-auto flex shrink-0 w-full max-w-2xl flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
+  Normal: `mx-auto flex shrink-0 w-full max-w-4xl flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
+  Wide: `mx-auto flex shrink-0 w-full max-w-6xl flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
+  Full: `flex shrink-0 w-full flex-col gap-8 p-4 sm:p-6 ${wrapAnywhere}`,
 };
 
 /** The host's title above a page that has none of its own, kept close to the line under it. */

@@ -318,7 +318,7 @@ pub fn build_trivia_player(sa: &TriviaServerActions) -> CreateWorkflowDefinition
                 revealed_answers,
                 loader("loader", "advance_answer"),
                 when(
-                    Cond::not(is("current_question.annotation_url", json!(null))),
+                    Cond::response_exists("current_question.annotation_url"),
                     vec![fine("{current_question.annotation_url}").centered()],
                 ),
                 when(

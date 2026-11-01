@@ -29,6 +29,8 @@ pub struct QuestionResource {
     pub points: i64,
     pub correct_value: String,
     pub options: Vec<OptionResource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotation_url: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -71,6 +73,11 @@ impl From<&TriviaQuestionWithAnswers> for QuestionResource {
                 .map(|option| option.id.clone())
                 .unwrap_or_default(),
             options: q.answers.iter().map(OptionResource::from).collect(),
+            annotation_url: q
+                .question
+                .annotation_url
+                .clone()
+                .filter(|url| !url.trim().is_empty()),
         }
     }
 }
