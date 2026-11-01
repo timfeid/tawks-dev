@@ -146,6 +146,21 @@ export function stateOf(value: string | null | undefined, inputs: Record<string,
   return STATES.includes(name) ? (name as State) : 'Default';
 }
 
+/** A row's accent colour, or null unless it resolves to `#rgb` or `#rrggbb`. */
+export function accentOf(value: string | null | undefined, inputs: Record<string, unknown>): string | null {
+  const color = value ? interpolate(inputs, value).trim() : '';
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(color) ? color : null;
+}
+
+/** Kept faint so text holds its contrast on either theme; the edge carries the colour. */
+export function accentFill(color: string): string {
+  return `color-mix(in srgb, ${color} 16%, transparent)`;
+}
+
+export function accentEdge(color: string): string {
+  return `inset 3px 0 0 ${color}`;
+}
+
 /** A row in a list. */
 export const rowState: Record<State, string> = {
   Default: 'border-foreground/10 bg-foreground/[0.02]',

@@ -206,6 +206,48 @@ named! {
     }
 }
 
+/// A colour a row is washed in, such as the team the viewer follows: `#rgb`,
+/// `#rrggbb`, or a `{key}` template naming one in response data. Nothing else
+/// deserializes, so it can only ever carry a colour; the renderer checks what
+/// a template resolves to the same way.
+#[derive(Type, Debug, Clone, PartialEq, Eq, Serialize)]
+#[specta(transparent)]
+pub struct Accent(String);
+
+impl Accent {
+    pub fn parse(value: impl Into<String>) -> Result<Self, String> {
+        let value = value.into();
+        if is_hex_color(&value) || is_key_template(&value) {
+            Ok(Self(value))
+        } else {
+            Err(format!("an accent is a #rgb or #rrggbb colour or a {{key}} template, not {value:?}"))
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+fn is_hex_color(value: &str) -> bool {
+    value
+        .strip_prefix('#')
+        .is_some_and(|hex| matches!(hex.len(), 3 | 6) && hex.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+fn is_key_template(value: &str) -> bool {
+    value
+        .strip_prefix('{')
+        .and_then(|rest| rest.strip_suffix('}'))
+        .is_some_and(|key| !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$' | '-')))
+}
+
+impl<'de> Deserialize<'de> for Accent {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Accent::parse(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
 /// What a piece of text is, which decides its size, weight and colour.
 #[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TextRole {
@@ -689,6 +731,10 @@ pub enum DisplayType {
         /// A `{key}` naming each row's `State`.
         #[serde(default)]
         row_state: Option<String>,
+        /// Each row's wash, usually a `{key}` per item; rows it leaves
+        /// empty stay plain.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        row_accent: Option<Accent>,
     },
     Wysiwyg {
         content_key: String,
@@ -861,6 +907,8 @@ pub enum DisplayType {
         state: String,
         href: Option<String>,
         act: Option<Act>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        accent: Option<Accent>,
     },
     /// A tile to pick, styled by `state` (a `{key}` is fine): picks, answers, slots.
     Choice {

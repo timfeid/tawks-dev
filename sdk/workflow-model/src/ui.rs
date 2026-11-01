@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 pub use crate::{
-    Act, ActionLook, Align, GroupButton, Aspect, Backdrop, CaptionPlacement, Fit, FlexDirection, Gap, IconSize, Justify, Layout, LinkStyle,
+    Accent, Act, ActionLook, Align, GroupButton, Aspect, Backdrop, CaptionPlacement, Fit, FlexDirection, Gap, IconSize, Justify, Layout, LinkStyle,
     Corner, PageWidth, Shape, Size, State, Tab, TabStyle, TextAlign, TextRole, TextStyle, Tone, Typeface,
 };
 use crate::{DisplayType, IconLibrary, NodeCondition, WorkflowDisplay};
@@ -320,6 +320,7 @@ pub fn list_row(title: impl Into<String>) -> WorkflowDisplay {
         state: String::new(),
         href: None,
         act: None,
+        accent: None,
     })
 }
 
@@ -565,6 +566,24 @@ impl WorkflowDisplay {
         match &mut self.r#type {
             DisplayType::Row { state, .. } | DisplayType::Choice { state, .. } => *state = value,
             DisplayType::Chip { state, .. } => *state = Some(value),
+            _ => {}
+        }
+        self
+    }
+
+    /// Washes a row, or each row of a table, in a colour: `#rrggbb` or a
+    /// `{key}` naming one per item, such as `"{r.accent}"`. A value that is
+    /// neither is left out.
+    pub fn accent_from(mut self, value: impl Into<String>) -> Self {
+        let accent = match Accent::parse(value) {
+            Ok(accent) => accent,
+            Err(error) => {
+                tracing::warn!("{error}");
+                return self;
+            }
+        };
+        match &mut self.r#type {
+            DisplayType::Row { accent: slot, .. } | DisplayType::Table { row_accent: slot, .. } => *slot = Some(accent),
             _ => {}
         }
         self
@@ -960,6 +979,27 @@ mod tests {
             examples += 1;
         }
         assert!(examples > 10);
+    }
+
+    #[test]
+    fn an_accent_is_only_ever_a_colour() {
+        let row = list_row("Devils").accent_from("{r.accent}");
+        assert!(matches!(&row.r#type, DisplayType::Row { accent: Some(a), .. } if a.as_str() == "{r.accent}"));
+        let row = list_row("Devils").accent_from("red; background: url(x)");
+        assert!(matches!(&row.r#type, DisplayType::Row { accent: None, .. }));
+
+        for good in ["#CE1126", "#fff", "{r.accent}"] {
+            assert!(serde_json::from_value::<Accent>(json!(good)).is_ok(), "{good}");
+        }
+        for bad in ["red", "#12345", "#CE1126; color: red", "{a}{b}", "{}", "url(x)", "{r.accent}x"] {
+            assert!(serde_json::from_value::<Accent>(json!(bad)).is_err(), "{bad}");
+        }
+        let table = serde_json::from_value::<WorkflowDisplay>(json!({ "type": { "Table": {
+            "items_key": "rows", "as": "r", "headers": [], "row": [], "row_accent": "expression(alert(1))"
+        } } }));
+        assert!(table.is_err());
+        let plain = serde_json::to_value(list_row("Devils")).unwrap();
+        assert!(plain["type"]["Row"].get("accent").is_none());
     }
 
     #[test]

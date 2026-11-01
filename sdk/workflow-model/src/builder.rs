@@ -841,6 +841,7 @@ impl WorkflowDisplayBuilder {
             headers,
             row,
             row_state: None,
+            row_accent: None,
         });
         self
     }

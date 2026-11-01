@@ -59,10 +59,17 @@
         {#each items as item}
           {@const scope = { ...inputs, [table.as]: item }}
           {@const state = look.stateOf(table.row_state, scope)}
-          <tr class={['border-b border-foreground/10 last:border-b-0', state !== 'Default' && look.rowState[state]]}>
+          {@const accent = look.accentOf(table.row_accent, scope)}
+          <tr
+            class={['border-b border-foreground/10 last:border-b-0', state !== 'Default' && look.rowState[state]]}
+            style:background-color={accent ? look.accentFill(accent) : undefined}
+          >
             {#each table.row as displayItem, index}
               {@const header = headers[index]}
-              <td class={['px-3 py-2 text-sm', header?.numeric && 'text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}>
+              <td
+                class={['px-3 py-2 text-sm', header?.numeric && 'text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}
+                style:box-shadow={accent && index === 0 ? look.accentEdge(accent) : undefined}
+              >
                 <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
               </td>
             {/each}

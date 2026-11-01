@@ -8,6 +8,8 @@
   let { display, inputs, workflow, ...rest }: Props = $props();
   let row = $derived(typeof display.type !== 'string' && 'Row' in display.type ? display.type.Row : null);
   let state = $derived(look.stateOf(row?.state, inputs));
+  let accent = $derived(look.accentOf(row?.accent, inputs));
+  let tint = $derived(accent ? `background-color: ${look.accentFill(accent)}; box-shadow: ${look.accentEdge(accent)}` : undefined);
   let href = $derived(row?.href ? safeHref(interpolate(inputs, row.href)) : null);
   let external = $derived(!!href && /^https?:\/\//i.test(href));
   const press = pressable(() => ({ workflow, inputs }));
@@ -41,7 +43,7 @@
 
 {#if row}
   {#if href}
-    <a {href} class={cls} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{@render inner()}</a>
+    <a {href} class={cls} style={tint} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{@render inner()}</a>
   {:else if row.act}
     {@const disabled = press.disabled(row.act)}
     <div
@@ -49,6 +51,7 @@
       tabindex={disabled ? -1 : 0}
       aria-disabled={disabled}
       class={[cls, 'w-full cursor-pointer', disabled && 'pointer-events-none']}
+      style={tint}
       onclick={() => press.run(row.act)}
       onkeydown={(event) => {
         if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
@@ -60,6 +63,6 @@
       {@render inner()}
     </div>
   {:else}
-    <div class={cls}>{@render inner()}</div>
+    <div class={cls} style={tint}>{@render inner()}</div>
   {/if}
 {/if}
