@@ -70,11 +70,71 @@ pub fn with_jitter(base: Duration) -> Duration {
 }
 
 pub fn full_avatar_url(user: &UserResource) -> String {
-    let ending = if user.avatar_url.starts_with("default/") {
-        user.avatar_url.clone()
+    let stored = user.avatar_url.trim();
+    let ending = if stored.is_empty() {
+        "default/default-1.png".to_string()
+    } else if stored.starts_with("http://") || stored.starts_with("https://") {
+        return stored.to_string();
+    } else if stored.starts_with("default/") {
+        stored.to_string()
     } else {
-        format!("{}/{}", user.id, user.avatar_url)
+        format!(
+            "{}/{}",
+            encode_path_segment(&user.id),
+            encode_path_segment(stored)
+        )
     };
 
     format!("https://cdn.tawks.app/avatars/{}", ending)
+}
+
+fn encode_path_segment(segment: &str) -> String {
+    segment
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod avatar_url_tests {
+    use super::*;
+
+    fn user(avatar_url: &str) -> UserResource {
+        UserResource {
+            id: "USR-1".into(),
+            username: "a".into(),
+            display_name: "A".into(),
+            avatar_url: avatar_url.into(),
+            db_score: 0,
+            is_bot: false,
+        }
+    }
+
+    #[test]
+    fn avatar_urls_never_point_at_a_broken_path() {
+        let cdn = "https://cdn.tawks.app/avatars";
+        assert_eq!(
+            full_avatar_url(&user("abc.png")),
+            format!("{cdn}/USR-1/abc.png")
+        );
+        assert_eq!(
+            full_avatar_url(&user("my pic #2.png")),
+            format!("{cdn}/USR-1/my%20pic%20%232.png")
+        );
+        assert_eq!(
+            full_avatar_url(&user(" default/default-3.png ")),
+            format!("{cdn}/default/default-3.png")
+        );
+        assert_eq!(
+            full_avatar_url(&user("https://x.test/a.png")),
+            "https://x.test/a.png"
+        );
+        assert_eq!(
+            full_avatar_url(&user("")),
+            format!("{cdn}/default/default-1.png")
+        );
+    }
 }

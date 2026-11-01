@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fallBackToDefaultAvatar } from '@tawks/ui/avatar/avatar-url.js';
   import { mediaUrl } from '../../media.js';
   import { getNestedValue, interpolate, pictureUrl } from '../../utils';
   import type { Props } from '../workflow-display.svelte';
@@ -21,7 +22,7 @@
   <div class="flex items-center -space-x-2">
     {#each shown as person}
       <div class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-[11px] font-bold text-primary ring-2 ring-background" title={person.name}>
-        {#if person.src}<img src={mediaUrl(person.src)} alt={person.name} class="size-full object-cover" />{:else}{(person.name || '?')[0].toUpperCase()}{/if}
+        {#if person.src}<img src={mediaUrl(person.src)} alt={person.name} onerror={fallBackToDefaultAvatar} class="size-full object-cover" />{:else}{(person.name || '?')[0].toUpperCase()}{/if}
       </div>
     {/each}
     {#if people.length > shown.length}

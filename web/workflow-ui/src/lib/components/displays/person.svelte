@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fallBackToDefaultAvatar } from '@tawks/ui/avatar/avatar-url.js';
   import { mediaUrl } from '../../media.js';
   import { interpolate, pictureUrl } from '../../utils';
   import * as look from '../../look';
@@ -14,7 +15,7 @@
 
 {#snippet content()}
   <div class={['flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 font-bold text-primary', size.avatar]}>
-    {#if src}<img src={mediaUrl(src)} alt="" class="size-full object-cover" />{:else}{(name || '?')[0].toUpperCase()}{/if}
+    {#if src}<img src={mediaUrl(src)} alt="" onerror={fallBackToDefaultAvatar} class="size-full object-cover" />{:else}{(name || '?')[0].toUpperCase()}{/if}
   </div>
   <div class="flex min-w-0 flex-col">
     <span class={['truncate font-semibold text-foreground', size.name, userId && 'group-hover:underline']}>{name}</span>
