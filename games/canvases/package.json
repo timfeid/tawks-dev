@@ -10,6 +10,8 @@
     "./party/costumes/client": "./src/party/costumes/client.ts",
     "./party/pets/catalog": "./src/party/pets/catalog.ts",
     "./party/pets/pet-reveal.svelte": "./src/party/pets/pet-reveal.svelte",
+    "./party/pets/store": "./src/party/pets/store.ts",
+    "./party/pets/pet-model": "./src/party/pets/pet-model.ts",
     "./party/characters": "./src/party/characters.ts",
     "./party/bags": "./src/party/bags.ts",
     "./party/costumes/framing": "./src/party/costumes/framing.ts",

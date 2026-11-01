@@ -1,0 +1,18 @@
+[
+  { "id": "pet-ember", "slot": "pet", "name": "Ember", "price": 8, "icon": "flame", "description": "Adopt Ember, a little dragon who runs warm. Walks beside you in place of your hatched pet, who stays yours." },
+  { "id": "pet-puddle", "slot": "pet", "name": "Puddle", "price": 8, "icon": "waves", "description": "Adopt Puddle, a calm little penguin. Walks beside you in place of your hatched pet, who stays yours." },
+  { "id": "pet-sprout", "slot": "pet", "name": "Sprout", "price": 8, "icon": "trees", "description": "Adopt Sprout, a brave little cactus. Walks beside you in place of your hatched pet, who stays yours." },
+  { "id": "pet-fizz", "slot": "pet", "name": "Fizz", "price": 8, "icon": "bug", "description": "Adopt Fizz, a buzzing little bee. Walks beside you in place of your hatched pet, who stays yours." },
+  { "id": "pet-mochi", "slot": "pet", "name": "Mochi", "price": 8, "icon": "heart", "description": "Adopt Mochi, a sleepy little pig. Walks beside you in place of your hatched pet, who stays yours." },
+  { "id": "pet-coat-midnight", "slot": "pet-coat", "style": "midnight", "name": "Midnight coat", "price": 2, "icon": "moon", "description": "Deep indigo with lavender trim. Fits every pet." },
+  { "id": "pet-coat-frost", "slot": "pet-coat", "style": "frost", "name": "Frost coat", "price": 2, "icon": "snowflake", "description": "Icy blue with snowy white trim. Fits every pet." },
+  { "id": "pet-coat-candy", "slot": "pet-coat", "style": "candy", "name": "Candy coat", "price": 2, "icon": "sparkle", "description": "Lilac with a sweet pastel trim. Fits every pet." },
+  { "id": "pet-hat-party", "slot": "pet-hat", "style": "party", "name": "Pet party hat", "price": 2, "icon": "party-popper", "colors": ["#ff6f9f", "#ffd23f"], "description": "A tiny striped cone with a pom on top." },
+  { "id": "pet-hat-tophat", "slot": "pet-hat", "style": "tophat", "name": "Pet top hat", "price": 2, "icon": "crown", "colors": ["#2b2633", "#e0457a"], "description": "A very small, very dapper top hat." },
+  { "id": "pet-hat-beanie", "slot": "pet-hat", "style": "beanie", "name": "Pet beanie", "price": 2, "icon": "cloud", "colors": ["#4d96ff", "#f4f7ff"], "description": "A knit cap with a fluffy pom." },
+  { "id": "pet-hat-santa", "slot": "pet-hat", "style": "santa", "name": "Pet Santa hat", "price": 2, "icon": "gift", "colors": ["#d62f3a", "#f8f8f8"], "from": "11-15", "until": "12-31", "description": "For the holidays. Sold and worn from November 15 to December 31 each year." },
+  { "id": "pet-neck-bowtie", "slot": "pet-neck", "style": "bowtie", "name": "Pet bow tie", "price": 2, "icon": "sparkles", "colors": ["#e0457a", "#b8325f"], "description": "A neat little bow tie." },
+  { "id": "pet-neck-bandana", "slot": "pet-neck", "style": "bandana", "name": "Pet bandana", "price": 2, "icon": "star", "colors": ["#d62f3a", "#f8f8f8"], "description": "A red bandana knotted at the back." },
+  { "id": "pet-neck-bell", "slot": "pet-neck", "style": "bell", "name": "Bell collar", "price": 2, "icon": "bell", "colors": ["#4d96ff", "#ffd23f"], "description": "A soft collar with a golden bell." },
+  { "id": "pet-neck-autumn", "slot": "pet-neck", "style": "scarf", "name": "Autumn scarf", "price": 2, "icon": "trees", "colors": ["#d9631e", "#ffd23f"], "from": "11-01", "until": "11-30", "description": "Warm stripes for the harvest. Sold and worn from November 1 to November 30 each year." }
+]

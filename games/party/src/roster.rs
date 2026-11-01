@@ -128,6 +128,22 @@ pub struct Costume {
     #[serde(default, skip_serializing_if = "Option::is_none")] pub reaction: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub shuffle_reactions: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")] pub reaction_pool: Vec<String>,
+    /// The pet out beside the character and what it wears. Checked by Tawks.
+    #[serde(default, skip_serializing_if = "PetLook::is_plain")] pub pet: PetLook,
+}
+/// Pet store item ids; `id` is an adopted pet shown in place of the hatched one.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PetLook {
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub coat: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub hat: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub neck: Option<String>,
+}
+impl PetLook {
+    pub fn is_plain(&self) -> bool { *self == Self::default() }
+    fn slots(&self) -> impl Iterator<Item = (&'static str, &str)> {
+        [("pet", &self.id), ("pet-coat", &self.coat), ("pet-hat", &self.hat), ("pet-neck", &self.neck)].into_iter().filter_map(|(slot, id)| id.as_deref().map(|id| (slot, id)))
+    }
 }
 /// A list, or the single id (or null) older outfits saved.
 fn one_or_many<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
@@ -162,6 +178,14 @@ pub fn reactions() -> &'static [Reaction] {
     ITEMS.get_or_init(|| serde_json::from_str(include_str!("../../canvases/src/party/reactions/catalog.json")).expect("reaction catalog"))
 }
 
+/// Pets to adopt, and coats and gear for them, sold through the same bot as clothing.
+#[derive(Debug, Deserialize)]
+pub struct PetItem {pub id:String,pub slot:String,pub name:String,pub price:i32,pub icon:String,pub description:String}
+pub fn pet_items() -> &'static [PetItem] {
+    static ITEMS: OnceLock<Vec<PetItem>>=OnceLock::new();
+    ITEMS.get_or_init(|| serde_json::from_str(include_str!("../../canvases/src/party/pets/store.json")).expect("pet store catalog"))
+}
+
 /// Comes with PuckLab, never sold; shows the owner's Lab club jersey.
 pub const PUCKLAB_JERSEY: &str = "shirt-pucklab";
 
@@ -181,6 +205,7 @@ pub fn validate_sandbox_costume(costume: &Costume, wardrobe: Option<&Wardrobe>) 
     }
     if costume.extras.iter().enumerate().any(|(i, id)| costume.extras[..i].contains(id)) { return Err("Each extra goes on once."); }
     if costume.reaction.iter().chain(&costume.reaction_pool).any(|id| !reactions().iter().any(|reaction| reaction.id == *id)) { return Err("Choose a reaction from the catalog."); }
+    if costume.pet.slots().any(|(slot, id)| !pet_items().iter().any(|item| item.id == id && item.slot == slot)) { return Err("Choose pet gear from the catalog."); }
     if let Some(id) = costume.model_id.as_deref() {
         // A bag is carried, not worn, so it goes with any character.
         if clothing.iter().any(|(slot, _)| *slot != "bag" && *slot != "extra") { return Err("Full characters can wear extras and carry bags, but not fitted clothing."); }
@@ -225,6 +250,10 @@ mod cosmetic_catalog_tests {
         let earned: Vec<_> = cosmetics().iter().filter(|item| item.unlocked_by.is_some()).map(|item| item.id.as_str()).collect();
         assert_eq!(earned, ["hat-crown", "hat-wizard", "extra-medal", "extra-halo"]);
         assert!(cosmetics().iter().filter(|item| !item.for_sale()).all(|item| item.included_with.is_some() || earned.contains(&item.id.as_str())));
+        for item in pet_items() {
+            assert!(ids.insert(item.id.as_str()), "duplicate store product {}", item.id);
+            assert_eq!(item.price, if item.slot == "pet" { 8 } else { 2 });
+        }
         let source: Vec<Cosmetic> = serde_json::from_str(include_str!("../../canvases/src/party/costumes/catalog.json")).unwrap();
         assert_eq!(cosmetics().len(), source.len() + 6);
     }

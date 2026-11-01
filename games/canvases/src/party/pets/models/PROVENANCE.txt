@@ -42,6 +42,37 @@ Modifications
   1,600 triangles, 5 to 17 bones). Each GLB is 115 to 160 KB.
 
 Reproduce
-build-pets.py and recolour.json in this folder rebuild all five GLBs from the
+build-pets.py and recolour.json in this folder rebuild all five GLBs and the coats from the
 archive with Blender 4.2 (the bpy module); the command is in the script header.
 Copies of the GLBs live in apps/tawkathon-native/assets/pets for the native game.
+
+Coats
+The pet store's coats (Midnight, Frost and Candy) are the same source
+textures repainted by build-pets.py with the colours each pet's "coats" entry
+in recolour.json swaps into its rules, so the regions and shading match the
+pet's own texture. They are written as coats/<pet>-<coat>.png, 256 px, and
+drawn on the unchanged GLBs in place of the embedded texture. Same CC0 source
+and license as above.
+| File | SHA-256 |
+| --- | --- |
+| coats/pet-ember-candy.png | 71b519cc1dc06c1074240f345b48138433d97273c1a4f1ed48e60ff5ecc128a5 |
+| coats/pet-ember-frost.png | f61e84126d79baa0aaee3c4d76710463632d177cced4f5e58c80e561d51ef566 |
+| coats/pet-ember-midnight.png | 715f2666bd74475fe8db79aa65b7e9798ef7d019b444cd593d9231bcf33be290 |
+| coats/pet-fizz-candy.png | 41d672508b516d9e6009affae5feb7643ba39aba5b11ca1497b526fa275e5cb6 |
+| coats/pet-fizz-frost.png | cfe178807a40bf4ff8d0219da6607b075e3d9a7a2dcd122bd2ce4727132625fe |
+| coats/pet-fizz-midnight.png | 79009140eb7d09f6d257db1ed8dd4c3be1b36b8ce078d524589d6eea8316e402 |
+| coats/pet-mochi-candy.png | 8a81bc9ba6316e9e8eb94803fa63300a7483cd3004fe4a7a5bf7d945b9a68e40 |
+| coats/pet-mochi-frost.png | 34a8262b0973b91101958d10d21dc52067c3d5d683b515f9c179ce7f96b0246f |
+| coats/pet-mochi-midnight.png | 7d6d3f985c98f2606822bbc4c7bbddaf7ba469104cbc034fc73f87b1d8bedd8c |
+| coats/pet-puddle-candy.png | 3e871f8196e3f96eaec32a328f5262d972b2b8ef67e1d1881f32b22f6115950e |
+| coats/pet-puddle-frost.png | c2464793ab17c55b2d4a48cab342a4ea8c4510c181cca724bba50076d89c9425 |
+| coats/pet-puddle-midnight.png | 40acb6ab7b01bc73c8e6b96daa178ad9054458394d7633751ea9f7df0b7d8999 |
+| coats/pet-sprout-candy.png | 7241a91525254bf9c7f26c3aebcfc0a14b89fde1892c4312798483f9a2ea1c7e |
+| coats/pet-sprout-frost.png | 47747b120442ee4c0d3e5e71ec8ca34b2c8fa12ae0f7d243821ef94fccfece71 |
+| coats/pet-sprout-midnight.png | 8dd16fd075704a9c0389ed54ebcdf1a71e483fa607e29968cf3a065ec9097f7d |
+
+Pet gear
+The pet hats and neckwear are not from the pack: they are original
+primitives (spheres, cones, rings and boxes) listed in ../gear.json and built
+in code by both clients, provided under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). No trademarked designs.

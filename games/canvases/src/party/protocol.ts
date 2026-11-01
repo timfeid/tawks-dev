@@ -20,7 +20,11 @@ export type Costume = {
   shuffle_reactions?: boolean;
   /** With shuffle on, every reaction owned, to pick from. Set by Tawks. */
   reaction_pool?: string[];
+  pet?: PetLook | null;
 };
+
+/** What the pet wears; `id` is an adopted pet shown in place of the hatched one. */
+export type PetLook = { id?: string | null; coat?: string | null; hat?: string | null; neck?: string | null };
 
 export type JerseyStripe = {
   pattern: 'single' | 'double' | 'triple' | 'bold' | 'thick_thin' | 'thin_thick_thin';

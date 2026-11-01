@@ -6,14 +6,22 @@
   {"s": [0, 0.27], "v": [0.55, 1], "to": "#ffd76a", "keep": 0.2},
   {"h": [35, 80], "v": [0, 0.42], "to": "#d94a12", "keep": 0.3},
   {"h": [15, 90], "to": "#ff7b29", "keep": 0.15}
- ]},
+ ], "coats": {
+  "midnight": {"#ff7b29": "#4a47a3", "#ffd76a": "#c9c3ff", "#d94a12": "#302e74"},
+  "frost": {"#ff7b29": "#9fd8f0", "#ffd76a": "#f2fbff", "#d94a12": "#5aa9d6"},
+  "candy": {"#ff7b29": "#c89cf2", "#ffd76a": "#fff0b8", "#d94a12": "#8f5fd1"}
+ }},
  {"id": "pet-puddle", "source": "Penguin", "actions": {"Idle": "Idle", "Jump": "Hop", "Dance": "Cheer"}, "rules": [
   {"region": [0.64, 0.74, 0.95, 1.0], "s": [0, 0.15], "v": [0, 0.62], "to": "#1d2333", "keep": 0.4},
   {"v": [0, 0.37], "to": "#1d2333", "keep": 0.4},
   {"h": [20, 70], "s": [0.3, 1], "to": "#ffc94d"},
   {"s": [0, 0.15], "v": [0.57, 1], "to": "#d6e6ff", "keep": 0.15},
   {"s": [0, 0.15], "to": "#4d96ff", "keep": 0.2}
- ]},
+ ], "coats": {
+  "midnight": {"#4d96ff": "#4a47a3", "#d6e6ff": "#c9c3ff", "#1d2333": "#24264f"},
+  "frost": {"#4d96ff": "#9fd8f0", "#d6e6ff": "#ffffff", "#1d2333": "#2c5d7a", "#ffc94d": "#ffb38a"},
+  "candy": {"#4d96ff": "#c89cf2", "#d6e6ff": "#fff0f8", "#1d2333": "#5b3d87", "#ffc94d": "#ff9cbe"}
+ }},
  {"id": "pet-sprout", "source": "Cactus", "actions": {"Idle": "Idle", "Jump": "Hop", "Dance": "Cheer"}, "rules": [
   {"s": [0, 0.15], "v": [0.8, 1]},
   {"v": [0, 0.2], "to": "#1f2a22", "keep": 0.5},
@@ -22,7 +30,11 @@
   {"s": [0, 0.42], "v": [0.5, 1], "h": [20, 90], "to": "#fff3d6", "keep": 0.2},
   {"h": [15, 50], "v": [0, 0.5], "to": "#2f5a31"},
   {"h": [60, 170], "to": "#62c370", "keep": 0.3}
- ]},
+ ], "coats": {
+  "midnight": {"#62c370": "#4a47a3", "#2f5a31": "#302e74", "#ff8fc0": "#ffd76a", "#fff3d6": "#c9c3ff"},
+  "frost": {"#62c370": "#9fd8f0", "#2f5a31": "#5aa9d6", "#ff8fc0": "#ffffff", "#fff3d6": "#e8f8ff"},
+  "candy": {"#62c370": "#c89cf2", "#2f5a31": "#8f5fd1", "#ff8fc0": "#7fe0c0", "#fff3d6": "#fff0f8"}
+ }},
  {"id": "pet-fizz", "source": "Bee", "actions": {"Flying": "Idle", "Bite_Front": "Cheer"}, "rules": [
   {"s": [0, 0.15], "v": [0.8, 1]},
   {"h": [280, 350], "s": [0.3, 1], "to": "#b8325f"},
@@ -30,12 +42,20 @@
   {"s": [0, 0.35], "v": [0.6, 1], "to": "#fff3d6", "keep": 0.2},
   {"h": [35, 75], "s": [0.3, 1], "to": "#ffd23f", "keep": 0.3},
   {"s": [0, 0.2], "to": "#2b2633", "keep": 0.4}
- ]},
+ ], "coats": {
+  "midnight": {"#ffd23f": "#4a47a3", "#2b2633": "#24264f", "#d9f0ff": "#c9c3ff", "#fff3d6": "#c9c3ff"},
+  "frost": {"#ffd23f": "#9fd8f0", "#2b2633": "#2c5d7a", "#d9f0ff": "#ffffff", "#fff3d6": "#f2fbff"},
+  "candy": {"#ffd23f": "#c89cf2", "#2b2633": "#5b3d87", "#d9f0ff": "#fff0f8", "#fff3d6": "#fff0b8"}
+ }},
  {"id": "pet-mochi", "source": "Pig", "actions": {"Idle": "Idle", "Jump": "Hop", "Dance": "Cheer"}, "rules": [
   {"s": [0, 0.15], "v": [0.8, 1]},
   {"v": [0, 0.2], "to": "#2a1d2a", "keep": 0.5},
   {"h": [30, 70], "s": [0.15, 1], "v": [0.5, 1], "to": "#fff3c4", "keep": 0.2},
   {"h": [290, 345], "s": [0.4, 1], "to": "#e0457a", "keep": 0.3},
   {"h": [250, 350], "to": "#ff9cbe", "keep": 0.2}
- ]}
+ ], "coats": {
+  "midnight": {"#ff9cbe": "#4a47a3", "#e0457a": "#302e74", "#fff3c4": "#c9c3ff"},
+  "frost": {"#ff9cbe": "#9fd8f0", "#e0457a": "#5aa9d6", "#fff3c4": "#ffffff"},
+  "candy": {"#ff9cbe": "#c89cf2", "#e0457a": "#8f5fd1", "#fff3c4": "#fff0b8"}
+ }}
 ]

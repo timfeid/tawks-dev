@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 
-export type FocusSlot = 'head' | 'face' | 'neck' | 'torso' | 'hands' | 'legs' | 'feet';
+/** `pet` frames the pet beside the character rather than anything it wears. */
+export type FocusSlot = 'head' | 'face' | 'neck' | 'torso' | 'hands' | 'legs' | 'feet' | 'pet';
 
 /** Where on the character a wardrobe item is worn, for framing a preview of it. */
 export function itemFocus(id: string): FocusSlot | null {
+  if (id.startsWith('pet-')) return 'pet';
   if (id.startsWith('hat-')) return 'head';
   if (id === 'extra-bowtie' || id === 'extra-scarf' || id === 'extra-medal') return 'neck';
   if (['extra-santa-hat', 'extra-elf-hat', 'extra-antlers', 'extra-headphones', 'extra-halo'].includes(id)) return 'head';
@@ -65,5 +67,7 @@ export function focusBounds(character: THREE.Object3D, slot: FocusSlot): THREE.B
     }
     case 'feet':
       return legs?.expandByVector(new THREE.Vector3(0.05, 0.05, 0)) ?? null;
+    case 'pet':
+      return null;
   }
 }

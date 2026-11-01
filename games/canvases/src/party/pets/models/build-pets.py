@@ -7,6 +7,10 @@ Each source texture is repainted in flat colour regions from recolour.json:
 a rule matches texels by sRGB hue/saturation/value (and optionally a UV
 rectangle, top-left origin), first match wins, and `keep` is how much of the
 painted shading survives. The texture is shrunk to 256 px and embedded.
+
+Each coat in a pet's "coats" swaps the colours its rules paint, and is
+written beside the GLBs as coats/<pet>-<coat>.png, for the app and the
+native game to put on the same model in place of its own texture.
 """
 import json
 import os
@@ -30,6 +34,10 @@ def to_linear(s):
 
 def rgb(code):
     return np.array([int(code[i:i + 2], 16) / 255 for i in (1, 3, 5)], np.float32)
+
+
+def recoat(rules, swaps):
+    return [{**rule, "to": swaps.get(rule["to"], rule["to"])} if "to" in rule else rule for rule in rules]
 
 
 def repaint(path, rules):
@@ -66,10 +74,17 @@ def repaint(path, rules):
     return image
 
 
+(out_dir / "coats").mkdir(exist_ok=True)
 for pet in pets:
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    source = pack / "Textures" / f"{pet['source']}_Texture.png"
+    for coat, swaps in pet.get("coats", {}).items():
+        image = repaint(source, recoat(pet["rules"], swaps))
+        image.filepath_raw = str(out_dir / "coats" / f"{pet['id']}-{coat}.png")
+        image.save()
+        bpy.data.images.remove(image)
     bpy.ops.wm.open_mainfile(filepath=str(pack / "Blends" / f"{pet['source']}.blend"), load_ui=False)
-    texture = repaint(pack / "Textures" / f"{pet['source']}_Texture.png", pet["rules"])
+    texture = repaint(source, pet["rules"])
     for action in list(bpy.data.actions):
         if action.name in pet["actions"]:
             action.name = pet["actions"][action.name]

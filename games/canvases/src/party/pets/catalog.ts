@@ -1,6 +1,11 @@
 import PETS from './catalog.json' with { type: 'json' };
 
-export type Pet = { id: string; name: string; kind: string; body: string; accent: string; blurb: string };
+/** Where gear sits on a pet, in its model's rest pose: on `bone`, centred `at`. A hat's base has radius `size` and leans forward by `tilt` radians; neckwear rings it `size` wide and deep. */
+export type PetFit = {
+  hat: { bone: string; at: [number, number, number]; size: number; tilt: number };
+  neck: { bone: string; at: [number, number, number]; size: [number, number] };
+};
+export type Pet = { id: string; name: string; kind: string; body: string; accent: string; blurb: string; fit: PetFit };
 
 export const PET_CATALOG = PETS as Pet[];
 

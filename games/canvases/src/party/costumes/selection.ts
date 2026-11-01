@@ -14,7 +14,7 @@ export function toggleExtra(worn:readonly string[],id:string):string[] {
   return [...worn.filter(extra=>!(HOLIDAY_HATS.includes(id)&&HOLIDAY_HATS.includes(extra))),id];
 }
 
-/** Takes one worn item off: a slot empties, one extra comes off, and a character or head goes back to Original or the round head. */
+/** Takes one worn item off: a slot empties, one extra comes off, a character or head goes back to Original or the round head, and an adopted pet goes back to the hatched one. */
 export function takeOff(costume:Costume,id:string):Costume {
   const look:Costume={...costume};
   if(look.model_id===id)look.model_id=null;
@@ -23,6 +23,7 @@ export function takeOff(costume:Costume,id:string):Costume {
   for(const slot of SINGLE_SLOTS)if(look[slot]===id)look[slot]=null;
   if(costume.shirt===id&&'jersey' in costume)look.jersey=null;
   if(look.extras?.includes(id))look.extras=look.extras.filter(extra=>extra!==id);
+  if(look.pet&&Object.values(look.pet).includes(id))look.pet=Object.fromEntries(Object.entries(look.pet).map(([field,worn])=>[field,worn===id?null:worn]));
   return look;
 }
 
@@ -37,7 +38,7 @@ export function easternMonthDay(now:Date):string {
   return `${part('month')}-${part('day')}`;
 }
 
-export function inSeason(head:Head,now=new Date()) {
+export function inSeason(head:{from?:string;until?:string},now=new Date()) {
   if(!head.from||!head.until)return true;
   const day=easternMonthDay(now);
   return head.from<=head.until?head.from<=day&&day<=head.until:day>=head.from||day<=head.until;
@@ -58,11 +59,13 @@ export function seasonNote(head:Head) {
 
 /** Whole characters use their authored appearance, independent of fitted clothes. */
 export function characterSelection(costume:Costume,modelId:string):Costume {
-  return {color:costume.color,model_id:modelId,bag:costume.bag??null,head:costume.head??null,...(costume.body_width == null ? {} : {body_width:costume.body_width}),...(costume.extras?.length?{extras:[...costume.extras]}:{}),...(costume.reaction?{reaction:costume.reaction}:{}),...(costume.shuffle_reactions?{shuffle_reactions:true}:{})};
+  return {color:costume.color,model_id:modelId,bag:costume.bag??null,head:costume.head??null,...(costume.body_width == null ? {} : {body_width:costume.body_width}),...(costume.extras?.length?{extras:[...costume.extras]}:{}),...(costume.reaction?{reaction:costume.reaction}:{}),...(costume.shuffle_reactions?{shuffle_reactions:true}:{}),...(costume.pet?{pet:{...costume.pet}}:{})};
 }
 
 /** Imported personal models use their library ownership; store models use entitlements. */
 export function hasUnownedSelection(costume:Costume,owned:readonly string[],catalogIds:readonly string[]) {
   if(costume.model_id&&catalogIds.includes(costume.model_id)&&!owned.includes(costume.model_id))return true;
-  return SINGLE_SLOTS.some(slot=>!!costume[slot]&&!owned.includes(costume[slot]!))||(costume.extras??[]).some(id=>!owned.includes(id))||(!!costume.reaction&&!owned.includes(costume.reaction));
+  const pet=costume.pet;
+  const petGear=[pet?.id,pet?.coat,pet?.hat,pet?.neck].filter((id):id is string=>!!id);
+  return SINGLE_SLOTS.some(slot=>!!costume[slot]&&!owned.includes(costume[slot]!))||(costume.extras??[]).some(id=>!owned.includes(id))||(!!costume.reaction&&!owned.includes(costume.reaction))||petGear.some(id=>!owned.includes(id));
 }

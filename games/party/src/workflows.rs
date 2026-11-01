@@ -86,6 +86,10 @@ pub async fn register(
                 bot.register_product(&tawks_bot::store::Product::new(format!("tawkathon-{}",reaction.id),&reaction.name,reaction.price,&workflow_id)
                     .description(&reaction.description).product_type("tawkathon-cosmetic").icon(&reaction.icon)).await?;
             }
+            for item in crate::roster::pet_items() {
+                bot.register_product(&tawks_bot::store::Product::new(format!("tawkathon-{}",item.id),&item.name,item.price,&workflow_id)
+                    .description(&item.description).product_type("tawkathon-cosmetic").icon(&item.icon)).await?;
+            }
         }
 
         let mut game = Activity::workflow(workflow_id, name).icon(icon).players(min, max);

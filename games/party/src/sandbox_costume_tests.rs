@@ -1,6 +1,6 @@
 use crate::protocol::ClientMsg;
 use crate::room::{DevAction, Phase, Room, RoomError};
-use crate::roster::{Costume, Wardrobe, cosmetics, validate_sandbox_costume};
+use crate::roster::{Costume, PetLook, Wardrobe, cosmetics, pet_items, validate_sandbox_costume};
 
 fn host() -> Room {
     let mut room = Room::new("sandbox-look", 42);
@@ -124,4 +124,23 @@ fn sandbox_events_are_manual_and_crawler_preview_can_return_to_player() {
     assert_eq!(room.board.as_ref().unwrap().turn_seat(),0);
     room.dev("host",DevAction::CandyVan).unwrap();
     assert!(room.board_paused());
+}
+
+#[test]
+fn a_pet_look_rides_along_with_the_costume_and_only_catalog_gear_previews() {
+    let look: Costume = serde_json::from_value(serde_json::json!({"color":"clover","pet":{"id":"pet-fizz","hat":"pet-hat-party","neck":"pet-neck-bell","coat":"pet-coat-frost"}})).unwrap();
+    let mut room = host();
+    room.apply_costume("host", look.clone());
+    let view = serde_json::to_value(&room.members[0]).unwrap();
+    assert_eq!(view["costume"]["pet"], serde_json::json!({"id":"pet-fizz","coat":"pet-coat-frost","hat":"pet-hat-party","neck":"pet-neck-bell"}), "clients draw what the pet wears");
+    assert!(serde_json::to_value(Costume { color: "clover".into(), ..Costume::default() }).unwrap().get("pet").is_none());
+    assert!(validate_sandbox_costume(&look, None).is_ok());
+    for item in pet_items() {
+        let mut pet = PetLook::default();
+        *match item.slot.as_str() { "pet" => &mut pet.id, "pet-coat" => &mut pet.coat, "pet-hat" => &mut pet.hat, _ => &mut pet.neck } = Some(item.id.clone());
+        assert!(validate_sandbox_costume(&Costume { color: "clover".into(), pet, ..Costume::default() }, None).is_ok(), "{}", item.id);
+    }
+    for pet in [PetLook { hat: Some("hat-cap".into()), ..PetLook::default() }, PetLook { neck: Some("pet-hat-party".into()), ..PetLook::default() }, PetLook { id: Some("pet-dragon".into()), ..PetLook::default() }] {
+        assert!(validate_sandbox_costume(&Costume { color: "clover".into(), pet, ..Costume::default() }, None).is_err());
+    }
 }

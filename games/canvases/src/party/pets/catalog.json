@@ -1,7 +1,12 @@
 [
-  { "id": "pet-ember", "name": "Ember", "kind": "Blaze", "body": "#ff7b29", "accent": "#ffd23f", "blurb": "Runs warm and never sits still." },
-  { "id": "pet-puddle", "name": "Puddle", "kind": "Splash", "body": "#4d96ff", "accent": "#d6e6ff", "blurb": "Calm on the surface, quick in a scrap." },
-  { "id": "pet-sprout", "name": "Sprout", "kind": "Bloom", "body": "#62c370", "accent": "#dff5d8", "blurb": "Grows a little braver every game." },
-  { "id": "pet-fizz", "name": "Fizz", "kind": "Spark", "body": "#ffd23f", "accent": "#ff7b29", "blurb": "Buzzes loudest right before a win." },
-  { "id": "pet-mochi", "name": "Mochi", "kind": "Dream", "body": "#ff6f9f", "accent": "#fff3c4", "blurb": "Naps through warmups, wakes for finals." }
+  { "id": "pet-ember", "name": "Ember", "kind": "Blaze", "body": "#ff7b29", "accent": "#ffd23f", "blurb": "Runs warm and never sits still.",
+    "fit": { "hat": { "bone": "Head", "at": [0, 1.48, 0], "size": 0.36, "tilt": 0 }, "neck": { "bone": "Head", "at": [0, 0.22, 0.01], "size": [0.66, 0.68] } } },
+  { "id": "pet-puddle", "name": "Puddle", "kind": "Splash", "body": "#4d96ff", "accent": "#d6e6ff", "blurb": "Calm on the surface, quick in a scrap.",
+    "fit": { "hat": { "bone": "Head3", "at": [0, 1.5, 0], "size": 0.36, "tilt": 0 }, "neck": { "bone": "Head", "at": [0, 0.45, 0.01], "size": [0.71, 0.72] } } },
+  { "id": "pet-sprout", "name": "Sprout", "kind": "Bloom", "body": "#62c370", "accent": "#dff5d8", "blurb": "Grows a little braver every game.",
+    "fit": { "hat": { "bone": "Head3", "at": [0, 1.82, 0], "size": 0.3, "tilt": 0 }, "neck": { "bone": "Head", "at": [0, 0.2, 0.03], "size": [0.71, 0.72] } } },
+  { "id": "pet-fizz", "name": "Fizz", "kind": "Spark", "body": "#ffd23f", "accent": "#ff7b29", "blurb": "Buzzes loudest right before a win.",
+    "fit": { "hat": { "bone": "Head3", "at": [0, 1.6, 0], "size": 0.32, "tilt": 0 }, "neck": { "bone": "Head", "at": [0, 0.28, 0.01], "size": [0.68, 0.7] } } },
+  { "id": "pet-mochi", "name": "Mochi", "kind": "Dream", "body": "#ff6f9f", "accent": "#fff3c4", "blurb": "Naps through warmups, wakes for finals.",
+    "fit": { "hat": { "bone": "Head3", "at": [0, 1.42, 0.05], "size": 0.36, "tilt": 0 }, "neck": { "bone": "Head", "at": [0, 0.2, 0.03], "size": [0.71, 0.72] } } }
 ]

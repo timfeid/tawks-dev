@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { toonTextured } from '../toon';
+import { toon, toonTextured } from '../toon';
+import { petById } from './catalog';
+import { buildGear } from './pet-gear';
+import type { PetItem, ShownPet } from './store';
 
 const files = import.meta.glob('./models/*.glb', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const coats = import.meta.glob('./models/coats/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const loaded = new Map<string, Promise<GLTF>>();
+const coatTextures = new Map<string, Promise<THREE.Texture>>();
 
 /** Standing height of a pet beside a party character, who is about 1.5 tall. */
 export const PET_HEIGHT = 0.5;
@@ -33,21 +38,58 @@ function load(id: string): Promise<GLTF> {
   return gltf;
 }
 
-export function buildPet(id: string, height = PET_HEIGHT): PetRig {
+/** The texture of `coat` for pet `id`, sampled like the model's own; null when there is none. */
+function coatTexture(id: string, coat: PetItem | null, like: THREE.Texture | null): Promise<THREE.Texture | null> {
+  const key = `${id}-${coat?.style}`;
+  const asset = coat?.style ? coats[`./models/coats/${key}.png`] : undefined;
+  if (!asset) return Promise.resolve(null);
+  let texture = coatTextures.get(key);
+  if (!texture) {
+    texture = new THREE.TextureLoader().loadAsync(new URL(asset, globalThis.location?.href ?? import.meta.url).href).then((loaded) => {
+      loaded.flipY = false;
+      loaded.colorSpace = like?.colorSpace ?? THREE.SRGBColorSpace;
+      if (like) { loaded.wrapS = like.wrapS; loaded.wrapT = like.wrapT; loaded.magFilter = like.magFilter; loaded.minFilter = like.minFilter; }
+      return loaded;
+    });
+    texture.catch(() => coatTextures.delete(key));
+    coatTextures.set(key, texture);
+  }
+  return texture.catch(() => null);
+}
+
+/** Puts gear on the bone the pet's fit names, placed from the model's rest pose so it follows the animation. */
+function wear(model: THREE.Object3D, rest: THREE.Object3D, item: PetItem | null, place: { bone: string; at: [number, number, number] }, scale: THREE.Vector3, tilt = 0) {
+  const gear = item ? buildGear(item.style, item.colors ?? [], toon) : null;
+  const bone = model.getObjectByName(place.bone);
+  const restBone = rest.getObjectByName(place.bone);
+  if (!gear || !bone || !restBone) { gear?.dispose(); return null; }
+  gear.group.position.copy(restBone.worldToLocal(new THREE.Vector3(...place.at)));
+  gear.group.quaternion.copy(restBone.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt));
+  gear.group.scale.copy(scale);
+  bone.add(gear.group);
+  return gear;
+}
+
+/** `look` is the coat and gear it wears, from shownPet. */
+export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 'coat' | 'hat' | 'neck'> | null): PetRig {
   const group = new THREE.Group();
   group.name = `pet-${id}`;
   const materials: THREE.Material[] = [];
+  const gear: { dispose(): void }[] = [];
   let mixer: THREE.AnimationMixer | null = null;
   let idle: THREE.AnimationAction | null = null;
   let cheer: THREE.AnimationAction | null = null;
   let disposed = false;
-  const ready = load(id).then((gltf) => {
+  const ready = load(id).then(async (gltf) => {
+    let own: THREE.Texture | null = null;
+    gltf.scene.traverse((object) => { if (object instanceof THREE.Mesh) own ??= (object.material as THREE.MeshStandardMaterial).map; });
+    const coat = await coatTexture(id, look?.coat ?? null, own);
     if (disposed) return;
     const model = cloneSkinned(gltf.scene);
     model.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       const source = object.material as THREE.MeshStandardMaterial;
-      const material = toonTextured(source.map);
+      const material = toonTextured(coat ?? source.map);
       materials.push(material);
       object.material = material;
       object.castShadow = true;
@@ -66,6 +108,15 @@ export function buildPet(id: string, height = PET_HEIGHT): PetRig {
     const scale = height / Math.max(size.y, 1e-3);
     model.scale.multiplyScalar(scale);
     model.position.set(-(box.min.x + box.max.x) / 2 * scale, -box.min.y * scale, -(box.min.z + box.max.z) / 2 * scale);
+    const fit = petById(id)?.fit;
+    if (fit && look) {
+      gltf.scene.updateMatrixWorld(true);
+      const [wide, deep] = fit.neck.size;
+      for (const worn of [
+        wear(model, gltf.scene, look.hat, fit.hat, new THREE.Vector3().setScalar(fit.hat.size), fit.hat.tilt),
+        wear(model, gltf.scene, look.neck, fit.neck, new THREE.Vector3(wide, (wide + deep) / 2, deep)),
+      ]) if (worn) gear.push(worn);
+    }
     group.add(model);
   });
   let cheering = false;
@@ -84,6 +135,7 @@ export function buildPet(id: string, height = PET_HEIGHT): PetRig {
     dispose() {
       disposed = true;
       mixer?.stopAllAction();
+      gear.forEach((worn) => worn.dispose());
       group.removeFromParent();
       materials.forEach((material) => material.dispose());
     },
