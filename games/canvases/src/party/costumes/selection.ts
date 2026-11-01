@@ -14,6 +14,18 @@ export function toggleExtra(worn:readonly string[],id:string):string[] {
   return [...worn.filter(extra=>!(HOLIDAY_HATS.includes(id)&&HOLIDAY_HATS.includes(extra))),id];
 }
 
+/** Takes one worn item off: a slot empties, one extra comes off, and a character or head goes back to Original or the round head. */
+export function takeOff(costume:Costume,id:string):Costume {
+  const look:Costume={...costume};
+  if(look.model_id===id)look.model_id=null;
+  if(look.head===id)look.head=null;
+  if(look.reaction===id)look.reaction=null;
+  for(const slot of SINGLE_SLOTS)if(look[slot]===id)look[slot]=null;
+  if(costume.shirt===id&&'jersey' in costume)look.jersey=null;
+  if(look.extras?.includes(id))look.extras=look.extras.filter(extra=>extra!==id);
+  return look;
+}
+
 export type Head={id:string|null;name:string;from?:string;until?:string};
 /** Free for everyone; `null` is the round head. Seasonal heads can be put on from `from` to `until` (MM-DD, both whole days, US Eastern) each year. */
 export const HEADS:readonly Head[]=[{id:null,name:'Round'},...seasonalHeads];

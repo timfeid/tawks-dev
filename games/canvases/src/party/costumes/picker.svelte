@@ -156,7 +156,10 @@
       stopped = true;
     };
   });
+  const takesOff = (id: string) =>
+    slot === "model" ? draft.model_id === id : wearing(id);
   function choose(id: string | null) {
+    if (id && slot !== "extra" && takesOff(id)) id = null;
     if (slot === "model") {
       if (id) {
         if (!draft.model_id) baseLook = { ...draft };
@@ -303,11 +306,14 @@
                   ? 'border-primary bg-primary/10 text-white'
                   : 'border-white/10 text-neutral-400 hover:text-white'}"
                 aria-pressed={on}
-                title={seasonNote(option) || undefined}
                 disabled={busy}
+                title={on && option.id
+                  ? "Click to take off"
+                  : seasonNote(option) || undefined}
                 onclick={() => {
-                  draft = { ...draft, head: option.id };
-                  baseLook = { ...baseLook, head: option.id };
+                  const head = on ? null : option.id;
+                  draft = { ...draft, head };
+                  baseLook = { ...baseLook, head };
                   saved = false;
                 }}>{option.name}</button
               >
@@ -394,6 +400,7 @@
                 !owned.includes(character.id) && draft.model_id === character.id
                   ? { id: character.id, price: character.price }
                   : null,
+                draft.model_id === character.id,
               )}{/each}
             {#if draft.model_id && !selectedModel}{@render tile(
                 true,
@@ -426,6 +433,7 @@
                 owned.includes(item.id) || "unlocked_by" in item
                   ? null
                   : { id: item.id, price: 10 },
+                wearing(item.id),
               )}{/each}
           {/if}
         </div>
@@ -463,6 +471,7 @@
   pick: () => void,
   Icon: typeof UserRound | null,
   sale: { id: string; price: number } | null = null,
+  removable = false,
 )}
   <div
     class="flex flex-col overflow-hidden rounded-lg border transition-colors {on
@@ -473,6 +482,8 @@
       class="flex min-h-16 flex-1 flex-col items-center justify-center gap-1 px-2 py-2.5 text-center"
       disabled={busy}
       aria-pressed={on}
+      title={removable ? "Click to take off" : undefined}
+      aria-label={removable ? `${name}, worn. Click to take off` : undefined}
       onclick={pick}
     >
       {#if Icon}<Icon
