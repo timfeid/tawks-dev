@@ -646,19 +646,30 @@ For a sport's scores, `ScoreLane` keeps one tab per game in step with your score
 ```rust
 use tawks_bot::scoreboard::{Matchup, Phase, ScoreLane, Side};
 
-let mut lane = ScoreLane::new("nhl", "hockey");
-let game = Matchup {
-    id: "2026020114".into(),
-    away: Side { abbrev: "NJD".into(), score: Some(3), color: Some("#ce1126".into()) },
-    home: Side { abbrev: "NYR".into(), score: Some(1), color: Some("#0038a8".into()) },
-    phase: Phase::Live { clock: "2nd 14:32".into() },
-    url: Some("/niche/hockey/tonight".into()),
-    starts_at: Some("2026-10-27T23:00:00Z".into()),
+let mut lane = ScoreLane::new("nhl", "hockey").league("nhl");
+let side = |abbrev: &str, score, color: &str| Side {
+    abbrev: abbrev.into(),
+    score: Some(score),
+    color: Some(color.into()),
+    channel_id: None,
+    logo: None,
 };
+let mut game = Matchup::new(
+    "2026020114",
+    side("NJD", 3, "#ce1126"),
+    side("NYR", 1, "#0038a8"),
+    Phase::Live { clock: "2nd 14:32".into() },
+);
+game.url = Some("/niche/hockey/tonight".into());
+game.starts_at = Some("2026-10-27T23:00:00Z".into());
 for scored in lane.sync(&bot.sdk.web_client, &[game]).await {
     println!("{} · {}", scored.side().abbrev, scored.score_line());
 }
 ```
+
+- `.league(...)` tags the lane's games with a league: `nhl`, `nfl`, `ncaaf` or `nba`. Tagged games show to everyone who picked that league for their bar, whatever hub they are in, instead of to your hub's members. Without a tag, the games show in your hub like any other item.
+- `tv` names where to watch, shown beside the start time before the game, such as `7:00 PM ET · ESPN`.
+- A game with `featured: false` shows only to people who follow one of its `teams` (league team ids, such as ESPN's), the way unranked college games do.
 
 ## Selling in the store
 

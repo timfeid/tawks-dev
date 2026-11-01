@@ -1,5 +1,5 @@
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::TawksBot;
 
@@ -21,10 +21,19 @@ pub struct TickerItem {
     pub position: i32,
     pub expires_in: Option<i64>,
     pub starts_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub league: Option<String>,
+    pub featured: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub teams: Vec<String>,
 }
 
 impl TickerItem {
-    pub fn new(key: impl Into<String>, niche_id: impl Into<String>, title: impl Into<String>) -> Self {
+    pub fn new(
+        key: impl Into<String>,
+        niche_id: impl Into<String>,
+        title: impl Into<String>,
+    ) -> Self {
         Self {
             key: key.into(),
             niche_id: niche_id.into(),
@@ -40,6 +49,9 @@ impl TickerItem {
             position: 0,
             expires_in: None,
             starts_at: None,
+            league: None,
+            featured: true,
+            teams: Vec::new(),
         }
     }
 
@@ -107,6 +119,21 @@ impl TickerItem {
         self
     }
 
+    /// A sports league (`nhl`, `nfl`, `ncaaf` or `nba`): the item then shows to
+    /// people who picked that league for their bar instead of to the hub's members.
+    pub fn league(mut self, league: impl Into<String>) -> Self {
+        self.league = Some(league.into());
+        self
+    }
+
+    /// For a league item: shows only to people who follow one of `teams`,
+    /// such as an unranked college game.
+    pub fn for_followers_of_teams(mut self, teams: Vec<String>) -> Self {
+        self.featured = false;
+        self.teams = teams;
+        self
+    }
+
     /// When the event starts, as RFC 3339, such as `2026-10-27T23:00:00Z`.
     /// The bar runs live items first, then in start order.
     pub fn starts_at(mut self, at: impl Into<String>) -> Self {
@@ -157,7 +184,8 @@ impl Flash {
 
     /// A button that opens an in-app path. Up to two; a flash with buttons waits for a choice.
     pub fn action(mut self, label: impl Into<String>, url: impl Into<String>) -> Self {
-        self.actions.push(json!({ "label": label.into(), "url": url.into() }));
+        self.actions
+            .push(json!({ "label": label.into(), "url": url.into() }));
         self
     }
 
@@ -186,17 +214,27 @@ impl Flash {
 
 impl TawksBot {
     pub async fn set_ticker(&self, item: &TickerItem) -> anyhow::Result<()> {
-        self.sdk.web_client.mutate::<_, Value>("ticker_set", item).await?;
+        self.sdk
+            .web_client
+            .mutate::<_, Value>("ticker_set", item)
+            .await?;
         Ok(())
     }
 
     pub async fn remove_ticker(&self, key: &str) -> anyhow::Result<()> {
-        self.sdk.web_client.mutate::<_, Value>("ticker_remove", &json!({ "key": key })).await?;
+        self.sdk
+            .web_client
+            .mutate::<_, Value>("ticker_remove", &json!({ "key": key }))
+            .await?;
         Ok(())
     }
 
     /// Returns how many people it reached.
     pub async fn flash(&self, flash: &Flash) -> anyhow::Result<usize> {
-        Ok(self.sdk.web_client.mutate::<_, usize>("ticker_flash", flash).await?)
+        Ok(self
+            .sdk
+            .web_client
+            .mutate::<_, usize>("ticker_flash", flash)
+            .await?)
     }
 }

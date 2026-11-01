@@ -43,9 +43,31 @@ pub struct Matchup {
     pub url: Option<String>,
     /// Kickoff or puck drop as RFC 3339, so the bar can run in date order.
     pub starts_at: Option<String>,
+    /// Where to watch, such as `ESPN`, shown beside the start time.
+    pub tv: Option<String>,
+    /// Whether everyone who picked the lane's league sees it. A game that is
+    /// not, such as an unranked college game, shows only to people who follow
+    /// one of its `teams`.
+    pub featured: bool,
+    /// The teams' ids in the league, for people who follow teams there.
+    pub teams: Vec<String>,
 }
 
 impl Matchup {
+    pub fn new(id: impl Into<String>, away: Side, home: Side, phase: Phase) -> Self {
+        Self {
+            id: id.into(),
+            away,
+            home,
+            phase,
+            url: None,
+            starts_at: None,
+            tv: None,
+            featured: true,
+            teams: Vec::new(),
+        }
+    }
+
     pub fn is_live(&self) -> bool {
         matches!(self.phase, Phase::Live { .. })
     }
@@ -74,13 +96,20 @@ impl Matchup {
 
     /// Both teams' logos as `away,home`, or none unless each side has one.
     pub fn logos(&self) -> Option<String> {
-        let usable = |logo: &Option<String>| logo.clone().filter(|url| url.starts_with("https://") && !url.contains(','));
-        Some(format!("{},{}", usable(&self.away.logo)?, usable(&self.home.logo)?))
+        let usable = |logo: &Option<String>| {
+            logo.clone()
+                .filter(|url| url.starts_with("https://") && !url.contains(','))
+        };
+        Some(format!(
+            "{},{}",
+            usable(&self.away.logo)?,
+            usable(&self.home.logo)?
+        ))
     }
 
     fn tag_and_detail(&self) -> (Option<String>, Option<String>) {
         match &self.phase {
-            Phase::Upcoming { starts } => (Some(starts.clone()), None),
+            Phase::Upcoming { starts } => (Some(starts.clone()), self.tv.clone()),
             Phase::Live { clock } => (None, Some(clock.chars().take(40).collect())),
             Phase::Final { label } => (Some(label.clone()), None),
         }
@@ -125,6 +154,7 @@ impl Scored {
 pub struct ScoreLane {
     prefix: String,
     niche_id: String,
+    league: Option<String>,
     lifetime_secs: i32,
     shown: HashMap<String, String>,
     scores: HashMap<String, (i64, i64)>,
@@ -136,10 +166,18 @@ impl ScoreLane {
         Self {
             prefix: prefix.into(),
             niche_id: niche_id.into(),
+            league: None,
             lifetime_secs: 12 * 3600,
             shown: HashMap::new(),
             scores: HashMap::new(),
         }
+    }
+
+    /// Tags the lane's games with a league (`nhl`, `nfl`, `ncaaf` or `nba`),
+    /// so they show to the people who picked it rather than to the hub's members.
+    pub fn league(mut self, league: impl Into<String>) -> Self {
+        self.league = Some(league.into());
+        self
     }
 
     fn key(&self, id: &str) -> String {
@@ -152,7 +190,10 @@ impl ScoreLane {
         for (position, game) in games.iter().enumerate() {
             let title = game.title();
             let (tag, detail) = game.tag_and_detail();
-            let label = format!("{title}|{tag:?}|{detail:?}|{position}|{:?}", game.starts_at);
+            let label = format!(
+                "{title}|{tag:?}|{detail:?}|{position}|{:?}|{}|{:?}",
+                game.starts_at, game.featured, game.teams
+            );
             if self.shown.get(&game.id) == Some(&label) {
                 continue;
             }
@@ -161,11 +202,15 @@ impl ScoreLane {
                 _ => None,
             };
             let image = game.logos();
-            let channel_ids: Vec<&String> = [&game.away.channel_id, &game.home.channel_id].into_iter().flatten().collect();
+            let channel_ids: Vec<&String> = [&game.away.channel_id, &game.home.channel_id]
+                .into_iter()
+                .flatten()
+                .collect();
             let item = json!({
                 "key": self.key(&game.id), "channel_ids": channel_ids, "niche_id": self.niche_id, "title": title, "label": tag,
                 "background": background, "detail": detail, "url": game.url, "live": game.is_live(),
                 "position": position as i32, "expires_in": self.lifetime_secs, "starts_at": game.starts_at, "image": image,
+                "league": self.league, "featured": game.featured, "teams": game.teams,
             });
             match web.mutate::<_, Value>("ticker_set", &item).await {
                 Ok(_) => {
@@ -231,14 +276,7 @@ mod tests {
             channel_id: None,
             logo: None,
         };
-        Matchup {
-            id: "1".into(),
-            away: side("KC", away),
-            home: side("BUF", home),
-            phase,
-            url: None,
-            starts_at: None,
-        }
+        Matchup::new("1", side("KC", away), side("BUF", home), phase)
     }
 
     #[test]
@@ -283,13 +321,43 @@ mod tests {
     }
 
     #[test]
+    fn upcoming_games_carry_where_to_watch_beside_the_start() {
+        let mut g = game(
+            Phase::Upcoming {
+                starts: "7:00 PM ET".into(),
+            },
+            None,
+            None,
+        );
+        assert_eq!(g.tag_and_detail(), (Some("7:00 PM ET".into()), None));
+        g.tv = Some("ESPN".into());
+        assert_eq!(
+            g.tag_and_detail(),
+            (Some("7:00 PM ET".into()), Some("ESPN".into()))
+        );
+        g.phase = Phase::Live {
+            clock: "Q3 5:12".into(),
+        };
+        assert_eq!(g.tag_and_detail(), (None, Some("Q3 5:12".into())));
+    }
+
+    #[test]
     fn logos_go_out_as_away_home_only_when_both_sides_have_one() {
-        let mut g = game(Phase::Upcoming { starts: "1:00 PM".into() }, None, None);
+        let mut g = game(
+            Phase::Upcoming {
+                starts: "1:00 PM".into(),
+            },
+            None,
+            None,
+        );
         assert_eq!(g.logos(), None);
         g.away.logo = Some("https://x/kc.png".into());
         assert_eq!(g.logos(), None);
         g.home.logo = Some("https://x/buf.png".into());
-        assert_eq!(g.logos().as_deref(), Some("https://x/kc.png,https://x/buf.png"));
+        assert_eq!(
+            g.logos().as_deref(),
+            Some("https://x/kc.png,https://x/buf.png")
+        );
         g.home.logo = Some("http://x/buf.png".into());
         assert_eq!(g.logos(), None);
     }
