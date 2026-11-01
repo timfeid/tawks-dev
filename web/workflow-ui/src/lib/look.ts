@@ -358,6 +358,18 @@ export function columns(n: number, fixed: boolean): string {
  */
 export const entryFollower = '-mt-2 pb-5';
 
+/** The block holding an `Entry` link and its follower, so one hover covers both. */
+export const entryGroup = [
+  '-mx-3',
+  'rounded-xl',
+  'px-3',
+  'transition-colors',
+  'hover:bg-foreground/[0.04]',
+  '[&>a]:mx-0',
+  '[&>a]:px-0',
+  '[&>a:hover]:bg-transparent',
+];
+
 export const chip =
   'inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] py-1.5 pr-3.5 pl-2.5 text-sm font-medium text-foreground';
 
