@@ -172,10 +172,30 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     for(const side of [-1,1]) {const leg=mesh(new THREE.CapsuleGeometry(0.113,costume.pants==='pants-shorts'?0.04:0.12,4,10),fabric);leg.position.set(side*0.17,0.19,0);leg.name='worn-pants';}
   }
   if(costume?.shoes) {
-    const material=cloth(costume.shoes==='shoes-sneakers'?'#f5f5f0':'#243044');
+    const style=costume.shoes;
+    const part=(geometry:THREE.BufferGeometry,material:THREE.Material,x:number,y:number,z:number)=>{const piece=mesh(geometry,material);piece.position.set(x,y,z);piece.name='worn-shoes';return piece;};
     for(const side of [-1,1]) {
-      const shoe=mesh(new THREE.SphereGeometry(0.145,14,10),material);shoe.scale.set(0.95,0.65,1.5);shoe.position.set(side*0.17,0.09,0.055);shoe.name='worn-shoes';
-      const sole=mesh(new THREE.BoxGeometry(0.25,0.035,0.34),costume.shoes==='shoes-skates'?cloth('#bcd1df'):materials.accent);sole.position.set(side*0.17,0.025,0.055);sole.name='worn-shoes';
+      const x=side*0.17;
+      if(style==='shoes-sneakers') {
+        const white=cloth('#f5f5f0');
+        part(new THREE.SphereGeometry(0.145,14,10),white,x,0.1,0.055).scale.set(0.95,0.62,1.5);
+        part(new THREE.SphereGeometry(0.15,16,8),cloth('#e4e4dc'),x,0.035,0.06).scale.set(1,0.3,1.55);
+        part(new THREE.SphereGeometry(0.15,16,8),materials.accent,x,0.07,0.06).scale.set(0.99,0.12,1.45);
+        for(const z of [0.1,0.15,0.2]) part(new THREE.BoxGeometry(0.1,0.014,0.018),cloth('#2b2b33'),x,0.165,z);
+      } else if(style==='shoes-skates') {
+        const boot=cloth('#1d2129');
+        part(new THREE.SphereGeometry(0.15,14,10),boot,x,0.125,0.05).scale.set(0.98,0.72,1.45);
+        part(new THREE.CylinderGeometry(0.13,0.145,0.24,16),boot,x,0.24,0);
+        part(new THREE.BoxGeometry(0.1,0.12,0.06),cloth('#c9ced6'),x,0.27,0.12);
+        part(new THREE.BoxGeometry(0.06,0.06,0.3),cloth('#f2f2f2'),x,0.075,0.05);
+        part(new THREE.BoxGeometry(0.02,0.05,0.38),cloth('#bcd1df'),x,0.025,0.05);
+      } else {
+        const leather=cloth('#7a4a2a'),rubber=cloth('#2a1c13');
+        part(new THREE.SphereGeometry(0.145,14,10),leather,x,0.1,0.06).scale.set(0.95,0.65,1.5);
+        part(new THREE.CylinderGeometry(0.13,0.145,0.24,16),leather,x,0.2,0);
+        part(new THREE.TorusGeometry(0.132,0.026,8,20),cloth('#5a361e'),x,0.32,0).rotation.x=Math.PI/2;
+        part(new THREE.SphereGeometry(0.15,16,8),rubber,x,0.03,0.06).scale.set(1.02,0.28,1.58);
+      }
     }
   }
   if(costume?.gloves) {
