@@ -240,7 +240,7 @@ export function text(r: TextRole, t: Tone, style?: TextStyle | null): string {
   const look = role[r];
   const parts = [look.cls, toneText(t, look.tone)];
   if (style) {
-    if (style.numeric) parts.push('tabular-nums');
+    if (style.numeric) parts.push('tabular-nums whitespace-nowrap');
     if (style.clamp) parts.push(clamp[Math.min(style.clamp, 6)], 'min-w-0');
     if (style.clamp && style.reserve) parts.push(reserve[Math.min(style.clamp, 6)]);
     if (style.align === 'Center') parts.push('text-center');
