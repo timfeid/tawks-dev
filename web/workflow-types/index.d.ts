@@ -285,7 +285,12 @@ tint?: string; caption_placement?: CaptionPlacement } } |
  * behind a button; `title` says what they are about, such as the story's
  * headline, beside the comments when they open.
  */
-{ Discussion: { chat: string; message: string; reactions: string; comments: string; start?: Act | null; suggested?: string | null; inline?: boolean; title?: string | null } }
+{ Discussion: { chat: string; message: string; reactions: string; comments: string; start?: Act | null; suggested?: string | null; inline?: boolean; title?: string | null } } | 
+/**
+ * A display this build does not know, such as one a newer bot sends
+ * while the API is behind. It draws nothing.
+ */
+{ Unknown: { name: string } }
 
 export type DisplayVisual = { Animation: { id: string; animation_type: string; trigger: string | null; delay_ms: number | null; meta: Partial<{ [key in string]: JsonValue }> } } | { Loading: { action_id: string; inputs: Partial<{ [key in string]: string }> } } | { Notification: { variant: NotificationVariant; content: WorkflowDisplay[] } } | { Modal: { content: WorkflowDisplay[] } } | { Sticky: { position: StickyPosition; content: WorkflowDisplay[] } } | { Tile: { content: WorkflowDisplay[] } } | 
 /**
@@ -299,7 +304,11 @@ export type DisplayVisual = { Animation: { id: string; animation_type: string; t
 /**
  * Centres the content up and down, for a page that is mostly one thing.
  */
-center?: boolean; backdrop?: Backdrop; typeface?: Typeface } } | { Chat: { chat_id: string } } | { Redirect: { url_key: string } }
+center?: boolean; backdrop?: Backdrop; typeface?: Typeface } } | { Chat: { chat_id: string } } | { Redirect: { url_key: string } } | 
+/**
+ * A visual this build does not know. It draws nothing.
+ */
+{ Unknown: { name: string } }
 
 export type Fit = "Cover" | "Contain"
 

@@ -305,7 +305,7 @@
         {/each}
       </div>
     {/if}
-  {:else}
+  {:else if !('Unknown' in finalProps.display.type)}
     {@const kind = typeof finalProps.display.type === 'string' ? finalProps.display.type : Object.keys(finalProps.display.type)[0]}
     <div class="rounded border border-dashed p-3 text-xs text-muted-foreground">
       {kind} is drawn by tawks itself and is not available here.

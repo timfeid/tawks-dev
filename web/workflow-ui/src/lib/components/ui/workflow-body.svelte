@@ -27,7 +27,7 @@
   // The first thing drawn below any sticky bars carries the tabs on a wide screen.
   let firstMain = $derived(
     tabs.length
-      ? workflow.visuals.find((visual) => visual && !('Sticky' in visual.display) && !('Modal' in visual.display) && !('Notification' in visual.display))?.id
+      ? workflow.visuals.find((visual) => visual && !('Sticky' in visual.display) && !('Modal' in visual.display) && !('Notification' in visual.display) && !('Unknown' in visual.display))?.id
       : undefined,
   );
 

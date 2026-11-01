@@ -20,32 +20,68 @@ struct RspcInner {
     data: Value,
 }
 
+/// A call tawks answered with an error, or with something that was not an
+/// rspc response at all (such as a proxy's 502 page).
+#[derive(Debug, Clone)]
+pub struct RspcError {
+    pub path: String,
+    /// The HTTP status, when the call was made over HTTP.
+    pub status: Option<u16>,
+    /// The rspc error code: 400 for input the API could not read, 401 and
+    /// 403 for auth, 404 for an unknown procedure, 500 for a failure inside it.
+    pub code: Option<i32>,
+    pub message: String,
+}
+
+impl RspcError {
+    /// The API is up and refused this request, so retrying the same request
+    /// will not help: usually the bot and the API disagree about a type.
+    pub fn is_rejected(&self) -> bool {
+        let client_error = |code: i64| (400..500).contains(&code);
+        self.code.is_some_and(|code| client_error(code.into()))
+            || self.status.is_some_and(|status| client_error(status.into()))
+    }
+}
+
+impl std::fmt::Display for RspcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let path = if self.path.is_empty() { "rspc call" } else { &self.path };
+        match (self.code, self.status) {
+            (Some(code), _) => write!(f, "{path} failed with error {code}: {}", self.message),
+            (None, Some(status)) => write!(f, "{path} got HTTP {status} and no rspc response: {}", self.message),
+            (None, None) => write!(f, "{path} got no rspc response: {}", self.message),
+        }
+    }
+}
+
+impl std::error::Error for RspcError {}
+
 pub fn parse_rspc<T: DeserializeOwned>(text: &str) -> anyhow::Result<T> {
-    // Try JSON-RPC envelope first
-    if let Ok(env) = serde_json::from_str::<JsonRpcEnvelope>(text) {
-        if env.result.kind != "response" {
-            anyhow::bail!(
-                "rspc {} response: {}",
-                env.result.kind,
-                summarize_rspc_data(&env.result.data)
-            );
-        }
-        return Ok(serde_json::from_value::<T>(env.result.data)?);
-    }
+    parse_rspc_response("", None, text)
+}
 
-    // Fallback: raw rspc { type, data }
-    if let Ok(inner) = serde_json::from_str::<RspcInner>(text) {
-        if inner.kind != "response" {
-            anyhow::bail!(
-                "rspc {} response: {}",
-                inner.kind,
-                summarize_rspc_data(&inner.data)
-            );
+fn parse_rspc_response<T: DeserializeOwned>(path: &str, status: Option<u16>, text: &str) -> anyhow::Result<T> {
+    let inner = serde_json::from_str::<JsonRpcEnvelope>(text)
+        .map(|env| env.result)
+        .or_else(|_| serde_json::from_str::<RspcInner>(text));
+    let error = |code, message| RspcError { path: path.to_string(), status, code, message };
+    match inner {
+        Ok(inner) if inner.kind == "response" => Ok(serde_json::from_value::<T>(inner.data)?),
+        Ok(inner) => {
+            let code = inner.data.get("code").and_then(Value::as_i64).and_then(|code| i32::try_from(code).ok());
+            Err(error(code, summarize_rspc_data(&inner.data)).into())
         }
-        return Ok(serde_json::from_value::<T>(inner.data)?);
+        Err(_) => Err(error(None, snippet(text)).into()),
     }
+}
 
-    anyhow::bail!("unexpected RSPC response: {}", text);
+fn snippet(text: &str) -> String {
+    const MAX: usize = 300;
+    let text = text.trim();
+    match text.char_indices().nth(MAX) {
+        Some((end, _)) => format!("{}...", &text[..end]),
+        None => text.to_string(),
+    }
 }
 
 fn summarize_rspc_data(data: &Value) -> String {
@@ -126,16 +162,17 @@ impl WebClient {
             .send()
             .await?;
 
+        let status = resp.status().as_u16();
         let text = resp.text().await?;
         if path == "game_session_launch" {
             debug!("Received private game launch response (redacted)");
         } else {
             debug!("Received response: {}", text);
         }
-        match parse_rspc(&text) {
+        match parse_rspc_response(path, Some(status), &text) {
             Ok(res) => Ok(res),
             Err(e) => {
-                warn!("RSPC error response: {:?}", e);
+                warn!("{e:#}");
                 Err(e)
             }
         }
@@ -162,13 +199,14 @@ impl WebClient {
             .send()
             .await?;
 
+        let status = resp.status().as_u16();
         let text = resp.text().await?;
         debug!("Received response: {}", text);
 
-        match parse_rspc(&text) {
+        match parse_rspc_response(path, Some(status), &text) {
             Ok(res) => Ok(res),
             Err(e) => {
-                warn!("RSPC error response: {:?}", e);
+                warn!("{e:#}");
                 Err(e)
             }
         }
@@ -205,7 +243,28 @@ impl WebClient {
 
 #[cfg(test)]
 mod tests {
-    use super::require_tls;
+    use super::{RspcError, parse_rspc_response, require_tls};
+
+    #[test]
+    fn an_api_error_keeps_its_code_and_message() {
+        let body = r#"{"jsonrpc":"2.0","id":null,"result":{"type":"error","data":{"code":400,"message":"invalid input: unknown variant `WordCloud`","data":null}}}"#;
+        let err = parse_rspc_response::<String>("workflow_register_workflow", Some(400), body).unwrap_err();
+        let err = err.downcast_ref::<RspcError>().expect("an RspcError");
+        assert!(err.is_rejected());
+        assert_eq!(err.code, Some(400));
+        assert_eq!(
+            err.to_string(),
+            "workflow_register_workflow failed with error 400: invalid input: unknown variant `WordCloud`"
+        );
+    }
+
+    #[test]
+    fn a_proxy_error_page_is_an_outage_not_a_rejection() {
+        let err = parse_rspc_response::<String>("workflow_register_workflow", Some(502), "<html>Bad Gateway</html>").unwrap_err();
+        let err = err.downcast_ref::<RspcError>().expect("an RspcError");
+        assert!(!err.is_rejected());
+        assert!(err.to_string().contains("HTTP 502"), "{err}");
+    }
 
     #[test]
     fn tokens_only_travel_in_the_clear_on_private_networks() {

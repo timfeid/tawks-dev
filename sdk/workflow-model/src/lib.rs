@@ -20,6 +20,7 @@ pub mod schedule;
 pub mod server_action;
 pub mod service;
 pub mod transform;
+mod tolerant;
 pub mod ui;
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -412,6 +413,7 @@ pub struct TableHeader {
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDisplay {
+    #[serde(deserialize_with = "tolerant::deserialize")]
     pub r#type: DisplayType,
     /// A name animations find this display by, as `[data-mark~="name"]`.
     /// Takes `{key}` templates and several names separated by spaces.
@@ -1034,6 +1036,19 @@ pub enum DisplayType {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         title: Option<String>,
     },
+    /// A display this build does not know, such as one a newer bot sends
+    /// while the API is behind. It draws nothing.
+    Unknown {
+        name: String,
+    },
+}
+
+impl tolerant::Tolerant for DisplayType {
+    const KIND: &'static str = "display";
+
+    fn unknown(name: String) -> Self {
+        DisplayType::Unknown { name }
+    }
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -1106,11 +1121,24 @@ pub enum DisplayVisual {
     Redirect {
         url_key: String,
     },
+    /// A visual this build does not know. It draws nothing.
+    Unknown {
+        name: String,
+    },
+}
+
+impl tolerant::Tolerant for DisplayVisual {
+    const KIND: &'static str = "visual";
+
+    fn unknown(name: String) -> Self {
+        DisplayVisual::Unknown { name }
+    }
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowVisual {
     pub id: String,
+    #[serde(deserialize_with = "tolerant::deserialize")]
     pub display: DisplayVisual,
 }
 

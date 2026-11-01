@@ -1,6 +1,9 @@
+use std::any::Any;
 use std::fmt::Display;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+use crate::web_client::RspcError;
 
 /// How long a bot may fail to reach tawks before it counts as an outage.
 /// Deploys restart the API and events servers well within this.
@@ -70,7 +73,19 @@ impl Outage {
 /// Logs a failed attempt to reach tawks (client setup, registration, the
 /// events socket) that the caller is about to retry: a warning until the bot
 /// has been unable to connect for [`CONNECTION_GRACE`], then one error.
-pub fn connection_failed(error: &dyn Display, context: &str) {
+/// A request the API answered and refused is not an outage: it is logged as
+/// an error straight away with the API's message.
+pub fn connection_failed<E: Display + Any>(error: &E, context: &str) {
+    if let Some(rejected) = rejection(error) {
+        tracing::error!(
+            path = %rejected.path,
+            code = ?rejected.code,
+            api_message = %rejected.message,
+            context,
+            "tawks rejected the request; retrying will not help until the bot or the API is updated: {rejected}"
+        );
+        return;
+    }
     let now = Instant::now();
     let (severity, down_for) = {
         let mut outage = CONNECTION.lock().unwrap_or_else(|p| p.into_inner());
@@ -87,6 +102,19 @@ pub fn connection_failed(error: &dyn Display, context: &str) {
             tracing::warn!(%error, down_for_secs = down_for, "{context}; will retry")
         }
     }
+}
+
+fn rejection<E: Any>(error: &E) -> Option<&RspcError> {
+    let error = error as &dyn Any;
+    let rejected = error
+        .downcast_ref::<anyhow::Error>()
+        .and_then(|error| {
+            error
+                .chain()
+                .find_map(|cause| cause.downcast_ref::<RspcError>())
+        })
+        .or_else(|| error.downcast_ref::<RspcError>())?;
+    rejected.is_rejected().then_some(rejected)
 }
 
 pub(crate) fn connection_restored() {
@@ -106,6 +134,27 @@ pub(crate) fn connection_restored() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_request_is_told_apart_from_an_outage() {
+        let refused = RspcError {
+            path: "workflow_register_workflow".into(),
+            status: Some(400),
+            code: Some(400),
+            message: "invalid input: unknown variant `WordCloud`".into(),
+        };
+        let wrapped = anyhow::Error::new(refused).context("registering the news page");
+        assert!(rejection(&wrapped).is_some());
+
+        let proxy_502 = anyhow::Error::new(RspcError {
+            path: "workflow_register_workflow".into(),
+            status: Some(502),
+            code: None,
+            message: "<html>502 Bad Gateway</html>".into(),
+        });
+        assert!(rejection(&proxy_502).is_none());
+        assert!(rejection(&anyhow::anyhow!("connection refused")).is_none());
+    }
 
     #[test]
     fn escalates_once_after_the_grace_period() {
