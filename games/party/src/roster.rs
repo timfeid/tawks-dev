@@ -130,6 +130,15 @@ pub struct Costume {
     #[serde(default, skip_serializing_if = "Vec::is_empty")] pub reaction_pool: Vec<String>,
     /// The pet out beside the character and what it wears. Checked by Tawks.
     #[serde(default, skip_serializing_if = "PetLook::is_plain")] pub pet: PetLook,
+    /// A palette colour per slot, in place of each item's own main colour. Checked by Tawks.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")] pub tints: std::collections::BTreeMap<String, String>,
+}
+pub const TINT_SLOTS: [&str; 7] = ["hat", "shirt", "pants", "shoes", "gloves", "bag", "extra"];
+pub fn tint_palette() -> &'static [String] {
+    #[derive(Deserialize)]
+    struct Tint { color: String }
+    static COLORS: OnceLock<Vec<String>> = OnceLock::new();
+    COLORS.get_or_init(|| serde_json::from_str::<Vec<Tint>>(include_str!("../../canvases/src/party/costumes/tints.json")).expect("tint palette").into_iter().map(|tint| tint.color).collect())
 }
 /// Pet store item ids; `id` is an adopted pet shown in place of the hatched one.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -206,6 +215,7 @@ pub fn validate_sandbox_costume(costume: &Costume, wardrobe: Option<&Wardrobe>) 
     if costume.extras.iter().enumerate().any(|(i, id)| costume.extras[..i].contains(id)) { return Err("Each extra goes on once."); }
     if costume.reaction.iter().chain(&costume.reaction_pool).any(|id| !reactions().iter().any(|reaction| reaction.id == *id)) { return Err("Choose a reaction from the catalog."); }
     if costume.pet.slots().any(|(slot, id)| !pet_items().iter().any(|item| item.id == id && item.slot == slot)) { return Err("Choose pet gear from the catalog."); }
+    if costume.tints.iter().any(|(slot, color)| !TINT_SLOTS.contains(&slot.as_str()) || !tint_palette().contains(color)) { return Err("Choose a colour from the palette."); }
     if let Some(id) = costume.model_id.as_deref() {
         // A bag is carried, not worn, so it goes with any character.
         if clothing.iter().any(|(slot, _)| *slot != "bag" && *slot != "extra") { return Err("Full characters can wear extras and carry bags, but not fitted clothing."); }

@@ -52,7 +52,7 @@ export async function captureAvatarReaction(
     rig = buildCharacter(characterFor(costume));
     await rig.ready;
     signal?.throwIfAborted();
-    unhang = hangBag(rig.group, buildBag(costume.bag), 1.1);
+    unhang = hangBag(rig.group, buildBag(costume.bag, costume.bag ? costume.tints?.bag : null), 1.1);
     scene.add(rig.group);
     rig.group.rotation.y = -0.18;
     rig.animate("idle", 0, 0);

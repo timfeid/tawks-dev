@@ -103,6 +103,20 @@ fn a_previewed_pucklab_jersey_shows_the_synced_design_never_the_clients() {
 }
 
 #[test]
+fn accessory_colours_reach_the_room_and_only_palette_colours_are_tried() {
+    let palette = crate::roster::tint_palette();
+    let tinted: Costume = serde_json::from_value(serde_json::json!({"color":"sunny","hat":"hat-cap","tints":{"hat":palette[1],"extra":palette[2]}})).unwrap();
+    let mut room = host();
+    room.start_sandbox_with_preview("host", tinted, None).unwrap();
+    let look = serde_json::to_value(room.members[0].costume.as_ref().unwrap()).unwrap();
+    assert_eq!(look["tints"], serde_json::json!({"extra":palette[2],"hat":palette[1]}));
+    for tints in [serde_json::json!({"hat":"#123456"}), serde_json::json!({"skin":palette[0]})] {
+        let forged: Costume = serde_json::from_value(serde_json::json!({"color":"sunny","tints":tints})).unwrap();
+        assert!(validate_sandbox_costume(&forged, None).is_err());
+    }
+}
+
+#[test]
 fn included_items_are_never_registered_for_sale() {
     let included: Vec<_> = cosmetics().iter().filter(|item| item.included_with.is_some()).map(|item| item.id.as_str()).collect();
     assert_eq!(included, ["shirt-pucklab"]);

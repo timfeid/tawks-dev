@@ -36,7 +36,7 @@
   let companionKey = '';
   let stillDrawn = false;
   // A close-up of a worn item leaves the bag off; at the side it would cover legs and feet.
-  const carry = (group: THREE.Group, def: CharacterDef) => focus || !bag ? null : hangBag(group, buildBag(def.costume?.bag), 1.1);
+  const carry = (group: THREE.Group, def: CharacterDef) => focus || !bag ? null : hangBag(group, buildBag(def.costume?.bag, def.costume?.bag ? def.costume.tints?.bag : null), 1.1);
 
   $effect(() => {
     if (!ready) return;

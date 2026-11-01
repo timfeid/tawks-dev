@@ -13,5 +13,6 @@ export function characterAppearanceKey(def: CharacterDef): string {
     costume?.body_width ?? 1,
     costume?.shirt === 'shirt-pucklab' ? JSON.stringify(costume.jersey ?? null) : null,
     costume?.reaction ?? null, costume?.shuffle_reactions ? [...(costume.reaction_pool ?? [])].sort().join(',') : null,
+    Object.entries(costume?.tints ?? {}).filter(([, color]) => color).sort(([a], [b]) => a.localeCompare(b)),
   ]);
 }

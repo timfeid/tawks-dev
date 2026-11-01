@@ -21,7 +21,11 @@ export type Costume = {
   /** With shuffle on, every reaction owned, to pick from. Set by Tawks. */
   reaction_pool?: string[];
   pet?: PetLook | null;
+  /** A palette colour per slot (`extra` covers every extra) in place of each item's own main colour. */
+  tints?: Partial<Record<TintSlot, string>>;
 };
+
+export type TintSlot = 'hat' | 'shirt' | 'pants' | 'shoes' | 'gloves' | 'bag' | 'extra';
 
 /** What the pet wears; `id` is an adopted pet shown in place of the hatched one. */
 export type PetLook = { id?: string | null; coat?: string | null; hat?: string | null; neck?: string | null };

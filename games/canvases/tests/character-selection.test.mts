@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {characterSelection,hasUnownedSelection,toggleExtra} from '../src/party/costumes/selection.ts';
+import {characterSelection,hasUnownedSelection,toggleExtra,withTint} from '../src/party/costumes/selection.ts';
+import tints from '../src/party/costumes/tints.json' with {type:'json'};
 import {itemFocus} from '../src/party/costumes/framing.ts';
 import catalog from '../src/party/costumes/catalog.json' with {type:'json'};
 
@@ -37,6 +38,22 @@ test('a holiday hat swaps out the other one while every other extra stacks',()=>
 
 test('a whole character keeps the chosen reaction and its shuffle',()=>{
   assert.deepEqual(characterSelection({color:'vex',hat:'hat-cap',reaction:'reaction-wink',shuffle_reactions:true},'model-robot'),{color:'vex',model_id:'model-robot',bag:null,head:null,reaction:'reaction-wink',shuffle_reactions:true});
+});
+
+test('chosen colours are free, survive a whole character and clear one slot at a time',()=>{
+  const red=tints[0].color,blue=tints[5].color;
+  const dressed=withTint(withTint({color:'vex',hat:'hat-cap',bag:'bag-santa'},'hat',red),'bag',blue);
+  assert.deepEqual(dressed.tints,{hat:red,bag:blue});
+  assert.equal(hasUnownedSelection(dressed,['hat-cap','bag-santa'],models),false,'colours need no purchase');
+  assert.deepEqual(characterSelection(dressed,'model-robot').tints,{hat:red,bag:blue});
+  assert.deepEqual(withTint(dressed,'hat',null).tints,{bag:blue});
+  assert.equal(dressed.tints?.hat,red,'clearing does not mutate the look it came from');
+});
+
+test('the tint palette is a short list of distinct hex colours',()=>{
+  assert.ok(tints.length>=8&&tints.length<=12);
+  assert.equal(new Set(tints.map(tint=>tint.color)).size,tints.length);
+  for(const tint of tints)assert.match(tint.color,/^#[0-9a-f]{6}$/);
 });
 
 test('achievement costumes say how to earn them and frame on the part they are worn',()=>{

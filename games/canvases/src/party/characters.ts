@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CharacterDef, Feature } from './protocol';
+import type { CharacterDef, Feature, TintSlot } from './protocol';
 import { wardrobeClient } from './costumes/client';
 import { loadCustomModel } from './models/custom-model-rig';
 import { resolveCatalogModel } from './models/catalog';
@@ -118,18 +118,20 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   const shirtFallback:THREE.Object3D[]=[];
   const jerseyLining = new Set<THREE.Object3D>();
   const shirtMesh=(g:THREE.BufferGeometry,m:THREE.Material,parent:THREE.Object3D)=>{const part=mesh(g,m,parent);shirtFallback.push(part);return part;};
+  const tint=(slot:TintSlot)=>costume?.tints?.[slot]??undefined;
   const hat: Record<string, Feature> = {'hat-cap':'cap','hat-beanie':'beanie','hat-visor':'visor','hat-horns':'horns','hat-ears':'long_ears','hat-tophat':'top_hat','hat-crown':'crown','hat-wizard':'wizard'};
   const headwear = new THREE.Group();headwear.name='headwear';head.add(headwear);
   const holidayHat=costume?.extras?.find(id=>HOLIDAY_HATS.includes(id));
   // A holiday hat goes on in place of the hat or signature headpiece, not over it.
-  addFeature(holidayHat ? 'none' : costume?.hat ? hat[costume.hat] ?? 'none' : def.feature, headwear, mesh, materials, glowMaterial);
   const cloth = (color: string) => { const material=toon(color); extraMaterials.push(material); return material; };
+  const hatTint=costume?.hat?tint('hat'):undefined;
+  addFeature(holidayHat ? 'none' : costume?.hat ? hat[costume.hat] ?? 'none' : def.feature, headwear, mesh, hatTint?{...materials,accent:cloth(hatTint)}:materials, glowMaterial, hatTint);
   const design=jerseyDesign(costume);
   const garment=costume?.shirt==='shirt-hockey'||!!design;
   if (costume?.shirt) {
     const fabric=garment
-      ? new THREE.MeshStandardMaterial({color:design?.body??'#164b77',roughness:.9})
-      : cloth(costume.shirt==='shirt-hoodie' ? '#26344c' : '#f5f5ef');
+      ? new THREE.MeshStandardMaterial({color:design?.body??tint('shirt')??'#164b77',roughness:.9})
+      : cloth(tint('shirt')??(costume.shirt==='shirt-hoodie' ? '#26344c' : '#f5f5ef'));
     if(garment)extraMaterials.push(fabric);
     const shirt=shirtMesh(new THREE.SphereGeometry(0.445,24,16,0,Math.PI*2,0,2.25),fabric,bodyShape);
     shirt.scale.set(1,1.08,0.97);shirt.position.y=0.55;
@@ -155,7 +157,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     }
   }
   if(costume?.pants) {
-    const fabric=cloth(costume.pants==='pants-jeans'?'#315b88':costume.pants==='pants-tracksuit'?'#172435':'#444b5d');
+    const fabric=cloth(tint('pants')??(costume.pants==='pants-jeans'?'#315b88':costume.pants==='pants-tracksuit'?'#172435':'#444b5d'));
     const waist=mesh(new THREE.SphereGeometry(WAIST_RADIUS,20,12,0,Math.PI*2,WAIST_ARC,Math.PI-WAIST_ARC),fabric,bodyShape);waist.scale.set(1,WAIST_STRETCH,0.96);waist.position.y=0.55;waist.name='worn-pants';
     for(const side of [-1,1]) {const leg=mesh(new THREE.CapsuleGeometry(0.113,costume.pants==='pants-shorts'?0.04:0.12,4,10),fabric);leg.position.set(side*0.17,0.19,0);leg.name='worn-pants';}
   }
@@ -165,20 +167,20 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     for(const side of [-1,1]) {
       const x=side*0.17;
       if(style==='shoes-sneakers') {
-        const white=cloth('#f5f5f0');
+        const white=cloth(tint('shoes')??'#f5f5f0');
         part(new THREE.SphereGeometry(0.145,14,10),white,x,0.1,0.055).scale.set(0.95,0.62,1.5);
         part(new THREE.SphereGeometry(0.15,16,8),cloth('#e4e4dc'),x,0.035,0.06).scale.set(1,0.3,1.55);
         part(new THREE.SphereGeometry(0.15,16,8),materials.accent,x,0.07,0.06).scale.set(0.99,0.12,1.45);
         for(const z of [0.1,0.15,0.2]) part(new THREE.BoxGeometry(0.1,0.014,0.018),cloth('#2b2b33'),x,0.165,z);
       } else if(style==='shoes-skates') {
-        const boot=cloth('#1d2129');
+        const boot=cloth(tint('shoes')??'#1d2129');
         part(new THREE.SphereGeometry(0.15,14,10),boot,x,0.125,0.05).scale.set(0.98,0.72,1.45);
         part(new THREE.CylinderGeometry(0.13,0.145,0.24,16),boot,x,0.24,0);
         part(new THREE.BoxGeometry(0.1,0.12,0.06),cloth('#c9ced6'),x,0.27,0.12);
         part(new THREE.BoxGeometry(0.06,0.06,0.3),cloth('#f2f2f2'),x,0.075,0.05);
         part(new THREE.BoxGeometry(0.02,0.05,0.38),cloth('#bcd1df'),x,0.025,0.05);
       } else {
-        const leather=cloth('#7a4a2a'),rubber=cloth('#2a1c13');
+        const leather=cloth(tint('shoes')??'#7a4a2a'),rubber=cloth('#2a1c13');
         part(new THREE.SphereGeometry(0.145,14,10),leather,x,0.1,0.06).scale.set(0.95,0.65,1.5);
         part(new THREE.CylinderGeometry(0.13,0.145,0.24,16),leather,x,0.2,0);
         part(new THREE.TorusGeometry(0.132,0.026,8,20),cloth('#5a361e'),x,0.32,0).rotation.x=Math.PI/2;
@@ -188,19 +190,20 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   }
   if(costume?.gloves) {
     const hockey=costume.gloves==='gloves-hockey';
+    const gloveTint=tint('gloves'),palm=gloveTint?cloth(gloveTint):materials.accent;
     arms.forEach((shoulder,i)=>{
       const side=i===0?-1:1;
       const glove=new THREE.Group();glove.position.y=-ARM_REACH;shoulder.add(glove);limbs[i].ends.push(glove);
       const piece=(geometry:THREE.BufferGeometry,material:THREE.Material,x:number,y:number,z:number)=>{const part=mesh(geometry,material,glove);part.position.set(x,y,z);return part;};
       if(hockey) {
-        const navy=cloth('#223650');
+        const navy=cloth(gloveTint??'#223650');
         piece(new THREE.BoxGeometry(0.21,0.2,0.19),navy,0,-0.02,0.01);
         for(const y of [-0.075,-0.025]) piece(new THREE.CylinderGeometry(0.04,0.04,0.215,10),cloth('#2d4566'),0,y,0.09).rotation.z=Math.PI/2;
         piece(new THREE.CylinderGeometry(0.15,0.125,0.11,16),navy,0,0.115,0);
         piece(new THREE.CylinderGeometry(0.152,0.152,0.026,16),cloth('#f2f2f2'),0,0.13,0);
       } else {
-        piece(new THREE.SphereGeometry(0.105,14,10),materials.accent,0,-0.015,0).scale.set(1,1.2,0.85);
-        piece(new THREE.SphereGeometry(0.045,10,8),materials.accent,-side*0.075,0.015,0.04);
+        piece(new THREE.SphereGeometry(0.105,14,10),palm,0,-0.015,0).scale.set(1,1.2,0.85);
+        piece(new THREE.SphereGeometry(0.045,10,8),palm,-side*0.075,0.015,0.04);
         piece(new THREE.TorusGeometry(0.083,0.032,8,20),cloth('#f1ece0'),0,0.09,0).rotation.x=Math.PI/2;
       }
     });
@@ -211,6 +214,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   head.add(extras);bodyShape.add(neckwear);
   let smoke:((time:number)=>void)|null=null;
   const extrasWorn=new Set(costume?.extras??[]);
+  const extraTint=tint('extra'),extraMain=extraTint?cloth(extraTint):materials.accent;
   if(extrasWorn.has('extra-cigar')) {
     const cigar=mesh(new THREE.CylinderGeometry(0.026,0.026,0.27,10),cloth('#6f4029'),extras);cigar.rotation.x=Math.PI/2;cigar.position.set(0.045,-0.12,0.51);
     const tip=mesh(new THREE.CylinderGeometry(0.027,0.027,0.025,10),glowMaterial('#f97316'),extras);tip.rotation.x=Math.PI/2;tip.position.set(0.045,-0.12,0.65);
@@ -250,10 +254,10 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     const bridge=mesh(new THREE.BoxGeometry(0.09,0.025,0.025),materials.frames,extras);bridge.position.set(0,0.05,0.42);
   }
   if(extrasWorn.has('extra-bowtie')) {
-    for(const side of [-1,1]) {const tie=mesh(new THREE.ConeGeometry(0.07,0.14,3),materials.accent,neckwear);tie.rotation.z=side*Math.PI/2;tie.position.x=side*0.065;}
+    for(const side of [-1,1]) {const tie=mesh(new THREE.ConeGeometry(0.07,0.14,3),extraMain,neckwear);tie.rotation.z=side*Math.PI/2;tie.position.x=side*0.065;}
   }
   if(extrasWorn.has('extra-medal')) {
-    const ribbon=cloth('#2563eb');
+    const ribbon=cloth(extraTint??'#2563eb');
     for(const side of [-1,1]) {const strap=mesh(new THREE.BoxGeometry(0.035,0.17,0.015),ribbon,neckwear);strap.position.set(side*0.04,-0.08,0);strap.rotation.z=-side*0.35;}
     const medal=mesh(new THREE.CylinderGeometry(0.075,0.075,0.022,20),cloth('#f5c542'),neckwear);medal.rotation.x=Math.PI/2;medal.position.set(0,-0.2,0.01);
   }
@@ -261,11 +265,11 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   if(extrasWorn.has('extra-bowtie')||extrasWorn.has('extra-medal'))neckwear.position.set(0,0.74,costume?.shirt?0.45:0.42);
   // Worn like a hat, so they follow the headwear onto a swapped head and move to an imported model's head with the other extras.
   const holidayHead=new THREE.Group();holidayHead.name='worn-holiday-head';headwear.add(holidayHead);
-  if(holidayHat)addHolidayHat(holidayHat,holidayHead,mesh,cloth);
+  if(holidayHat)addHolidayHat(holidayHat,holidayHead,mesh,cloth,extraTint);
   if(extrasWorn.has('extra-antlers'))addAntlers(holidayHead,mesh,cloth);
   if(extrasWorn.has('extra-headphones')) {
     const band=mesh(new THREE.TorusGeometry(0.43,0.03,8,28,Math.PI),materials.dark,holidayHead);band.position.y=0.04;
-    for(const side of [-1,1]) {const cup=mesh(new THREE.CylinderGeometry(0.12,0.12,0.08,18),materials.accent,holidayHead);cup.rotation.z=Math.PI/2;cup.position.set(side*0.43,0.02,0);}
+    for(const side of [-1,1]) {const cup=mesh(new THREE.CylinderGeometry(0.12,0.12,0.08,18),extraMain,holidayHead);cup.rotation.z=Math.PI/2;cup.position.set(side*0.43,0.02,0);}
   }
   if(extrasWorn.has('extra-halo')) {
     const halo=mesh(new THREE.TorusGeometry(0.26,0.035,8,32),glowMaterial('#fde68a'),holidayHead);halo.rotation.x=Math.PI/2;halo.position.y=0.78;halo.castShadow=false;
@@ -274,7 +278,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   // On a slim build the head is wider than the body where they meet, so the scarf only ever widens with the build. Over a shirt its tail hangs a little further out.
   const fitScarf=(width:number)=>scarf.scale.set(Math.max(1,width),1,Math.max(1,Math.sqrt(width))*(costume?.shirt?1.08:1));
   if(extrasWorn.has('extra-scarf')) {
-    addScarf(scarf,SCARF_RING,mesh,cloth);
+    addScarf(scarf,SCARF_RING,mesh,cloth,extraTint);
     scarf.position.set(0,0.84,0);
     fitScarf(width);
     torso.add(scarf);
@@ -354,7 +358,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
         neckwear.position.set(0,0,0);rig.attachments.neck.add(neckwear);
         holidayHead.position.set(0,0,0);holidayHead.scale.setScalar(1);rig.attachments.head.add(holidayHead);
         if(extrasWorn.has('extra-scarf')) {
-          scarf.clear();addScarf(scarf,MODEL_SCARF_RING,mesh,cloth);
+          scarf.clear();addScarf(scarf,MODEL_SCARF_RING,mesh,cloth,extraTint);
           scarf.position.set(0,MODEL_SCARF_Y,0);scarf.scale.setScalar(1);rig.attachments.head.add(scarf);
         }
       }
@@ -536,13 +540,13 @@ const SCARF_RING = 0.335, MODEL_SCARF_RING = 0.28, MODEL_SCARF_Y = -0.46;
 const HOLIDAY_RED = '#c8323c', HOLIDAY_WHITE = '#f4f4f0';
 
 // Head-sized units, as the hats in addFeature: the round head is a 0.4 ball about the origin.
-function addHolidayHat(id: string, parent: THREE.Group, mesh: MeshFactory, cloth: Cloth) {
+function addHolidayHat(id: string, parent: THREE.Group, mesh: MeshFactory, cloth: Cloth, main?: string) {
   const santa = id === 'extra-santa-hat';
   const hat = santa
     ? tippedBack(parent, { tilt: HAT_TILT, lift: 0.03 }, { tilt: 0.16, lift: 0 })
     : tippedBack(parent, { tilt: 0.35, lift: 0.04 }, { tilt: 0.12, lift: 0 });
   if (santa) {
-    const red = cloth(HOLIDAY_RED), white = cloth(HOLIDAY_WHITE);
+    const red = cloth(main ?? HOLIDAY_RED), white = cloth(HOLIDAY_WHITE);
     hat.rotation.z = 0.06;
     const brim = mesh(new THREE.TorusGeometry(0.37, 0.075, 10, 32), white, hat);
     brim.rotation.x = Math.PI / 2;
@@ -558,7 +562,7 @@ function addHolidayHat(id: string, parent: THREE.Group, mesh: MeshFactory, cloth
     const pom = mesh(new THREE.SphereGeometry(0.085, 12, 10), white, droop);
     pom.position.y = 0.34;
   } else {
-    const green = cloth('#2f9e44'), red = cloth(HOLIDAY_RED);
+    const green = cloth(main ?? '#2f9e44'), red = cloth(HOLIDAY_RED);
     const band = mesh(new THREE.TorusGeometry(0.37, 0.055, 8, 32), red, hat);
     band.rotation.x = Math.PI / 2;
     band.position.y = 0.2;
@@ -604,8 +608,8 @@ function addAntlers(parent: THREE.Group, mesh: MeshFactory, cloth: Cloth) {
 }
 
 /** Around the neck at `ring`, knotted at the front with one striped tail hanging down. */
-function addScarf(parent: THREE.Group, ring: number, mesh: MeshFactory, cloth: Cloth) {
-  const red = cloth(HOLIDAY_RED), white = cloth(HOLIDAY_WHITE);
+function addScarf(parent: THREE.Group, ring: number, mesh: MeshFactory, cloth: Cloth, main?: string) {
+  const red = cloth(main ?? HOLIDAY_RED), white = cloth(HOLIDAY_WHITE);
   const wrap = mesh(new THREE.TorusGeometry(ring, 0.075, 10, 36), red, parent);
   wrap.rotation.x = Math.PI / 2;
   const knot = mesh(new THREE.SphereGeometry(0.08, 12, 10), red, parent);
@@ -639,7 +643,8 @@ type Materials = Record<'body' | 'accent' | 'belly' | 'white' | 'dark' | 'ink' |
 const BUBBLE = 0.5;
 const isDark = (color: string) => new THREE.Color(color).getHSL({ h: 0, s: 0, l: 0 }).l < 0.25;
 
-function addFeature(feature: Feature, head: THREE.Group, mesh: MeshFactory, m: Materials, glow: (color: string) => THREE.Material) {
+/** `m.accent` already carries a chosen hat colour; `main` also takes over a hat's own dark felt or gold. */
+function addFeature(feature: Feature, head: THREE.Group, mesh: MeshFactory, m: Materials, glow: (color: string) => THREE.Material, main?: string) {
   switch (feature) {
     case 'cap': {
       const cap = tippedBack(head, { tilt: HAT_TILT, lift: 0.075 }, { tilt: 0, lift: 0 });
@@ -722,17 +727,18 @@ function addFeature(feature: Feature, head: THREE.Group, mesh: MeshFactory, m: M
     }
     case 'top_hat': {
       const hat = tippedBack(head, { tilt: HAT_TILT * 0.5, lift: 0.3 }, { tilt: 0, lift: 0.1 });
-      const brim = mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.04, 28), m.dark, hat);
+      const felt = main ? m.accent : m.dark;
+      const brim = mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.04, 28), felt, hat);
       brim.position.y = 0.06;
-      const crown = mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.42, 24), m.dark, hat);
+      const crown = mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.42, 24), felt, hat);
       crown.position.y = 0.29;
-      const band = mesh(new THREE.CylinderGeometry(0.275, 0.275, 0.07, 24), m.accent, hat);
+      const band = mesh(new THREE.CylinderGeometry(0.275, 0.275, 0.07, 24), main ? m.dark : m.accent, hat);
       band.position.y = 0.12;
       break;
     }
     case 'crown': {
       const crown = tippedBack(head, { tilt: HAT_TILT * 0.5, lift: 0.3 }, { tilt: 0, lift: 0.1 });
-      const gold = glow('#f5c542');
+      const gold = glow(main ?? '#f5c542');
       const ring = mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.12, 24, 1, true), gold, crown);
       ring.position.y = 0.08;
       for (let i = 0; i < 5; i++) {

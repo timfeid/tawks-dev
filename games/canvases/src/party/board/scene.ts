@@ -81,6 +81,7 @@ type TokenView = {
   rig: CharacterRig;
   /** The bag bought for them, or null for the plain sack. */
   bagStyle: string | null;
+  bagTint: string | null;
   space: number;
   from: THREE.Vector3;
   to: THREE.Vector3;
@@ -130,7 +131,7 @@ const itemLabel = (item: unknown) => ITEMS[item as Item]?.label ?? String(item);
 const BAG_SIZES = [0.6, 0.95, 1.3, 1.75, 2.3, 3];
 
 /** A sack at a token's side, and the strap from it over the shoulder. */
-type Bag = { pivot: THREE.Group; sack: THREE.Group; strap: THREE.Mesh; built: CarriedBag; style: string | null; held: number; size: number; pop: number };
+type Bag = { pivot: THREE.Group; sack: THREE.Group; strap: THREE.Mesh; built: CarriedBag; style: string | null; tint: string | null; held: number; size: number; pop: number };
 /** An item on its way into a sack, or flung out of a full one. */
 type BagFlight = { sprite: THREE.Sprite; seat: number; start: THREE.Vector3; age: number; life: number; out: boolean };
 
@@ -1008,6 +1009,7 @@ export class PartyBoard {
         appearanceKey: characterAppearanceKey(def),
         rig,
         bagStyle: def.costume?.bag ?? null,
+        bagTint: (def.costume?.bag && def.costume.tints?.bag) || null,
         space: token.space,
         from: at,
         to: at,
@@ -2993,7 +2995,7 @@ export class PartyBoard {
 
   private bagOf(token: TokenView) {
     let bag = this.bags.get(token.seat);
-    if (bag && bag.style !== token.bagStyle) {
+    if (bag && (bag.style !== token.bagStyle || bag.tint !== token.bagTint)) {
       bag.built.dispose();
       bag.pivot.removeFromParent();
       bag.strap.removeFromParent();
@@ -3001,13 +3003,13 @@ export class PartyBoard {
     }
     if (!bag) {
       this.strapGeometry ??= this.track(new THREE.CylinderGeometry(0.03, 0.03, 1, 6).translate(0, 0.5, 0));
-      const built = buildBag(token.bagStyle);
+      const built = buildBag(token.bagStyle, token.bagTint);
       const pivot = new THREE.Group();
       pivot.name = 'item-bag';
       const sack = new THREE.Group();
       sack.add(built.group);
       pivot.add(sack);
-      bag = { pivot, sack, strap: new THREE.Mesh(this.strapGeometry, built.strap), built, style: token.bagStyle, held: 0, size: BAG_SIZES[0], pop: 0 };
+      bag = { pivot, sack, strap: new THREE.Mesh(this.strapGeometry, built.strap), built, style: token.bagStyle, tint: token.bagTint, held: 0, size: BAG_SIZES[0], pop: 0 };
       pivot.userData.carried = bag.strap.userData.carried = true;
       this.bags.set(token.seat, bag);
     }

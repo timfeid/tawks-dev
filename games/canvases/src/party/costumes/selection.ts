@@ -1,4 +1,4 @@
-import type {Costume} from '../protocol';
+import type {Costume,TintSlot} from '../protocol';
 import seasonalHeads from './heads.json' with {type:'json'};
 
 export const CLOTHING_SLOTS=['hat','shirt','pants','shoes','gloves','extra','bag'] as const;
@@ -59,7 +59,14 @@ export function seasonNote(head:Head) {
 
 /** Whole characters use their authored appearance, independent of fitted clothes. */
 export function characterSelection(costume:Costume,modelId:string):Costume {
-  return {color:costume.color,model_id:modelId,bag:costume.bag??null,head:costume.head??null,...(costume.body_width == null ? {} : {body_width:costume.body_width}),...(costume.extras?.length?{extras:[...costume.extras]}:{}),...(costume.reaction?{reaction:costume.reaction}:{}),...(costume.shuffle_reactions?{shuffle_reactions:true}:{}),...(costume.pet?{pet:{...costume.pet}}:{})};
+  return {color:costume.color,model_id:modelId,bag:costume.bag??null,head:costume.head??null,...(costume.body_width == null ? {} : {body_width:costume.body_width}),...(costume.extras?.length?{extras:[...costume.extras]}:{}),...(costume.reaction?{reaction:costume.reaction}:{}),...(costume.shuffle_reactions?{shuffle_reactions:true}:{}),...(costume.pet?{pet:{...costume.pet}}:{}),...(costume.tints?{tints:{...costume.tints}}:{})};
+}
+
+/** Sets or, with `null`, clears the colour chosen for one slot. */
+export function withTint(costume:Costume,slot:TintSlot,color:string|null):Costume {
+  const tints={...costume.tints};
+  if(color)tints[slot]=color;else delete tints[slot];
+  return {...costume,tints};
 }
 
 /** Imported personal models use their library ownership; store models use entitlements. */

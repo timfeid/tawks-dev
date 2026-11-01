@@ -39,7 +39,8 @@ export function hangBag(parent: THREE.Object3D, bag: CarriedBag, size: number) {
   return () => { geometry.dispose(); strap.removeFromParent(); bag.dispose(); };
 }
 
-export function buildBag(style: string | null | undefined): CarriedBag {
+/** `tint` is the wearer's chosen colour for the bag's main cloth. */
+export function buildBag(style: string | null | undefined, tint?: string | null): CarriedBag {
   const group = new THREE.Group();
   group.name = `bag-${style ?? 'sack'}`;
   const geometries: THREE.BufferGeometry[] = [];
@@ -72,7 +73,7 @@ export function buildBag(style: string | null | undefined): CarriedBag {
       at.setXYZ(i, x * (1 + 0.15 * round) * squeeze, y + 0.28, z * (1 + 0.45 * round) * squeeze * corner);
     }
     body.computeVertexNormals();
-    const cloth = material('#f1f5f9');
+    const cloth = material(tint ?? '#f1f5f9');
     mesh(body, cloth);
     const stripe = material('#60a5fa');
     for (const y of [0.1, 0.17]) {
@@ -85,7 +86,7 @@ export function buildBag(style: string | null | undefined): CarriedBag {
     strap = cloth;
   } else if (style === 'bag-stocking') {
     // Red with a white cuff, the toe kicked out to one side.
-    const red = material('#dc2626');
+    const red = material(tint ?? '#dc2626');
     const white = material('#f8fafc');
     const leg = mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.4, 14), red);
     leg.position.y = 0.33;
@@ -102,7 +103,7 @@ export function buildBag(style: string | null | undefined): CarriedBag {
     strap = white;
   } else if (style === 'bag-pumpkin') {
     // A trick-or-treat pail: open at the top, a grin on the front, a wire handle.
-    const orange = material('#f97316');
+    const orange = material(tint ?? '#f97316');
     const body = new THREE.SphereGeometry(0.28, 18, 12, 0, Math.PI * 2, 0.55, Math.PI - 0.55);
     body.scale(1, 0.85, 1);
     body.translate(0, 0.24, 0);
@@ -130,7 +131,7 @@ export function buildBag(style: string | null | undefined): CarriedBag {
     const profile = [[0, 0], [0.14, 0.015], [0.23, 0.08], [0.27, 0.19], [0.26, 0.31], [0.2, 0.42], [0.1, 0.5], [0.075, 0.53], [0.1, 0.58], [0.13, 0.63], [0.08, 0.6], [0, 0.57]].map(([x, y]) => new THREE.Vector2(x, y));
     const sack = new THREE.LatheGeometry(profile, 14);
     sack.computeVertexNormals();
-    const body = mesh(sack, material(santa ? '#b91c1c' : '#c9a26a'));
+    const body = mesh(sack, material(tint ?? (santa ? '#b91c1c' : '#c9a26a')));
     body.scale.set(1.08, 1, 0.92);
     const rope = material(santa ? '#fef3c7' : '#6b4423');
     const tie = mesh(new THREE.TorusGeometry(0.085, santa ? 0.032 : 0.024, 6, 14), rope);

@@ -26,6 +26,13 @@ test('a changed PuckLab club design rebuilds the character, other shirts ignore 
   assert.equal(characterAppearanceKey(tee),characterAppearanceKey({...tee,costume:{...tee.costume,jersey:{body:'#123B74',sleeve_stripes:[],hem_stripes:[]}}}));
 });
 
+test('a chosen accessory colour rebuilds the character, key order does not',()=>{
+  const dressed={...base,costume:{color:'clover',hat:'hat-cap',tints:{hat:'#d63c3c',extra:'#2f6fd6'}}};
+  assert.notEqual(characterAppearanceKey(dressed),characterAppearanceKey({...dressed,costume:{...dressed.costume,tints:{hat:'#2f6fd6',extra:'#2f6fd6'}}}));
+  assert.equal(characterAppearanceKey(dressed),characterAppearanceKey({...dressed,costume:{...dressed.costume,tints:{extra:'#2f6fd6',hat:'#d63c3c'}}}));
+  assert.equal(characterAppearanceKey({...base,costume:{color:'clover'}}),characterAppearanceKey({...base,costume:{color:'clover',tints:{}}}));
+});
+
 test('default and explicit empty fitted slots have the same appearance',()=>{
   const free={...base,costume:null};
   assert.equal(characterAppearanceKey(free),characterAppearanceKey({...base,costume:{color:base.id,hat:null,shirt:undefined,pants:null,shoes:null,gloves:null,extras:[],bag:null,model_id:null}}));

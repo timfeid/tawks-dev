@@ -33,8 +33,10 @@
     seasonNote,
     hasUnownedSelection,
     toggleExtra,
+    withTint,
   } from "./selection";
   import catalog from "./catalog.json";
+  import tints from "./tints.json";
 
   const isDark = (hex: string) => {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -172,6 +174,7 @@
           bag: draft.bag,
           extras: draft.extras,
           body_width: draft.body_width,
+          tints: draft.tints,
           model_id: null,
         };
     } else if (slot === "bag") {
@@ -198,6 +201,13 @@
       };
       baseLook = { ...draft };
     }
+    saved = false;
+    error = "";
+  }
+  function paint(color: string | null) {
+    if (slot === "model") return;
+    draft = withTint(draft, slot, color);
+    baseLook = withTint(baseLook, slot, color);
     saved = false;
     error = "";
   }
@@ -437,6 +447,49 @@
               )}{/each}
           {/if}
         </div>
+        {#if slot !== "model"}
+          {@const chosen = draft.tints?.[slot] ?? null}
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-neutral-300">Colour</span>
+            <div class="flex flex-wrap gap-2" aria-label="Accessory colours">
+              <button
+                class="grid size-7 place-items-center rounded-full border border-white/20 text-neutral-300 transition {chosen ===
+                null
+                  ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900'
+                  : 'hover:scale-110'}"
+                title="Original colour"
+                aria-label="Original colour"
+                aria-pressed={chosen === null}
+                disabled={busy}
+                onclick={() => paint(null)}><X class="size-3.5" /></button
+              >
+              {#each tints as tint (tint.color)}
+                <button
+                  class="grid size-7 place-items-center rounded-full transition {isDark(
+                    tint.color,
+                  )
+                    ? 'text-white'
+                    : 'text-black'} {chosen === tint.color
+                    ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900'
+                    : 'hover:scale-110'}"
+                  style:background={tint.color}
+                  title={tint.name}
+                  aria-label={tint.name}
+                  aria-pressed={chosen === tint.color}
+                  disabled={busy}
+                  onclick={() => paint(tint.color)}
+                >
+                  {#if chosen === tint.color}<Check class="size-3.5" />{/if}
+                </button>
+              {/each}
+            </div>
+            <p class="text-xs text-neutral-500">
+              Free. {slot === "extra"
+                ? "One colour covers all your extras."
+                : "Kept when you swap items."}
+            </p>
+          </div>
+        {/if}
         {#if draft.model_id}<p class="text-xs text-neutral-500">
             Extras and bags go with your character. Fitted clothing uses
             Original.
