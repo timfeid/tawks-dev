@@ -1,8 +1,9 @@
 import type { Costume, JerseyDesign } from '../protocol';
 import type { ImportedModel, ModelImportApi } from '../models/types';
 /** `set_up` once a look has been saved; a Tawkathon asks for one before you play.
- * `jersey` is the owner's synced PuckLab club design, for trying the PuckLab jersey on. */
-export type Wardrobe = { costume: Costume; owned: string[]; set_up?: boolean; jersey?: JerseyDesign | null };
+ * `jersey` is the owner's synced PuckLab club design, for trying the PuckLab jersey on.
+ * `pet` is the pet this account hatched. */
+export type Wardrobe = { costume: Costume; owned: string[]; set_up?: boolean; jersey?: JerseyDesign | null; pet?: string };
 export type WardrobeClient = {
   load(): Promise<Wardrobe>;
   apply(costume: Costume): Promise<Wardrobe>;

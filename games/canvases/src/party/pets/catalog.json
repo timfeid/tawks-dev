@@ -1,0 +1,7 @@
+[
+  { "id": "pet-ember", "name": "Ember", "kind": "Blaze", "body": "#ff7b29", "accent": "#ffd23f", "blurb": "Runs warm and never sits still." },
+  { "id": "pet-puddle", "name": "Puddle", "kind": "Splash", "body": "#4d96ff", "accent": "#d6e6ff", "blurb": "Calm on the surface, quick in a scrap." },
+  { "id": "pet-sprout", "name": "Sprout", "kind": "Bloom", "body": "#62c370", "accent": "#dff5d8", "blurb": "Grows a little braver every game." },
+  { "id": "pet-fizz", "name": "Fizz", "kind": "Spark", "body": "#ffd23f", "accent": "#ff7b29", "blurb": "Buzzes loudest right before a win." },
+  { "id": "pet-mochi", "name": "Mochi", "kind": "Dream", "body": "#ff6f9f", "accent": "#fff3c4", "blurb": "Naps through warmups, wakes for finals." }
+]
