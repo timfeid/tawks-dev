@@ -97,6 +97,11 @@ export function toneSoft(t: Tone, fallback: Exclude<Tone, 'Default'> = 'Muted'):
   return `${p.soft} ${p.border}`;
 }
 
+export function badgeVariant(t: Tone): 'default' | 'secondary' | 'destructive' {
+  if (t === 'Danger') return 'destructive';
+  return t === 'Primary' ? 'default' : 'secondary';
+}
+
 export function toneSolid(t: Tone, fallback: Exclude<Tone, 'Default'> = 'Primary'): string {
   return paint[t === 'Default' ? fallback : t].solid;
 }

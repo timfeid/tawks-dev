@@ -14,12 +14,11 @@
 </script>
 
 {#if badge?.tone}
-  {@const tone = look.toneOf(badge.tone, inputs)}
   {@const text = interpolate(inputs, badge.text)}
   {@const Icon = badge.icon ? LUCIDE_REGISTRY[interpolate(inputs, badge.icon)] : undefined}
   {#if text}
-    <span class={['inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] leading-none font-semibold', look.toneSoft(tone), look.toneText(tone, 'Muted')]}
-      >{#if Icon}<Icon class="size-3" />{/if}{text}</span
+    <Badge variant={look.badgeVariant(look.toneOf(badge.tone, inputs))}
+      >{#if Icon}<Icon class="mr-1 size-3" />{/if}{text}</Badge
     >
   {/if}
 {:else if badge}
