@@ -35,7 +35,8 @@ function fakeTawks(handle) {
     const procedure = req.url.split('/').pop();
     calls.push({ procedure, input: body ? JSON.parse(body) : null, auth: req.headers.authorization });
     const out = handle(procedure);
-    res.end(JSON.stringify(out instanceof Error ? { result: { type: 'error', data: { message: out.message } } } : { result: { type: 'response', data: out } }));
+    if (out instanceof Error) res.statusCode = out.code ?? 500;
+    res.end(JSON.stringify(out instanceof Error ? { result: { type: 'error', data: { code: out.code, message: out.message } } } : { result: { type: 'response', data: out } }));
   });
   return new Promise((resolve) => server.listen(0, () => resolve({ server, calls, url: `http://localhost:${server.address().port}/rspc` })));
 }
@@ -46,6 +47,14 @@ test('the api sends the bot token and surfaces errors', async () => {
   assert.equal(await api.mutate('chat_create_message', { chat_id: 'c' }), 'ok');
   assert.equal(calls[0].auth, 'Bot tbot_x');
   await assert.rejects(api.query('boom'), /boom: No such thing/);
+  server.close();
+});
+
+test('an api error carries the code tawks answered with', async () => {
+  const missing = Object.assign(new Error('Conversation not found'), { code: 404 });
+  const { server, url } = await fakeTawks(() => missing);
+  const api = new TawksApi({ rspcUrl: url, token: 'tbot_x' });
+  await assert.rejects(api.query('chat_messages'), (error) => error.code === 404 && error.message === 'chat_messages: Conversation not found');
   server.close();
 });
 

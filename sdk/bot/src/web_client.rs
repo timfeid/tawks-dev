@@ -27,8 +27,10 @@ pub struct RspcError {
     pub path: String,
     /// The HTTP status, when the call was made over HTTP.
     pub status: Option<u16>,
-    /// The rspc error code: 400 for input the API could not read, 401 and
-    /// 403 for auth, 404 for an unknown procedure, 500 for a failure inside it.
+    /// The rspc error code, which is also the HTTP status: 400 for input the
+    /// API could not use, 401 and 403 for auth, 404 for an unknown procedure
+    /// or a missing thing, 409 for a conflict, 429 for too many requests and
+    /// 5xx for a failure inside the API.
     pub code: Option<i32>,
     pub message: String,
 }
@@ -36,10 +38,14 @@ pub struct RspcError {
 impl RspcError {
     /// The API is up and refused this request, so retrying the same request
     /// will not help: usually the bot and the API disagree about a type.
+    /// Timeouts and rate limits (408, 429) pass with time, so they count as
+    /// an outage like a 5xx or a dropped connection.
     pub fn is_rejected(&self) -> bool {
-        let client_error = |code: i64| (400..500).contains(&code);
-        self.code.is_some_and(|code| client_error(code.into()))
-            || self.status.is_some_and(|status| client_error(status.into()))
+        let refusal = |code: i64| (400..500).contains(&code) && code != 408 && code != 429;
+        match self.code {
+            Some(code) => refusal(code.into()),
+            None => self.status.is_some_and(|status| refusal(status.into())),
+        }
     }
 }
 
@@ -256,6 +262,26 @@ mod tests {
             err.to_string(),
             "workflow_register_workflow failed with error 400: invalid input: unknown variant `WordCloud`"
         );
+    }
+
+    #[test]
+    fn procedure_refusals_are_rejections_and_failures_are_outages() {
+        let error = |status: u16, code: i32| {
+            let body = format!(
+                r#"{{"jsonrpc":"2.0","id":null,"result":{{"type":"error","data":{{"code":{code},"message":"m","data":null}}}}}}"#
+            );
+            let err = parse_rspc_response::<String>("chat_list", Some(status), &body).unwrap_err();
+            err.downcast_ref::<RspcError>().expect("an RspcError").clone()
+        };
+        for code in [400, 401, 403, 404, 409] {
+            assert!(error(code as u16, code).is_rejected(), "{code}");
+        }
+        for code in [408, 429, 500, 503] {
+            assert!(!error(code as u16, code).is_rejected(), "{code}");
+        }
+        // An older API answered every procedure error with HTTP 200 and code 500.
+        assert!(!error(200, 500).is_rejected());
+        assert_eq!(error(404, 404).message, "m");
     }
 
     #[test]

@@ -9,6 +9,9 @@ export type ApiOptions = {
 };
 
 export class TawksApiError extends Error {
+  /** The API's error code, which is also the HTTP status: 4xx when it refused the request, 5xx when it failed. */
+  readonly code?: number;
+
   constructor(
     readonly procedure: string,
     message: string,
@@ -16,6 +19,8 @@ export class TawksApiError extends Error {
   ) {
     super(`${procedure}: ${message}`);
     this.name = 'TawksApiError';
+    const code = (data as { code?: unknown } | undefined)?.code;
+    if (typeof code === 'number') this.code = code;
   }
 }
 

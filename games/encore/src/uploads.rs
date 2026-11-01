@@ -464,11 +464,11 @@ impl ApiBackend {
 
 /// The message tawks gave, without the client's prefix.
 pub fn api_message(error: &anyhow::Error) -> String {
-    let text = error.to_string();
-    match text.split_once(" response: ") {
-        Some((head, message)) if head.starts_with("rspc") => message.to_string(),
-        _ => text,
-    }
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<tawks_bot::web_client::RspcError>())
+        .map(|refused| refused.message.clone())
+        .unwrap_or_else(|| error.to_string())
 }
 
 #[derive(Deserialize)]
@@ -931,5 +931,24 @@ pub(crate) mod tests {
         assert!(cache.path("..", "song.ogg").is_none());
         assert!(cache.path("ENS-1", "../../etc/passwd").is_none());
         assert!(cache.path("ENS-1", ".hidden").is_none());
+    }
+}
+
+#[cfg(test)]
+mod api_message_tests {
+    use super::api_message;
+    use tawks_bot::web_client::RspcError;
+
+    #[test]
+    fn shows_only_what_tawks_said() {
+        let refused = anyhow::Error::new(RspcError {
+            path: "encore_uploader_status".into(),
+            status: Some(403),
+            code: Some(403),
+            message: "Only Encore's owners can do that.".into(),
+        })
+        .context("checking the uploader");
+        assert_eq!(api_message(&refused), "Only Encore's owners can do that.");
+        assert_eq!(api_message(&anyhow::anyhow!("disk full")), "disk full");
     }
 }
