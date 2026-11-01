@@ -11,6 +11,15 @@
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/80 border-transparent',
         outline: 'text-foreground',
+        success:
+          'border-transparent bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300',
+        warning:
+          'border-transparent bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:bg-amber-400/15 dark:text-amber-300',
+        danger:
+          'border-transparent bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:bg-red-400/15 dark:text-red-300',
+        info: 'border-transparent bg-sky-500/15 text-sky-700 hover:bg-sky-500/25 dark:bg-sky-400/15 dark:text-sky-300',
+        violet:
+          'border-transparent bg-violet-500/15 text-violet-700 hover:bg-violet-500/25 dark:bg-violet-400/15 dark:text-violet-300',
         glass:
           'bg-white/5 border-white/10 text-white/70 backdrop-blur-md hover:bg-white/10 hover:text-white hover:border-white/20',
       },

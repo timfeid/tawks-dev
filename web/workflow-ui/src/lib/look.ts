@@ -97,9 +97,42 @@ export function toneSoft(t: Tone, fallback: Exclude<Tone, 'Default'> = 'Muted'):
   return `${p.soft} ${p.border}`;
 }
 
-export function badgeVariant(t: Tone): 'default' | 'secondary' | 'destructive' {
-  if (t === 'Danger') return 'destructive';
-  return t === 'Primary' ? 'default' : 'secondary';
+type BadgeTone = 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'violet';
+
+const badgeTone: Record<Tone, BadgeTone> = {
+  Default: 'secondary',
+  Strong: 'secondary',
+  Muted: 'secondary',
+  Faint: 'secondary',
+  Slate: 'secondary',
+  Primary: 'default',
+  Success: 'success',
+  Lime: 'success',
+  Green: 'success',
+  Emerald: 'success',
+  Teal: 'success',
+  Warning: 'warning',
+  Orange: 'warning',
+  Amber: 'warning',
+  Yellow: 'warning',
+  Gold: 'warning',
+  Danger: 'danger',
+  Live: 'danger',
+  Red: 'danger',
+  Rose: 'danger',
+  Pink: 'danger',
+  Info: 'info',
+  Cyan: 'info',
+  Sky: 'info',
+  Blue: 'info',
+  Indigo: 'violet',
+  Violet: 'violet',
+  Purple: 'violet',
+  Fuchsia: 'violet',
+};
+
+export function badgeVariant(t: Tone): BadgeTone {
+  return badgeTone[t];
 }
 
 export function toneSolid(t: Tone, fallback: Exclude<Tone, 'Default'> = 'Primary'): string {
