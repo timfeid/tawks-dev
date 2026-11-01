@@ -18,7 +18,7 @@ export class ReadyGate {
 
   constructor(
     private readonly key: () => unknown,
-    private readonly capMs = 4000,
+    private readonly capMs = 2000,
   ) {
     this.arm();
   }

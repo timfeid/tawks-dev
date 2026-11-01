@@ -1,18 +1,17 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
-  import { fade } from 'svelte/transition';
-  import { prefersReducedMotion } from 'svelte/motion';
   import { cn } from '../utils.js';
   import PageLoader from './page-loader.svelte';
   import { ReadyGate, setReadyGate } from './ready-gate.svelte.js';
 
-  const SHOW_AFTER_MS = 180;
-  const MIN_SHOWN_MS = 450;
+  // spin-delay's defaults: loads under half a second never show a loader, and one that shows doesn't flash.
+  const SHOW_AFTER_MS = 500;
+  const MIN_SHOWN_MS = 200;
 
   let {
     key = undefined,
     ready = true,
-    capMs = 4000,
+    capMs = 2000,
     label,
     shown = $bindable(false),
     class: className,
@@ -82,21 +81,19 @@
   $effect.pre(() => {
     shown = visible;
   });
-  const fadeMs = $derived(prefersReducedMotion.current ? 0 : 200);
 </script>
 
 <div class={cn('relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col', className)} aria-busy={!visible}>
   <div
     class={cn(
-      'flex h-full min-h-0 w-full min-w-0 flex-1 flex-col transition-opacity ease-out',
+      'flex h-full min-h-0 w-full min-w-0 flex-1 flex-col',
       !visible && 'pointer-events-none opacity-0',
     )}
-    style:transition-duration="{visible ? fadeMs : 0}ms"
   >
     {@render children()}
   </div>
   {#if loaderShown && !visible}
-    <div class="absolute inset-0 flex items-center justify-center" out:fade={{ duration: fadeMs }}>
+    <div class="absolute inset-0 flex items-center justify-center">
       <PageLoader {label} />
     </div>
   {/if}
