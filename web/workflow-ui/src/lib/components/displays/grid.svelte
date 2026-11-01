@@ -9,7 +9,7 @@
 
 {#if grid}
   <!-- Columns follow the room this grid has, not the window, since the sidebars take a varying share of it. -->
-  <div class="@container min-w-0">
+  <div class="@container w-full min-w-0">
     <div class={['grid min-w-0', look.columns(grid.columns, !!grid.fixed), look.gap[grid.gap]]}>
       {#each grid.content as child}
         <WorkflowDisplay {...rest} {inputs} {workflow} display={child} />

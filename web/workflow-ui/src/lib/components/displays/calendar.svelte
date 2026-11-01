@@ -46,7 +46,7 @@
 {/snippet}
 
 {#if calendar}
-  <div class="@container min-w-0">
+  <div class="@container w-full min-w-0">
     <div class="grid grid-cols-7 gap-1 @md:gap-1.5">
       {#each WEEKDAYS as weekday}
         <span class="pb-1 text-center text-[10px] font-semibold tracking-wider text-muted-foreground/70 uppercase">{weekday}</span>

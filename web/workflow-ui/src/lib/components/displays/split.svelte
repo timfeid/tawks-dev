@@ -7,7 +7,7 @@
 </script>
 
 {#if split?.rail}
-  <div class="@container min-w-0">
+  <div class="@container w-full min-w-0">
     <div class="flex items-start gap-6">
       <div class="flex min-w-0 flex-1 flex-col gap-5">
         {#each split.content as child}<WorkflowDisplay {...rest} {inputs} {workflow} display={child} />{/each}
@@ -18,7 +18,7 @@
     </div>
   </div>
 {:else if split}
-  <div class="@container min-w-0">
+  <div class="@container w-full min-w-0">
     <div class="flex flex-col gap-5 @xl:flex-row">
       <div class="w-full shrink-0 @xl:w-56">
         {#each split.media as child}<WorkflowDisplay {...rest} {inputs} {workflow} display={child} />{/each}

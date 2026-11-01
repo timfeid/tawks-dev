@@ -27,7 +27,7 @@
 </script>
 
 {#if items && list.length}
-  <div class={grid ? '@container min-w-0' : 'contents'}>
+  <div class={grid ? '@container w-full min-w-0' : 'contents'}>
     <div class={['min-w-0', layout]} style:max-height={maxHeight}>
       {#each list as item}
         {#each items.content as child}
