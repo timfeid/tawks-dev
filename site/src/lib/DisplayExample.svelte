@@ -26,7 +26,6 @@
       status: 'active',
       complete_message: null,
       visuals: node.visuals,
-      layout: null,
       user_id: 'you',
       current_node_id: 'home',
       waiting: false,

@@ -30,11 +30,11 @@
 
   <Tooltip.Provider>
     <Tooltip.Root>
-      <Tooltip.Trigger bind:ref class={display.class}>
+      <Tooltip.Trigger bind:ref>
         {@render render()}
       </Tooltip.Trigger>
 
-      <Tooltip.Content collisionBoundary={scrollEl} class={tooltip.class}>
+      <Tooltip.Content collisionBoundary={scrollEl}>
         {@html sanitizeInlineHtml(interpolate(inputs, tooltip.tooltip_html))}
       </Tooltip.Content>
     </Tooltip.Root>

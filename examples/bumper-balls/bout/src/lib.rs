@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use tawks_bout::{Bout, BoutSpec, Contestant, Controls, Format, Input, Skill, Stick};
+use tawks_bout::{Bout, BoutSpec, Contestant, Controls, Format, Input, Skill, Stick, crowd_scale};
 
 pub const SPEC: BoutSpec = BoutSpec {
     key: "bumper",
@@ -16,7 +16,7 @@ pub const SPEC: BoutSpec = BoutSpec {
     controls: Controls::Move,
     format: Format::FreeForAll,
     min_players: 2,
-    max_players: 4,
+    max_players: 8,
     create: |contestants, seed| Box::new(BumperBalls::new(contestants, seed)),
 };
 
@@ -70,17 +70,23 @@ pub struct BumperBalls {
     pub balls: Vec<Ball>,
     pub time: f32,
     pub radius: f32,
+    /// How much wider than the platform for four, for the size of the field.
+    size: f32,
     rng: StdRng,
     cooldowns: HashMap<(u8, u8), f32>,
     brains: HashMap<u8, BotBrain>,
     skills: HashMap<u8, Skill>,
     placements: Option<Vec<Vec<u8>>>,
+    /// Partners, when played in pairs: they roll apart but never bump each other off.
+    allies: HashMap<u8, u8>,
 }
 
+/// Where the `index`th of `count` balls starts. A bigger field starts further
+/// out, on the wider platform it plays on.
 pub fn spawn_point(index: usize, count: usize) -> (f32, f32) {
     let angle =
         std::f32::consts::TAU * index as f32 / count.max(1) as f32 + std::f32::consts::FRAC_PI_4;
-    let distance = ARENA_RADIUS * 0.55;
+    let distance = ARENA_RADIUS * crowd_scale(count) * 0.55;
     (angle.cos() * distance, angle.sin() * distance)
 }
 
@@ -119,9 +125,11 @@ impl BumperBalls {
             })
             .collect();
         BumperBalls {
+            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
             balls,
             time: 0.0,
-            radius: ARENA_RADIUS,
+            radius: ARENA_RADIUS * crowd_scale(count),
+            size: crowd_scale(count),
             rng: StdRng::seed_from_u64(seed),
             cooldowns: HashMap::new(),
             brains,
@@ -137,13 +145,13 @@ impl BumperBalls {
         self.skills.get(&seat).copied().unwrap_or_default()
     }
 
-    fn radius_at(time: f32) -> f32 {
+    fn radius_at(&self, time: f32) -> f32 {
         if time <= SHRINK_START_SECONDS {
-            return ARENA_RADIUS;
+            return ARENA_RADIUS * self.size;
         }
         let t = ((time - SHRINK_START_SECONDS) / (ROUND_SECONDS - SHRINK_START_SECONDS))
             .clamp(0.0, 1.0);
-        ARENA_RADIUS + (ARENA_MIN_RADIUS - ARENA_RADIUS) * t
+        (ARENA_RADIUS + (ARENA_MIN_RADIUS - ARENA_RADIUS) * t) * self.size
     }
 
     fn ball(&self, seat: u8) -> Option<&Ball> {
@@ -195,12 +203,20 @@ impl Bout for BumperBalls {
         "bumper"
     }
 
+    fn setup(&self) -> Value {
+        json!({
+            "game": "bumper",
+            "radius": ARENA_RADIUS * self.size,
+            "min_radius": ARENA_MIN_RADIUS * self.size,
+        })
+    }
+
     fn step(&mut self, inputs: &[(u8, Input)], dt: f32, events: &mut Vec<Value>) {
         if self.placements.is_some() {
             return;
         }
         self.time += dt;
-        self.radius = Self::radius_at(self.time);
+        self.radius = self.radius_at(self.time);
         for cooldown in self.cooldowns.values_mut() {
             *cooldown -= dt;
         }
@@ -269,7 +285,11 @@ impl Bout for BumperBalls {
                 let (nx, nz) = (dx / dist, dz / dist);
                 let push = (BALL_RADIUS * 2.0 - dist) / 2.0;
                 let approach = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
-                let impulse = if approach < 0.0 {
+                let partners = tawks_bout::allied(self.allies.get(&a.seat).copied(), self.allies.get(&b.seat).copied());
+                let impulse = if partners {
+                    // Partners only roll apart.
+                    0.0
+                } else if approach < 0.0 {
                     (-(1.0 + RESTITUTION) * approach / 2.0).max(MIN_BUMP_IMPULSE)
                 } else {
                     0.0
@@ -425,6 +445,8 @@ mod tests {
                 seat,
                 is_bot: bots,
                 skill: DEFAULT_SKILL,
+                team: seat % 2,
+                ally: None,
             })
             .collect()
     }
@@ -493,6 +515,19 @@ mod tests {
         let placements = game.placements().expect("round over");
         assert_eq!(placements[0].len(), 2, "both idle balls survived");
         assert_eq!(placements[1], vec![2]);
+    }
+
+    #[test]
+    fn a_bigger_field_gets_a_wider_platform() {
+        assert_eq!(BumperBalls::new(&contestants(4, false), 1).radius, ARENA_RADIUS, "four play it as built");
+        let (x, z) = spawn_point(0, 4);
+        assert!((x.hypot(z) - ARENA_RADIUS * 0.55).abs() < 1e-4, "and start where they did");
+        let mut eight = BumperBalls::new(&contestants(8, false), 1);
+        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
+        run(&mut eight, ROUND_SECONDS - 0.5, &[]);
+        let closed = eight.radius / ARENA_MIN_RADIUS;
+        assert!((closed - 2f32.sqrt()).abs() < 0.05, "it closes in to a wider ring too, {closed}");
     }
 
     #[test]

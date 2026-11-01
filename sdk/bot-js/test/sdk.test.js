@@ -19,10 +19,11 @@ test('number inputs accept template strings', () => {
 });
 
 test('ui helpers build the JSON tawks expects', () => {
-  const def = ui.workflow('hi', 'Hi', { home: ui.node('Home', [ui.page([ui.form('go', [ui.textInput('name'), ui.submit('Go', 'go')])])]) }, { actions: [ui.actions.run('go', 'sa-hi.go-bot')] });
-  const form = def.nodes.home.visuals[0].display.Block.content[0].type.Form;
+  const def = ui.workflow('hi', 'Hi', { home: ui.node('Home', [ui.page('Narrow', [ui.form('go', [ui.textInput('name'), ui.submit('Go', 'go')])])]) }, { actions: [ui.actions.run('go', 'sa-hi.go-bot')] });
+  const form = def.nodes.home.visuals[0].display.Page.content[0].type.Form;
   assert.equal(form.server_action_id, 'go');
-  assert.equal(form.content[1].type.Button.type, 'submit');
+  assert.deepEqual(form.content[1].type.Action.act, { action: 'go', inputs: null, disabled: null });
+  assert.equal(form.content[1].type.Action.submit, true);
   assert.deepEqual(def.actions[0], { id: 'go', action_type: 'RunServerAction', allow_while_loading: false, target: 'sa-hi.go-bot', progress_node: true });
 });
 

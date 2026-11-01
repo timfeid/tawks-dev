@@ -22,10 +22,10 @@ const hello = ui.workflow(
   'Hello',
   {
     home: ui.node('Hello', [
-      ui.page([
-        ui.text('Hello, {name}!', 'text-2xl font-bold'),
-        ui.form('wave', [ui.textInput('name', 'Your name'), ui.submit('Wave', 'wave')], { cls: 'flex gap-2' }),
-        ui.text('{reply}', 'text-muted-foreground'),
+      ui.page('Narrow', [
+        ui.title('Hello, {name}!'),
+        ui.form('wave', [ui.row('Tight', [ui.textInput('name', 'Your name'), ui.submit('Wave', 'wave')])]),
+        ui.body('{reply}'),
       ]),
     ]),
   },

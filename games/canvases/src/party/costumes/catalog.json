@@ -1,0 +1,283 @@
+[
+  {
+    "id": "hat-cap",
+    "slot": "hat",
+    "name": "Cap",
+    "style": "cap",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "hat-beanie",
+    "slot": "hat",
+    "name": "Beanie",
+    "style": "beanie",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "hat-visor",
+    "slot": "hat",
+    "name": "Visor",
+    "style": "visor",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "hat-horns",
+    "slot": "hat",
+    "name": "Horns",
+    "style": "horns",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "hat-ears",
+    "slot": "hat",
+    "name": "Rabbit ears",
+    "style": "long_ears",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "hat-tophat",
+    "slot": "hat",
+    "name": "Top hat",
+    "style": "top_hat",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "hat-crown",
+    "slot": "hat",
+    "name": "Party crown",
+    "style": "crown",
+    "price": 2,
+    "icon": "crown",
+    "unlocked_by": "MLS-tawkathon-wins-5",
+    "unlock": "Win 5 Tawkathons"
+  },
+  {
+    "id": "hat-wizard",
+    "slot": "hat",
+    "name": "Wizard hat",
+    "style": "wizard",
+    "price": 2,
+    "icon": "sparkles",
+    "unlocked_by": "MLS-tawkathon-bout-wins-25",
+    "unlock": "Win 25 bouts"
+  },
+  {
+    "id": "shirt-tee",
+    "slot": "shirt",
+    "name": "T-shirt",
+    "style": "tee",
+    "price": 2,
+    "icon": "shirt"
+  },
+  {
+    "id": "shirt-hoodie",
+    "slot": "shirt",
+    "name": "Hoodie",
+    "style": "hoodie",
+    "price": 2,
+    "icon": "shirt"
+  },
+  {
+    "id": "shirt-hockey",
+    "slot": "shirt",
+    "name": "Hockey jersey",
+    "style": "hockey",
+    "price": 2,
+    "icon": "shirt"
+  },
+  {
+    "id": "shirt-pucklab",
+    "slot": "shirt",
+    "name": "PuckLab jersey",
+    "style": "pucklab",
+    "price": 2,
+    "icon": "shirt",
+    "included_with": "pucklab"
+  },
+  {
+    "id": "pants-shorts",
+    "slot": "pants",
+    "name": "Shorts",
+    "style": "shorts",
+    "price": 2,
+    "icon": "shopping-bag"
+  },
+  {
+    "id": "pants-jeans",
+    "slot": "pants",
+    "name": "Jeans",
+    "style": "jeans",
+    "price": 2,
+    "icon": "shopping-bag"
+  },
+  {
+    "id": "pants-tracksuit",
+    "slot": "pants",
+    "name": "Track pants",
+    "style": "tracksuit",
+    "price": 2,
+    "icon": "shopping-bag"
+  },
+  {
+    "id": "shoes-sneakers",
+    "slot": "shoes",
+    "name": "Sneakers",
+    "style": "sneakers",
+    "price": 2,
+    "icon": "footprints"
+  },
+  {
+    "id": "shoes-boots",
+    "slot": "shoes",
+    "name": "Boots",
+    "style": "boots",
+    "price": 2,
+    "icon": "footprints"
+  },
+  {
+    "id": "shoes-skates",
+    "slot": "shoes",
+    "name": "Hockey skates",
+    "style": "skates",
+    "price": 2,
+    "icon": "footprints"
+  },
+  {
+    "id": "gloves-mittens",
+    "slot": "gloves",
+    "name": "Mittens",
+    "style": "mittens",
+    "price": 2,
+    "icon": "hand"
+  },
+  {
+    "id": "gloves-hockey",
+    "slot": "gloves",
+    "name": "Hockey gloves",
+    "style": "hockey",
+    "price": 2,
+    "icon": "hand"
+  },
+  {
+    "id": "extra-cigar",
+    "slot": "extra",
+    "name": "Cigar",
+    "style": "cigar",
+    "price": 2,
+    "icon": "sparkles"
+  },
+  {
+    "id": "extra-glasses",
+    "slot": "extra",
+    "name": "Glasses",
+    "style": "glasses",
+    "price": 2,
+    "icon": "sparkles"
+  },
+  {
+    "id": "extra-bowtie",
+    "slot": "extra",
+    "name": "Bow tie",
+    "style": "bowtie",
+    "price": 2,
+    "icon": "sparkles"
+  },
+  {
+    "id": "extra-santa-hat",
+    "slot": "extra",
+    "name": "Santa hat",
+    "style": "santa_hat",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "extra-elf-hat",
+    "slot": "extra",
+    "name": "Elf hat",
+    "style": "elf_hat",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "extra-antlers",
+    "slot": "extra",
+    "name": "Reindeer antlers",
+    "style": "antlers",
+    "price": 2,
+    "icon": "crown"
+  },
+  {
+    "id": "extra-scarf",
+    "slot": "extra",
+    "name": "Scarf",
+    "style": "scarf",
+    "price": 2,
+    "icon": "sparkles"
+  },
+  {
+    "id": "extra-headphones",
+    "slot": "extra",
+    "name": "Headphones",
+    "style": "headphones",
+    "price": 2,
+    "icon": "headphones"
+  },
+  {
+    "id": "extra-medal",
+    "slot": "extra",
+    "name": "Gold medal",
+    "style": "medal",
+    "price": 2,
+    "icon": "trophy",
+    "unlocked_by": "MLS-tawkathon-first-win",
+    "unlock": "Win a Tawkathon"
+  },
+  {
+    "id": "extra-halo",
+    "slot": "extra",
+    "name": "Halo",
+    "style": "halo",
+    "price": 2,
+    "icon": "star",
+    "unlocked_by": "MLS-tawkathon-perfect",
+    "unlock": "Win every bout in a Tawkathon"
+  },
+  {
+    "id": "bag-pillowcase",
+    "slot": "bag",
+    "name": "Pillowcase",
+    "style": "pillowcase",
+    "price": 2,
+    "icon": "shopping-bag"
+  },
+  {
+    "id": "bag-stocking",
+    "slot": "bag",
+    "name": "Christmas stocking",
+    "style": "stocking",
+    "price": 2,
+    "icon": "shopping-bag"
+  },
+  {
+    "id": "bag-pumpkin",
+    "slot": "bag",
+    "name": "Pumpkin pail",
+    "style": "pumpkin",
+    "price": 2,
+    "icon": "shopping-bag"
+  },
+  {
+    "id": "bag-santa",
+    "slot": "bag",
+    "name": "Santa sack",
+    "style": "santa",
+    "price": 2,
+    "icon": "shopping-bag"
+  }
+]

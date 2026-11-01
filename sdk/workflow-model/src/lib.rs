@@ -20,6 +20,7 @@ pub mod schedule;
 pub mod server_action;
 pub mod service;
 pub mod transform;
+pub mod ui;
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub enum InputType {
@@ -35,7 +36,6 @@ pub enum InputType {
         content: Vec<WorkflowDisplay>,
         selected_content: Option<Vec<WorkflowDisplay>>,
         unselected_content: Option<Vec<WorkflowDisplay>>,
-        class: String,
     },
     Switch,
     Checkbox {
@@ -65,7 +65,9 @@ pub enum InputType {
         r#as: String,
         value: String,
         content: Vec<WorkflowDisplay>,
-        class: String,
+        /// Lays the options out in this many columns; 0 stacks them.
+        #[serde(default)]
+        columns: u8,
         min: Option<u32>,
         max: Option<u32>,
     },
@@ -73,9 +75,10 @@ pub enum InputType {
         items_key: String,
         r#as: String,
         value: String,
-        class: String,
-        selected_class: String,
         content: Vec<WorkflowDisplay>,
+        /// Lays the options out in this many columns; 0 stacks them.
+        #[serde(default)]
+        columns: u8,
     },
 }
 
@@ -114,6 +117,279 @@ pub enum FlexDirection {
     Row,
 }
 
+/// Space between the children of a `Stack` or `Grid`.
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Gap {
+    None,
+    Tight,
+    #[default]
+    Normal,
+    Loose,
+    Section,
+}
+
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Align {
+    #[default]
+    Stretch,
+    Start,
+    Center,
+    End,
+    Baseline,
+}
+
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Justify {
+    #[default]
+    Start,
+    Center,
+    End,
+    Between,
+}
+
+/// Declares a plain enum whose variants travel as their own names, so a
+/// display field can hold one directly or a `{key}` template that resolves to
+/// one from response data.
+macro_rules! named {
+    ($(#[$meta:meta])* $name:ident { $($(#[$vmeta:meta])* $variant:ident),+ $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum $name {
+            #[default]
+            $($(#[$vmeta])* $variant),+
+        }
+
+        impl $name {
+            pub fn as_str(self) -> &'static str {
+                match self { $($name::$variant => stringify!($variant)),+ }
+            }
+        }
+
+        impl From<$name> for String {
+            fn from(value: $name) -> String {
+                value.as_str().to_string()
+            }
+        }
+    };
+}
+
+named! {
+    /// A colour from the theme. `Default` leaves the colour to the display, so a
+    /// heading stays bright and body text stays muted. The named accents after
+    /// `Live` are for things told apart by colour: puzzle groups, alliances,
+    /// answers, metrics.
+    Tone {
+        Default, Strong, Muted, Faint, Primary, Success, Warning, Danger, Info, Live,
+        Red, Orange, Amber, Yellow, Lime, Green, Emerald, Teal, Cyan, Sky, Blue, Indigo,
+        Violet, Purple, Fuchsia, Pink, Rose, Gold, Slate,
+    }
+}
+
+named! {
+    /// How a row, a tile or a tab stands relative to the rest.
+    State {
+        Default,
+        /// Picked by the viewer.
+        Selected,
+        /// Worth noticing, such as the viewer's own row.
+        Highlight,
+        /// Set aside: used, eliminated, out of play.
+        Muted,
+        /// Can't be chosen right now.
+        Disabled,
+        Success,
+        Danger,
+        Warning,
+        Live,
+        Pending,
+    }
+}
+
+/// What a piece of text is, which decides its size, weight and colour.
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextRole {
+    /// The page's own title.
+    Display,
+    /// A large title inside the page, such as a highlighted panel's.
+    Title,
+    /// A section heading.
+    Heading,
+    /// The title of an item, a row or a panel.
+    Subheading,
+    /// The title of a story in a feed: larger than a subheading, smaller than a heading.
+    Headline,
+    /// The introduction under a title.
+    Lead,
+    #[default]
+    Body,
+    /// Small print: requirements, captions and footnotes.
+    Fine,
+    /// A short uppercase label above a title.
+    Eyebrow,
+    /// Something to copy, such as a command.
+    Code,
+    /// A number that matters, such as a score.
+    Stat,
+}
+
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PageWidth {
+    Narrow,
+    #[default]
+    Normal,
+    Wide,
+    Full,
+}
+
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LinkStyle {
+    /// Wraps its content and adds nothing, the way a link always used to.
+    #[default]
+    Plain,
+    /// Text in the primary colour, underlined on hover.
+    Inline,
+    /// The page's main call to action.
+    Primary,
+    /// An outlined button beside a primary one.
+    Secondary,
+    /// A whole panel that opens the link, lighting up under the pointer.
+    Card,
+    /// An entry in a list, such as a story in a feed: no box of its own,
+    /// room above and below, a light wash under the pointer. Sits well in a
+    /// `Divided` list.
+    Entry,
+}
+
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IconSize {
+    /// The size of the text around it.
+    #[default]
+    Inherit,
+    Small,
+    Medium,
+    Large,
+}
+
+named! {
+    Size { Medium, ExtraSmall, Small, Large, ExtraLarge, Fill }
+}
+
+named! {
+    /// Proportions for media: `Poster` is 2:3, `Portrait` 3:4, `Card` a playing card.
+    Aspect { Auto, Square, Video, Poster, Portrait, Card, Wide }
+}
+
+named! {
+    Shape { Rounded, Round, Square }
+}
+
+named! {
+    Fit { Cover, Contain }
+}
+
+named! {
+    /// Where a media caption sits: over the foot of the picture on a shade, or
+    /// in a band beneath it so the whole picture stays clear.
+    CaptionPlacement { Over, Below }
+}
+
+named! {
+    TabStyle { Bottom, Underline, Segmented }
+}
+
+named! {
+    ActionLook { Primary, Secondary, Ghost, Danger, Icon, Link }
+}
+
+named! {
+    TextAlign { Start, Center, End }
+}
+
+named! {
+    /// What sits behind a page: the app's own background, or near black for a game.
+    Backdrop { Default, Dark, Black }
+}
+
+named! {
+    /// The typeface a page marks with `themed` text uses: the app's own,
+    /// a tall condensed one for sports and lobbies, or a spooky one for Midnight.
+    Typeface { Default, Condensed, Spooky }
+}
+
+named! {
+    /// Where an overlay sits over the game canvas before it.
+    Corner { BottomLeft, BottomRight, TopLeft, TopRight, Top, Bottom }
+}
+
+/// Finer control of a piece of text.
+#[derive(Type, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextStyle {
+    /// Figures of equal width, so numbers line up.
+    #[serde(default)]
+    pub numeric: bool,
+    /// Cuts the text off after this many lines; 0 lets it run.
+    #[serde(default)]
+    pub clamp: u8,
+    /// Keeps the room of all `clamp` lines even when the text is shorter,
+    /// so texts side by side start and end at the same place.
+    #[serde(default)]
+    pub reserve: bool,
+    #[serde(default)]
+    pub align: TextAlign,
+    #[serde(default)]
+    pub struck: bool,
+    /// Keeps the line breaks in the text.
+    #[serde(default)]
+    pub lines: bool,
+    /// The game's own typeface, where the page sets one.
+    #[serde(default)]
+    pub themed: bool,
+}
+
+/// What pressing something does: run `action` with `inputs`. `disabled`
+/// greys it out while it holds.
+#[derive(Type, Debug, Clone, Serialize, Deserialize)]
+pub struct Act {
+    pub action: String,
+    #[serde(default)]
+    pub inputs: Option<HashMap<String, Value>>,
+    #[serde(default)]
+    pub disabled: Option<NodeCondition>,
+}
+
+#[derive(Type, Debug, Clone, Serialize, Deserialize)]
+pub struct Tab {
+    pub label: String,
+    pub icon: Option<String>,
+    /// Shows the tab as the current one while it holds.
+    pub active: NodeCondition,
+    pub act: Option<Act>,
+    pub href: Option<String>,
+}
+
+#[derive(Type, Debug, Clone, Serialize, Deserialize)]
+pub struct GroupButton {
+    pub label: String,
+    pub act: Act,
+}
+
+#[derive(Type, Debug, Clone, Serialize, Deserialize)]
+pub enum Layout {
+    Stack { gap: Gap },
+    Row { gap: Gap },
+    /// `fixed` keeps every column on a phone too, for boards and tile grids.
+    Grid {
+        columns: u8,
+        gap: Gap,
+        #[serde(default)]
+        fixed: bool,
+    },
+    /// Rows with a rule between them.
+    Divided,
+    /// A stack that shows about `rows` rows and scrolls the rest.
+    Scroll { gap: Gap, rows: u8 },
+}
+
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub struct SrcSet {
     value_key: String,
@@ -126,12 +402,21 @@ pub struct TableHeader {
     pub key: String,
     pub width: Option<String>,
     pub align: Option<String>,
+    /// Lines figures up and right-aligns them.
+    #[serde(default)]
+    pub numeric: bool,
+    /// Leaves the column out on narrow screens.
+    #[serde(default)]
+    pub wide_only: bool,
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDisplay {
-    pub class: String,
     pub r#type: DisplayType,
+    /// A name animations find this display by, as `[data-mark~="name"]`.
+    /// Takes `{key}` templates and several names separated by spaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mark: Option<String>,
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -243,9 +528,6 @@ pub enum DisplayType {
     ScoreTicker {
         value_key: String,
         icon: Box<WorkflowDisplay>,
-        container_class: Option<String>,
-        pop_text_class: Option<String>,
-        pop_container_class: Option<String>,
     },
     Form {
         server_action_id: String,
@@ -260,7 +542,8 @@ pub enum DisplayType {
         content: Vec<WorkflowVisual>,
         opened_server_action_id: Option<String>,
         closed_server_action_id: Option<String>,
-        content_class: String,
+        #[serde(default)]
+        width: Size,
     },
     Searchable {
         data_url: String,
@@ -273,12 +556,20 @@ pub enum DisplayType {
     Time {
         opts: TimeDisplayOpts,
         key: String,
+        #[serde(default)]
+        role: TextRole,
+        #[serde(default)]
+        tone: String,
     },
     Icon {
         lib: IconLibrary,
         name: String,
         aria_label: Option<String>,
         url: Option<String>,
+        #[serde(default)]
+        size: IconSize,
+        #[serde(default)]
+        tone: String,
     },
 
     Chart {
@@ -295,6 +586,10 @@ pub enum DisplayType {
         r#as: String,
         text: String,
         shake_under_ms_left: Option<u32>,
+        #[serde(default)]
+        role: TextRole,
+        #[serde(default)]
+        tone: String,
     },
     Tile {
         workflow: String,
@@ -308,7 +603,6 @@ pub enum DisplayType {
         size: String,
     },
     Tooltip {
-        class: String,
         tooltip_html: String,
         view_display: Vec<WorkflowDisplay>,
     },
@@ -330,11 +624,16 @@ pub enum DisplayType {
     },
     Progress {
         progress_percentage_key: String,
-        percentage_class: String,
+        #[serde(default)]
+        tone: String,
     },
     Badge {
         variant: String,
         text: String,
+        #[serde(default)]
+        tone: String,
+        #[serde(default)]
+        icon: Option<String>,
     },
     RevealCards {
         reveal_card_keys: Vec<String>,
@@ -377,12 +676,17 @@ pub enum DisplayType {
         input_map: Option<HashMap<String, Value>>,
         #[serde(default)]
         active_key: Option<String>,
+        #[serde(default)]
+        item_size: Size,
     },
     Table {
         items_key: String,
         r#as: String,
         headers: Vec<TableHeader>,
         row: Vec<WorkflowDisplay>,
+        /// A `{key}` naming each row's `State`.
+        #[serde(default)]
+        row_state: Option<String>,
     },
     Wysiwyg {
         content_key: String,
@@ -431,11 +735,258 @@ pub enum DisplayType {
     ShareResult {
         value: String,
         label: String,
+        /// The result appearing means a game just finished, so the app may celebrate it.
+        #[serde(default)]
+        celebrate: bool,
     },
     Loader,
     Link {
         href: String,
         content: Vec<WorkflowDisplay>,
+        #[serde(default)]
+        style: LinkStyle,
+        /// A picture (a template) shown as a small square beside the content,
+        /// on its right; left out while it resolves to nothing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        thumb: Option<String>,
+    },
+    /// Children in a column or a row, `gap` apart.
+    Stack {
+        direction: FlexDirection,
+        gap: Gap,
+        #[serde(default)]
+        align: Align,
+        #[serde(default)]
+        justify: Justify,
+        #[serde(default)]
+        wrap: bool,
+        content: Vec<WorkflowDisplay>,
+    },
+    /// Children in `columns` equal columns, fewer as the space narrows and
+    /// one on a phone.
+    Grid {
+        columns: u8,
+        gap: Gap,
+        content: Vec<WorkflowDisplay>,
+        /// Keeps every column on a phone instead of folding them up.
+        #[serde(default)]
+        fixed: bool,
+    },
+    /// A rounded, bordered box. `Primary` highlights it; `Warning` and
+    /// `Danger` call attention to it.
+    Panel {
+        tone: String,
+        content: Vec<WorkflowDisplay>,
+    },
+    /// The top of a page: an optional eyebrow, the title with `aside` beside
+    /// it, the lead and a row of `actions`.
+    Hero {
+        eyebrow: Option<String>,
+        title: String,
+        lead: Option<String>,
+        aside: Vec<WorkflowDisplay>,
+        actions: Vec<WorkflowDisplay>,
+    },
+    /// A part of a page under a rule, with its heading, a lead and `aside`
+    /// across from the heading.
+    Section {
+        eyebrow: Option<String>,
+        title: String,
+        lead: Option<String>,
+        aside: Vec<WorkflowDisplay>,
+        content: Vec<WorkflowDisplay>,
+    },
+    /// An icon beside a title and a line or two; a card to open when it has
+    /// an `href`.
+    Feature {
+        icon: Option<String>,
+        title: String,
+        body: String,
+        href: Option<String>,
+    },
+    /// A small rounded label with an optional icon. With `act` it is a
+    /// toggle: pressing it runs `act`, and a `Selected` state shows it as on,
+    /// with a cross, since pressing it then turns it off.
+    Chip {
+        icon: Option<String>,
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        act: Option<Act>,
+        /// A `State`, or a `{key}` naming one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<String>,
+    },
+    /// Text styled by what it is.
+    Typography {
+        text: String,
+        role: TextRole,
+        tone: String,
+        #[serde(default)]
+        style: TextStyle,
+    },
+    /// A notice across the page: an error, a hint, a call to sign in.
+    Notice {
+        tone: String,
+        icon: Option<String>,
+        title: Option<String>,
+        body: String,
+        actions: Vec<WorkflowDisplay>,
+    },
+    /// Switches between views; `Bottom` sits fixed at the foot of the page.
+    TabBar {
+        style: TabStyle,
+        tabs: Vec<Tab>,
+    },
+    /// A compact segmented strip of buttons, each running its own act, for
+    /// quick picks such as 1, 3 or 5 tickets. Unlike tabs, none stays current.
+    ButtonGroup {
+        buttons: Vec<GroupButton>,
+    },
+    /// A label between back and forward buttons, for stepping through days or weeks.
+    Stepper {
+        title: String,
+        subtitle: Option<String>,
+        previous: Option<Act>,
+        next: Option<Act>,
+    },
+    /// One line in a list: `lead` (a rank, an avatar, an icon), a title over a
+    /// meta line, and `trail` on the right. `state` may be a `{key}`.
+    Row {
+        lead: Vec<WorkflowDisplay>,
+        title: String,
+        meta: Option<String>,
+        trail: Vec<WorkflowDisplay>,
+        state: String,
+        href: Option<String>,
+        act: Option<Act>,
+    },
+    /// A tile to pick, styled by `state` (a `{key}` is fine): picks, answers, slots.
+    Choice {
+        content: Vec<WorkflowDisplay>,
+        state: String,
+        act: Act,
+        direction: FlexDirection,
+    },
+    /// A number over its label.
+    Stat {
+        value: String,
+        label: String,
+        tone: String,
+    },
+    /// A thin bar filled to `percent` (a template for a number from 0 to 100).
+    Meter {
+        label: Option<String>,
+        value: Option<String>,
+        percent: String,
+        tone: String,
+    },
+    /// A row of small segments, one per item, each coloured by its `state` template.
+    Segments {
+        items_key: String,
+        r#as: String,
+        state: String,
+        label: Option<String>,
+    },
+    /// What a page shows with nothing in it yet, or while it loads.
+    Empty {
+        icon: Option<String>,
+        title: String,
+        body: Option<String>,
+        loading: bool,
+        actions: Vec<WorkflowDisplay>,
+    },
+    /// Someone's avatar beside their name; the avatar falls back to an initial.
+    Person {
+        avatar: String,
+        name: String,
+        meta: Option<String>,
+        size: Size,
+        /// A user id template; pressing the person then opens their profile card.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        user: Option<String>,
+    },
+    /// Overlapping avatars for a list, with a count of the rest.
+    AvatarStack {
+        items_key: String,
+        r#as: String,
+        avatar: String,
+        name: String,
+        max: u8,
+    },
+    Divider {
+        label: Option<String>,
+    },
+    /// Lines of output in a scrolling monospace box that keeps to the end.
+    Log {
+        text: String,
+    },
+    /// Media beside content when there is room, above it when not. As a
+    /// `rail`, `media` is a side column after the content instead, shown only
+    /// when there is room for both.
+    Split {
+        media: Vec<WorkflowDisplay>,
+        content: Vec<WorkflowDisplay>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rail: Option<bool>,
+    },
+    /// Buttons held at the foot of the page.
+    ActionBar {
+        content: Vec<WorkflowDisplay>,
+    },
+    /// An image shaped by `aspect` and `size`, with an optional `badge` over a
+    /// corner and a `caption` across its foot.
+    Media {
+        src: String,
+        alt: String,
+        aspect: Aspect,
+        size: Size,
+        shape: Shape,
+        fit: Fit,
+        badge: Vec<WorkflowDisplay>,
+        caption: Vec<WorkflowDisplay>,
+        /// Washes the picture in a tone's colour, such as a role's alliance.
+        #[serde(default)]
+        tint: String,
+        #[serde(default)]
+        caption_placement: CaptionPlacement,
+    },
+    /// Floats over the game canvas just before it, in one corner, with the
+    /// canvas still playable around it. Docks to the bottom on a phone.
+    Overlay {
+        corner: Corner,
+        content: Vec<WorkflowDisplay>,
+    },
+    /// A band in `color` with `image` large and faint in its corner, washed
+    /// dark so `content` reads over it.
+    Backdrop {
+        color: String,
+        image: String,
+        content: Vec<WorkflowDisplay>,
+    },
+    /// A month, seven days to a row under the weekday names. Each item of
+    /// `items_key` is one cell: `day`, and optionally `outside` (true for days
+    /// of the months either side), `today`, `href`, `image`, `label`,
+    /// `detail` and `tone`.
+    Calendar {
+        items_key: String,
+    },
+    /// Repeats `content` for each item of `items_key`, laid out by `layout`.
+    Items {
+        items_key: String,
+        r#as: String,
+        layout: Layout,
+        content: Vec<WorkflowDisplay>,
+    },
+    /// A button. `look` decides how it is drawn; `full_width` stretches it;
+    /// `submit` makes it send its form; `scroll_to` scrolls to an element id or a mark.
+    Action {
+        label: String,
+        icon: Option<String>,
+        look: ActionLook,
+        act: Act,
+        full_width: bool,
+        submit: bool,
+        scroll_to: Option<String>,
     },
     /// The registered activity for this workflow, its web client in a
     /// sandboxed frame. The client gets the response `state` and sends each
@@ -449,11 +1000,39 @@ pub enum DisplayType {
     PartyCanvas,
     RemotePlayCanvas,
     NhlStreams,
-    FpsCanvas {
-        server_url_key: String,
-        match_id_key: String,
-        token_key: String,
-        cert_hash_key: String,
+    /// An authenticated, live installed-game invitation in a conversation.
+    GameInvite,
+    /// A primary button that starts the first-party `game` when the desktop
+    /// app has it installed, and otherwise opens `fallback_url`.
+    PlayGame {
+        game: String,
+        label: String,
+        fallback_url: String,
+    },
+    /// Reactions and comments on something the page shows, such as a story,
+    /// kept as a thread on a chat message so they arrive live, can be
+    /// moderated and follow blocks. `chat` and `message` are templates for
+    /// that message's chat and id; while `message` resolves to nothing, the first reaction or
+    /// comment runs `start`, which answers by filling it in. `reactions` and
+    /// `comments` name what the page last knew: a list of `emoji`, `count`
+    /// and `me`, and a number. `suggested` names a list of emoji that fit,
+    /// best first: hovering shows the first, and hovering that shows the
+    /// rest beside a picker for any other. `inline` lays the comments out on the page instead of
+    /// behind a button; `title` says what they are about, such as the story's
+    /// headline, beside the comments when they open.
+    Discussion {
+        chat: String,
+        message: String,
+        reactions: String,
+        comments: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        start: Option<Act>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        suggested: Option<String>,
+        #[serde(default)]
+        inline: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
     },
 }
 
@@ -503,9 +1082,21 @@ pub enum DisplayVisual {
     Tile {
         content: Vec<WorkflowDisplay>,
     },
+    /// A plain container, such as a card posted into a chat.
     Block {
-        class: String,
         content: Vec<WorkflowDisplay>,
+    },
+    /// The page column every channel page sits in.
+    Page {
+        width: PageWidth,
+        content: Vec<WorkflowDisplay>,
+        /// Centres the content up and down, for a page that is mostly one thing.
+        #[serde(default)]
+        center: bool,
+        #[serde(default)]
+        backdrop: Backdrop,
+        #[serde(default)]
+        typeface: Typeface,
     },
 
     Chat {
@@ -629,7 +1220,6 @@ pub struct WorkflowNode {
     pub title: String,
     pub description: Option<String>,
     pub visuals: Vec<WorkflowVisual>,
-    pub layout: Option<String>,
     pub condition: Option<NodeCondition>,
     pub parent_id: Option<String>,
 }
@@ -870,7 +1460,6 @@ mod tests {
             status: WorkflowRuntimeStatus::Active,
             complete_message: None,
             visuals: Vec::new(),
-            layout: None,
             user_id: user_id.to_string(),
             current_node_id: "root".to_string(),
             waiting: false,

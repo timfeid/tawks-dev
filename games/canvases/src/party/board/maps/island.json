@@ -1,0 +1,1266 @@
+{
+  "id": "island",
+  "coast": [
+    [
+      -58,
+      6
+    ],
+    [
+      -62,
+      -6
+    ],
+    [
+      -68,
+      -14
+    ],
+    [
+      -64,
+      -22
+    ],
+    [
+      -52,
+      -26
+    ],
+    [
+      -44,
+      -32
+    ],
+    [
+      -32,
+      -38
+    ],
+    [
+      -18,
+      -44
+    ],
+    [
+      -4,
+      -50
+    ],
+    [
+      10,
+      -47
+    ],
+    [
+      24,
+      -41
+    ],
+    [
+      38,
+      -34
+    ],
+    [
+      50,
+      -24
+    ],
+    [
+      58,
+      -12
+    ],
+    [
+      62,
+      0
+    ],
+    [
+      54,
+      6
+    ],
+    [
+      52,
+      12
+    ],
+    [
+      56,
+      20
+    ],
+    [
+      48,
+      28
+    ],
+    [
+      36,
+      32
+    ],
+    [
+      22,
+      36
+    ],
+    [
+      10,
+      42
+    ],
+    [
+      -4,
+      40
+    ],
+    [
+      -18,
+      42
+    ],
+    [
+      -32,
+      38
+    ],
+    [
+      -44,
+      30
+    ],
+    [
+      -54,
+      20
+    ]
+  ],
+  "land": [
+    {
+      "kind": "hill",
+      "x": 0,
+      "z": -16,
+      "r": 21,
+      "h": 7
+    },
+    {
+      "kind": "hill",
+      "x": -14,
+      "z": -22,
+      "r": 10,
+      "h": 3
+    },
+    {
+      "kind": "hill",
+      "x": 16,
+      "z": -24,
+      "r": 9,
+      "h": 2.8
+    },
+    {
+      "kind": "hill",
+      "x": 44,
+      "z": -6,
+      "r": 10,
+      "h": 3
+    },
+    {
+      "kind": "plateau",
+      "x": -44,
+      "z": -14,
+      "r": 9,
+      "h": 5
+    },
+    {
+      "kind": "hill",
+      "x": -34,
+      "z": 8,
+      "r": 12,
+      "h": 2.5
+    },
+    {
+      "kind": "hill",
+      "x": 18,
+      "z": 16,
+      "r": 9,
+      "h": 1.6
+    },
+    {
+      "kind": "river",
+      "points": [
+        [
+          4,
+          -6
+        ],
+        [
+          12,
+          0
+        ],
+        [
+          22,
+          4
+        ],
+        [
+          32,
+          8
+        ],
+        [
+          44,
+          14
+        ],
+        [
+          54,
+          18
+        ]
+      ],
+      "r": 3.2,
+      "h": -5
+    }
+  ],
+  "zones": [
+    {
+      "name": "Beach Camp",
+      "x": 0,
+      "z": 30,
+      "r": 10
+    },
+    {
+      "name": "The Dock",
+      "x": 38,
+      "z": 18,
+      "r": 8
+    },
+    {
+      "name": "Temple Ruins",
+      "x": 44,
+      "z": -6,
+      "r": 10
+    },
+    {
+      "name": "Thunder Peak",
+      "x": 0,
+      "z": -16,
+      "r": 16
+    },
+    {
+      "name": "Peak Cave",
+      "x": 0,
+      "z": -28,
+      "r": 10
+    },
+    {
+      "name": "Watchtower Point",
+      "x": -44,
+      "z": -14,
+      "r": 9
+    },
+    {
+      "name": "Palm Grove",
+      "x": -36,
+      "z": 12,
+      "r": 12
+    },
+    {
+      "name": "The River",
+      "x": 24,
+      "z": 4,
+      "r": 10
+    },
+    {
+      "name": "Coral Market",
+      "x": -9,
+      "z": 15,
+      "r": 10
+    },
+    {
+      "name": "Temple Gardens",
+      "x": 45,
+      "z": -7,
+      "r": 12
+    },
+    {
+      "name": "Coconut Grove",
+      "x": -35,
+      "z": 10,
+      "r": 14
+    }
+  ],
+  "paths": [
+    {
+      "id": "lap",
+      "closed": true,
+      "points": [
+        [
+          0,
+          30,
+          [
+            "start",
+            "shop",
+            "coin"
+          ]
+        ],
+        [
+          12,
+          28,
+          [
+            "item",
+            "coin",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          26,
+          25,
+          [
+            "coin",
+            "event",
+            "coin"
+          ]
+        ],
+        [
+          36,
+          17,
+          [
+            "coin",
+            "cannon",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          44,
+          4,
+          [
+            "coin",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          43,
+          -9,
+          [
+            "prize_spot",
+            "coin",
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          34,
+          -21,
+          [
+            "loss",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          22,
+          -30,
+          [
+            "coin",
+            "shop",
+            "coin"
+          ]
+        ],
+        [
+          11,
+          -26,
+          [
+            "hazard",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          15,
+          -15,
+          [
+            "coin",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          8,
+          -6,
+          [
+            "event",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          0,
+          -12,
+          [
+            "prize_spot",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          -8,
+          -6,
+          [
+            "coin",
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          -16,
+          -14,
+          [
+            "loss",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          -11,
+          -25,
+          [
+            "coin",
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          -24,
+          -31,
+          [
+            "item",
+            "coin",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          -36,
+          -24,
+          [
+            "coin",
+            "cannon",
+            "coin"
+          ]
+        ],
+        [
+          -46,
+          -10,
+          [
+            "shop",
+            "coin",
+            "event",
+            "coin"
+          ]
+        ],
+        [
+          -47,
+          5,
+          [
+            "coin",
+            "loss",
+            "item"
+          ]
+        ],
+        [
+          -39,
+          17,
+          [
+            "coin",
+            "hazard",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          -26,
+          25,
+          [
+            "prize_spot",
+            "coin",
+            "loss"
+          ]
+        ],
+        [
+          -12,
+          30,
+          [
+            "coin",
+            "item",
+            "coin"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "peak-cave",
+      "under": true,
+      "points": [
+        [
+          11,
+          -26
+        ],
+        [
+          6,
+          -33
+        ],
+        [
+          -2,
+          -35
+        ],
+        [
+          -8,
+          -32
+        ],
+        [
+          -11,
+          -25
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "item",
+        "hazard",
+        "coin",
+        "loss",
+        "item",
+        "coin"
+      ]
+    },
+    {
+      "id": "rope-bridge",
+      "bridge": true,
+      "points": [
+        [
+          36,
+          17
+        ],
+        [
+          30,
+          10
+        ],
+        [
+          24,
+          4
+        ],
+        [
+          19,
+          -4
+        ],
+        [
+          15,
+          -15
+        ]
+      ],
+      "kinds": [
+        "hazard",
+        "coin",
+        "item",
+        "hazard",
+        "loss",
+        "coin",
+        "hazard",
+        "item",
+        "coin"
+      ]
+    },
+    {
+      "id": "grove-spring",
+      "points": [
+        [
+          -47,
+          5
+        ],
+        [
+          -38,
+          3
+        ],
+        [
+          -30,
+          6
+        ],
+        [
+          -24,
+          11
+        ]
+      ],
+      "warp_to": [
+        26,
+        25
+      ],
+      "kinds": [
+        "coin",
+        "loss",
+        "item",
+        "prize_spot",
+        "coin"
+      ]
+    },
+    {
+      "id": "market-road",
+      "join_paths": true,
+      "points": [
+        [
+          -12,
+          30
+        ],
+        [
+          -8,
+          22
+        ],
+        [
+          -5,
+          14
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          8,
+          -6
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "item",
+        "coin",
+        "shop",
+        "coin",
+        "event",
+        "coin"
+      ]
+    },
+    {
+      "id": "grove-market",
+      "join_paths": true,
+      "points": [
+        [
+          -39,
+          17
+        ],
+        [
+          -29,
+          15
+        ],
+        [
+          -17,
+          13
+        ],
+        [
+          -5,
+          14
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "coin",
+        "loss",
+        "item",
+        "coin"
+      ]
+    },
+    {
+      "id": "river-market",
+      "join_paths": true,
+      "points": [
+        [
+          -5,
+          14
+        ],
+        [
+          7,
+          15
+        ],
+        [
+          17,
+          20
+        ],
+        [
+          26,
+          25
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "hazard",
+        "coin",
+        "item",
+        "coin"
+      ]
+    }
+  ],
+  "props": [
+    {
+      "model": "tent",
+      "x": 6,
+      "z": 33,
+      "yaw": 3.3,
+      "scale": 0.95
+    },
+    {
+      "model": "tent_smallOpen",
+      "x": -6,
+      "z": 34,
+      "yaw": 2.9,
+      "scale": 0.9
+    },
+    {
+      "model": "campfire-pit",
+      "x": 0,
+      "z": 35,
+      "scale": 0.75
+    },
+    {
+      "model": "bedroll",
+      "x": 3,
+      "z": 36,
+      "yaw": 0.4,
+      "scale": 0.7
+    },
+    {
+      "model": "log_stack",
+      "x": -10,
+      "z": 33,
+      "yaw": 1.2,
+      "scale": 0.7
+    },
+    {
+      "model": "structure-platform-dock",
+      "x": 44,
+      "z": 25,
+      "y": -2.2,
+      "yaw": -0.7,
+      "scale": 1.4
+    },
+    {
+      "model": "boat-row-small",
+      "x": 50,
+      "z": 29,
+      "y": -3,
+      "yaw": 0.6,
+      "scale": 1.05
+    },
+    {
+      "model": "ship-pirate-medium",
+      "x": 66,
+      "z": 26,
+      "y": -3.3,
+      "yaw": 2.3,
+      "scale": 2.2
+    },
+    {
+      "model": "column-large",
+      "x": 49,
+      "z": -3,
+      "scale": 1.1
+    },
+    {
+      "model": "column-large",
+      "x": 48,
+      "z": -12,
+      "scale": 1.1
+    },
+    {
+      "model": "statue_columnDamaged",
+      "x": 39,
+      "z": -2,
+      "scale": 1.2
+    },
+    {
+      "model": "statue_obelisk",
+      "x": 51,
+      "z": -8,
+      "scale": 1.3
+    },
+    {
+      "model": "pillar-large",
+      "x": 38,
+      "z": -14,
+      "scale": 1.0
+    },
+    {
+      "model": "stairs-stone",
+      "x": 46,
+      "z": -16,
+      "yaw": 0.7,
+      "scale": 1.0
+    },
+    {
+      "model": "chest",
+      "x": 47,
+      "z": -7,
+      "yaw": 2.1,
+      "scale": 0.75
+    },
+    {
+      "model": "tower-watch",
+      "x": -48,
+      "z": -17,
+      "yaw": 0.8,
+      "scale": 2.0
+    },
+    {
+      "model": "flag-pirate-high",
+      "x": -42,
+      "z": -19,
+      "scale": 0.4
+    },
+    {
+      "model": "flag",
+      "x": 0,
+      "z": -9,
+      "scale": 0.65
+    },
+    {
+      "model": "signpost",
+      "x": 33,
+      "z": 13,
+      "yaw": 2.2,
+      "scale": 0.65
+    },
+    {
+      "model": "signpost",
+      "x": -44,
+      "z": 2,
+      "yaw": 1.2,
+      "scale": 0.65
+    },
+    {
+      "model": "fountain-round",
+      "x": -22,
+      "z": 13,
+      "scale": 0.65
+    },
+    {
+      "model": "ship-wreck",
+      "x": -54,
+      "z": 24,
+      "yaw": 0.8,
+      "scale": 1.15
+    },
+    {
+      "model": "fountain-round",
+      "x": -3,
+      "z": 15,
+      "scale": 1.7
+    },
+    {
+      "model": "stall-red",
+      "x": -14,
+      "z": 8,
+      "scale": 1.25
+    },
+    {
+      "model": "stall-green",
+      "x": -12,
+      "z": 22,
+      "scale": 1.25
+    },
+    {
+      "model": "stall-red",
+      "x": 3,
+      "z": 8,
+      "scale": 1.1
+    },
+    {
+      "model": "lightpost-single",
+      "x": -17,
+      "z": 18,
+      "scale": 1.2
+    },
+    {
+      "model": "lightpost-single",
+      "x": 2,
+      "z": 21,
+      "scale": 1.2
+    },
+    {
+      "model": "statue_obelisk",
+      "x": 54,
+      "z": -6,
+      "scale": 2.2
+    },
+    {
+      "model": "column-large",
+      "x": 52,
+      "z": -16,
+      "scale": 1.8
+    },
+    {
+      "model": "column-large",
+      "x": 36,
+      "z": -4,
+      "scale": 1.8
+    },
+    {
+      "model": "tent",
+      "x": -30,
+      "z": 8,
+      "scale": 1.3
+    }
+  ],
+  "clusters": [
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight",
+        "palm-detailed-bend",
+        "tree_palmTall",
+        "tree_palmBend"
+      ],
+      "x": -34,
+      "z": 10,
+      "r": 13,
+      "count": 55,
+      "scale": [
+        0.84,
+        1.32
+      ]
+    },
+    {
+      "models": [
+        "flower_redA",
+        "flower_yellowA",
+        "flowers",
+        "plant_bush"
+      ],
+      "x": -32,
+      "z": 10,
+      "r": 12,
+      "count": 40,
+      "scale": [
+        0.63,
+        0.95
+      ]
+    },
+    {
+      "models": [
+        "tree_oak",
+        "tree_default",
+        "tree_detailed",
+        "tree_tall"
+      ],
+      "x": -12,
+      "z": -24,
+      "r": 11,
+      "count": 30,
+      "scale": [
+        0.84,
+        1.26
+      ]
+    },
+    {
+      "models": [
+        "tree_oak",
+        "tree_default",
+        "tree_detailed"
+      ],
+      "x": 18,
+      "z": -24,
+      "r": 9,
+      "count": 24,
+      "scale": [
+        0.84,
+        1.26
+      ]
+    },
+    {
+      "models": [
+        "rock_largeA",
+        "rock_largeB",
+        "rock_tallA",
+        "rock_tallC"
+      ],
+      "x": 0,
+      "z": -16,
+      "r": 9,
+      "count": 22,
+      "scale": [
+        0.84,
+        1.47
+      ]
+    },
+    {
+      "models": [
+        "plant_bushLarge",
+        "plant_bushDetailed",
+        "grass_leafs"
+      ],
+      "x": 26,
+      "z": 6,
+      "r": 14,
+      "count": 34,
+      "scale": [
+        0.63,
+        1.05
+      ]
+    },
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight",
+        "tree_palmBend"
+      ],
+      "x": 18,
+      "z": 18,
+      "r": 9,
+      "count": 18,
+      "scale": [
+        0.84,
+        1.26
+      ]
+    },
+    {
+      "models": [
+        "plant_bushLarge",
+        "grass_leafs",
+        "rocks-a"
+      ],
+      "x": 44,
+      "z": -6,
+      "r": 10,
+      "count": 22,
+      "scale": [
+        0.63,
+        1.0
+      ]
+    },
+    {
+      "models": [
+        "rocks-a",
+        "rocks-b",
+        "rock_largeC",
+        "rock_largeD"
+      ],
+      "x": -44,
+      "z": -14,
+      "r": 9,
+      "count": 18,
+      "scale": [
+        0.74,
+        1.26
+      ],
+      "ring": true
+    },
+    {
+      "models": [
+        "palm-straight",
+        "palm-bend"
+      ],
+      "x": 0,
+      "z": 28,
+      "r": 14,
+      "count": 12,
+      "scale": [
+        0.95,
+        1.32
+      ]
+    },
+    {
+      "models": [
+        "mushroom_redGroup",
+        "mushrooms",
+        "stump_round"
+      ],
+      "x": -12,
+      "z": -22,
+      "r": 8,
+      "count": 14,
+      "scale": [
+        0.63,
+        0.95
+      ]
+    },
+    {
+      "models": [
+        "flower_redA",
+        "flower_yellowA",
+        "flowers",
+        "plant_bush",
+        "grass_leafs"
+      ],
+      "x": 8,
+      "z": 14,
+      "r": 15,
+      "count": 60,
+      "scale": [
+        0.8,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "tree_oak",
+        "tree_default",
+        "tree_detailed"
+      ],
+      "x": -8,
+      "z": 12,
+      "r": 7,
+      "count": 10,
+      "scale": [
+        0.9,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "rock_largeA",
+        "rock_largeC",
+        "stone_largeB"
+      ],
+      "x": -20,
+      "z": 4,
+      "r": 6,
+      "count": 7,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "palm-straight",
+        "palm-bend",
+        "palm-detailed-bend"
+      ],
+      "x": 46,
+      "z": 24,
+      "r": 7,
+      "count": 10,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "tree_oak",
+        "tree_default"
+      ],
+      "x": 30,
+      "z": -28,
+      "r": 7,
+      "count": 12,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "palm-straight",
+        "palm-bend"
+      ],
+      "x": -50,
+      "z": 8,
+      "r": 7,
+      "count": 10,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "grass_leafs",
+        "plant_bushLarge"
+      ],
+      "x": 0,
+      "z": -34,
+      "r": 10,
+      "count": 20,
+      "scale": [
+        0.8,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "flowers",
+        "flower_redA",
+        "flower_yellowA"
+      ],
+      "x": -3,
+      "z": 15,
+      "r": 12,
+      "count": 70,
+      "scale": [
+        0.75,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "palm-straight",
+        "tree_palmTall"
+      ],
+      "x": -22,
+      "z": 0,
+      "r": 9,
+      "count": 24,
+      "scale": [
+        1.1,
+        1.7
+      ]
+    }
+  ],
+  "islets": [
+    [
+      -64,
+      28,
+      5
+    ],
+    [
+      66,
+      -22,
+      6
+    ],
+    [
+      20,
+      50,
+      4
+    ],
+    [
+      -30,
+      -50,
+      5
+    ],
+    [
+      68,
+      14,
+      3
+    ]
+  ],
+  "rough": 1.0,
+  "specials": {
+    "palms": [
+      [
+        18,
+        18
+      ],
+      [
+        -34,
+        11
+      ],
+      [
+        46,
+        24
+      ],
+      [
+        -8,
+        23
+      ]
+    ]
+  },
+  "districts": [
+    {
+      "name": "Coral Market",
+      "x": -9,
+      "z": 15,
+      "r": 10,
+      "color": "#c8b88b"
+    },
+    {
+      "name": "Temple Gardens",
+      "x": 45,
+      "z": -7,
+      "r": 12,
+      "color": "#a7ae7c"
+    },
+    {
+      "name": "Coconut Grove",
+      "x": -35,
+      "z": 10,
+      "r": 14,
+      "color": "#4c9867"
+    },
+    {
+      "name": "Beach Camp",
+      "x": 0,
+      "z": 33,
+      "r": 10,
+      "color": "#e9cd97"
+    }
+  ]
+}

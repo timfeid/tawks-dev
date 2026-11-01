@@ -5,11 +5,13 @@ use std::sync::Arc;
 use tawks_bot::TawksBot;
 use ulid::Ulid;
 
+use workflow::CreateWorkflowDefinition;
 use workflow::server_action::ServerActionResult;
 use workflow::service::WorkflowResourceWithContext;
-use workflow::CreateWorkflowDefinition;
-use workflow::{WorkflowVisual, builder::*};
+use workflow::{WorkflowVisual, builder::*, ui::*};
 
+use crate::MidnightPage;
+use crate::ability_header;
 use crate::gamestate::{GameState, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
 use game_framework::engine::GameEngine;
@@ -28,110 +30,54 @@ pub const LOST_SWAP_ACTION: &str = "games.midnight.lost.swap_hidden";
 
 fn lost_selection_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("lost_selection")
-        .tile(vec![
-            // 1. Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center mb-6")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-2xl font-halloween text-purple-400 tracking-widest uppercase opacity-90 drop-shadow-sm")
-                        .text("The Void Beckons")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xs font-mono text-purple-300/50 uppercase tracking-widest")
-                        .text("Abandon your identity. Seize another.")
-                        .build(),
-                ])
-                .build(),
-
-            // 2. The Mystery Grid (Face down cards)
-            WorkflowDisplayBuilder::new("w-full grid grid-cols-3 gap-3")
-                .list(
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                ability_header(
+                    "The Void Beckons",
+                    Tone::Purple,
+                    "Abandon your identity. Seize another.",
+                ),
+                items(
                     "card_options",
                     "card",
-                    vec![
-                        WorkflowDisplayBuilder::new("w-full !h-auto !p-0 !bg-transparent hover:!bg-transparent !border-0 focus:outline-none")
-                        .submit(
-                                    vec![
-                                        // CARD BACK CONTAINER
-                                        WorkflowDisplayBuilder::new("w-full aspect-[3/4] bg-neutral-900 border border-white/10 rounded-lg flex flex-col items-center justify-center group hover:border-purple-500/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all duration-300 active:scale-95 cursor-pointer relative overflow-hidden")
-                                            .div(vec![
-                                                // 1. Pattern/Texture (Background)
-                                                WorkflowDisplayBuilder::new("absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/10 to-transparent opacity-50")
-                                                    .build(),
-
-                                                // 2. The Icon & Text (Foreground)
-                                                // We wrap this in a builder to apply the z-index class
-                                                WorkflowDisplayBuilder::new("relative z-10 flex flex-col items-center")
-                                                    .div(vec![
-                                                        WorkflowDisplayBuilder::new("text-4xl text-purple-500/50 group-hover:text-purple-400 transition-colors animate-pulse")
-                                                            .text("?")
-                                                            .build(),
-                                                        WorkflowDisplayBuilder::new("mt-2 text-[10px] font-mono uppercase tracking-widest text-white/30 group-hover:text-white/60")
-                                                            .text("{card.name}")
-                                                            .build()
-                                                    ])
-                                                    .build(),
-                                            ])
-                                            .build(),
-                                    ],
-                                    Some({
-                                        let mut m = HashMap::new();
-                                        m.insert("hidden_index".into(), "{card.value}".into());
-                                        m
-                                    }),
-                                    LOST_SWAP_ACTION,
-                                    "ghost",
-                                    "md",
-                                )
-                            .build()
-                    ]
-                )
-                .build()
-        ])
+                    Layout::Grid {
+                        columns: 3,
+                        gap: Gap::Normal,
+                        fixed: false,
+                    },
+                    vec![choice(
+                        vec![title("?").themed().tone(Tone::Purple), fine("{card.name}")],
+                        act(LOST_SWAP_ACTION).input("hidden_index", "{card.value}"),
+                    )],
+                ),
+            ],
+        )
         .build()
 }
 
 fn lost_success_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("lost_success")
-        .tile(vec![
-            // Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center py-6 space-y-4")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-4xl mb-2 animate-pulse")
-                        .text("🤫")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xl font-halloween text-center text-purple-400")
-                        .text("Identity Veiled")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-sm font-mono text-center text-white/50 max-w-xs")
-                        .text("The void has reshaped you, but your true form remains hidden in the shadows...")
-                        .build(),
-                ])
-                .build(),
-
-            // The "Secret" Card Visual
-            WorkflowDisplayBuilder::new("w-full flex justify-center py-4")
-                .div(vec![
-                    // CARD CONTAINER
-                    WorkflowDisplayBuilder::new("w-[180px] aspect-[3/4] bg-neutral-900 border border-purple-500/30 rounded-lg flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_20px_rgba(168,85,247,0.1)]")
-                        .div(vec![
-                            // 1. Pattern (Background)
-                            WorkflowDisplayBuilder::new("absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 to-transparent opacity-50")
-                                .build(),
-
-                            // 2. Icon (Foreground)
-                            // Added 'relative z-10' to ensure it sits on top of the absolute background
-                            WorkflowDisplayBuilder::new("relative z-10 text-6xl text-purple-500/20 font-halloween animate-pulse")
-                                .text("?")
-                                .build()
-                        ])
-                        .build()
-                ])
-                .build(),
-
-            // Footer
-            WorkflowDisplayBuilder::new("text-xs text-center text-white/30 italic mt-4")
-                .text("Trust no one. Not even yourself.")
-                .build(),
-        ])
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                column(
+                    Gap::Tight,
+                    vec![
+                        icon("moon", IconSize::Large).tone(Tone::Purple),
+                        ability_header(
+                            "Identity Veiled",
+                            Tone::Purple,
+                            "The void has reshaped you, but your true form remains hidden in the shadows...",
+                        ),
+                    ],
+                )
+                .align(Align::Center),
+                panel(vec![display_title("?").themed().centered().tone(Tone::Purple)])
+                    .tone(Tone::Purple),
+                fine("Trust no one. Not even yourself.").centered(),
+            ],
+        )
         .build()
 }
 

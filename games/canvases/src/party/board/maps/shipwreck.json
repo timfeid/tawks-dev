@@ -1,0 +1,1354 @@
+{
+  "id": "shipwreck",
+  "coast": [
+    [
+      -58,
+      10
+    ],
+    [
+      -60,
+      -4
+    ],
+    [
+      -55,
+      -18
+    ],
+    [
+      -46,
+      -30
+    ],
+    [
+      -32,
+      -38
+    ],
+    [
+      -16,
+      -42
+    ],
+    [
+      0,
+      -40
+    ],
+    [
+      16,
+      -43
+    ],
+    [
+      32,
+      -38
+    ],
+    [
+      46,
+      -30
+    ],
+    [
+      56,
+      -18
+    ],
+    [
+      61,
+      -4
+    ],
+    [
+      59,
+      10
+    ],
+    [
+      53,
+      22
+    ],
+    [
+      43,
+      32
+    ],
+    [
+      31,
+      38
+    ],
+    [
+      21,
+      40
+    ],
+    [
+      15,
+      34
+    ],
+    [
+      11,
+      27
+    ],
+    [
+      3,
+      23
+    ],
+    [
+      -6,
+      23
+    ],
+    [
+      -14,
+      27
+    ],
+    [
+      -18,
+      35
+    ],
+    [
+      -26,
+      41
+    ],
+    [
+      -38,
+      38
+    ],
+    [
+      -48,
+      30
+    ],
+    [
+      -55,
+      20
+    ]
+  ],
+  "land": [
+    {
+      "kind": "hill",
+      "x": -44,
+      "z": 4,
+      "r": 12,
+      "h": 3
+    },
+    {
+      "kind": "hill",
+      "x": -38,
+      "z": -20,
+      "r": 15,
+      "h": 4.5
+    },
+    {
+      "kind": "hill",
+      "x": -26,
+      "z": -34,
+      "r": 9,
+      "h": 3
+    },
+    {
+      "kind": "plateau",
+      "x": 2,
+      "z": -32,
+      "r": 17,
+      "h": 8
+    },
+    {
+      "kind": "ridge",
+      "from": [
+        22,
+        6
+      ],
+      "to": [
+        38,
+        -10
+      ],
+      "r": 8,
+      "h": 6.5
+    },
+    {
+      "kind": "hill",
+      "x": 52,
+      "z": -14,
+      "r": 9,
+      "h": 4
+    },
+    {
+      "kind": "hill",
+      "x": 50,
+      "z": 14,
+      "r": 7,
+      "h": 2.2
+    },
+    {
+      "kind": "pool",
+      "x": 2,
+      "z": -4,
+      "r": 12,
+      "h": -7
+    }
+  ],
+  "zones": [
+    {
+      "name": "Harbor Town",
+      "x": -36,
+      "z": 16,
+      "r": 12
+    },
+    {
+      "name": "Cove Beach",
+      "x": -2,
+      "z": 17,
+      "r": 12
+    },
+    {
+      "name": "Ship Graveyard",
+      "x": 42,
+      "z": 2,
+      "r": 14
+    },
+    {
+      "name": "Smuggler's Cave",
+      "x": 30,
+      "z": -3,
+      "r": 8
+    },
+    {
+      "name": "Lighthouse Cliffs",
+      "x": 2,
+      "z": -32,
+      "r": 16
+    },
+    {
+      "name": "The Lagoon",
+      "x": 2,
+      "z": -4,
+      "r": 11
+    },
+    {
+      "name": "Palm Jungle",
+      "x": -38,
+      "z": -14,
+      "r": 14
+    },
+    {
+      "name": "Smuggler Market",
+      "x": -19,
+      "z": -6,
+      "r": 11
+    },
+    {
+      "name": "Harbor Quarter",
+      "x": -36,
+      "z": 16,
+      "r": 13
+    },
+    {
+      "name": "Wreckwater",
+      "x": 42,
+      "z": 1,
+      "r": 14
+    },
+    {
+      "name": "Lighthouse Bluff",
+      "x": 2,
+      "z": -32,
+      "r": 15
+    }
+  ],
+  "paths": [
+    {
+      "id": "lap",
+      "closed": true,
+      "points": [
+        [
+          -34,
+          14,
+          [
+            "start",
+            "shop",
+            "coin"
+          ]
+        ],
+        [
+          -24,
+          12,
+          [
+            "coin",
+            "event",
+            "coin",
+            "loss"
+          ]
+        ],
+        [
+          -16,
+          15,
+          [
+            "tide",
+            "coin",
+            "tide"
+          ]
+        ],
+        [
+          -6,
+          17,
+          [
+            "tide",
+            "prize_spot",
+            "tide"
+          ]
+        ],
+        [
+          4,
+          17,
+          [
+            "tide",
+            "coin",
+            "tide",
+            "loss"
+          ]
+        ],
+        [
+          12,
+          13,
+          [
+            "coin",
+            "item",
+            "cannon"
+          ]
+        ],
+        [
+          20,
+          8,
+          [
+            "coin",
+            "hazard",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          30,
+          12,
+          [
+            "item",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          38,
+          6,
+          [
+            "hazard",
+            "coin",
+            "shop"
+          ]
+        ],
+        [
+          46,
+          10,
+          [
+            "coin",
+            "prize_spot",
+            "coin",
+            "loss"
+          ]
+        ],
+        [
+          50,
+          0,
+          [
+            "loss",
+            "coin",
+            "event"
+          ]
+        ],
+        [
+          46,
+          -10,
+          [
+            "coin",
+            "hazard",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          38,
+          -18,
+          [
+            "coin",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          30,
+          -14,
+          [
+            "item",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          22,
+          -20,
+          [
+            "coin",
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          16,
+          -28,
+          [
+            "prize_spot",
+            "coin",
+            "event"
+          ]
+        ],
+        [
+          6,
+          -32,
+          [
+            "coin",
+            "shop",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          -6,
+          -30,
+          [
+            "loss",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          -16,
+          -26,
+          [
+            "coin",
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          -24,
+          -30,
+          [
+            "coin",
+            "item",
+            "loss"
+          ]
+        ],
+        [
+          -34,
+          -26,
+          [
+            "coin",
+            "event",
+            "coin",
+            "cannon"
+          ]
+        ],
+        [
+          -42,
+          -18,
+          [
+            "item",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          -46,
+          -8,
+          [
+            "coin",
+            "prize_spot",
+            "loss"
+          ]
+        ],
+        [
+          -46,
+          2,
+          [
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          -40,
+          10,
+          [
+            "coin",
+            "loss"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "cave",
+      "under": true,
+      "points": [
+        [
+          20,
+          8
+        ],
+        [
+          27,
+          2
+        ],
+        [
+          31,
+          -5
+        ],
+        [
+          33,
+          -10
+        ],
+        [
+          30,
+          -14
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "item",
+        "hazard",
+        "coin",
+        "loss",
+        "item",
+        "coin",
+        "hazard"
+      ]
+    },
+    {
+      "id": "rope-bridge",
+      "bridge": true,
+      "points": [
+        [
+          -6,
+          17
+        ],
+        [
+          -3,
+          7
+        ],
+        [
+          1,
+          -3
+        ],
+        [
+          4,
+          -13
+        ],
+        [
+          7,
+          -24
+        ],
+        [
+          6,
+          -32
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "hazard",
+        "item",
+        "hazard",
+        "prize_spot",
+        "hazard",
+        "coin",
+        "loss",
+        "item",
+        "hazard",
+        "coin",
+        "event",
+        "coin",
+        "hazard",
+        "loss"
+      ]
+    },
+    {
+      "id": "smugglers-market",
+      "join_paths": true,
+      "points": [
+        [
+          -24,
+          12
+        ],
+        [
+          -20,
+          4
+        ],
+        [
+          -17,
+          -5
+        ],
+        [
+          -18,
+          -15
+        ],
+        [
+          -16,
+          -26
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "item",
+        "coin",
+        "shop",
+        "coin",
+        "loss"
+      ]
+    },
+    {
+      "id": "lagoon-crossing",
+      "join_paths": true,
+      "points": [
+        [
+          -17,
+          -5
+        ],
+        [
+          -8,
+          -10
+        ],
+        [
+          0,
+          -16
+        ],
+        [
+          4,
+          -13
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "hazard",
+        "coin",
+        "item",
+        "coin"
+      ],
+      "bridge": true
+    },
+    {
+      "id": "jungle-market",
+      "join_paths": true,
+      "points": [
+        [
+          -42,
+          -18
+        ],
+        [
+          -32,
+          -12
+        ],
+        [
+          -22,
+          -8
+        ],
+        [
+          -17,
+          -5
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "loss",
+        "item",
+        "coin",
+        "coin"
+      ]
+    }
+  ],
+  "props": [
+    {
+      "model": "ship-pirate-medium",
+      "x": 3,
+      "z": -4,
+      "y": -3.3,
+      "yaw": 0.6,
+      "scale": 1.9
+    },
+    {
+      "model": "ship-wreck",
+      "x": 34,
+      "z": 15,
+      "yaw": 1.2,
+      "scale": 1.45
+    },
+    {
+      "model": "ship-wreck",
+      "x": 43,
+      "z": -3,
+      "yaw": -0.4,
+      "scale": 1.45
+    },
+    {
+      "model": "ship-wreck",
+      "x": 41,
+      "z": -15,
+      "yaw": 2.2,
+      "scale": 1.45
+    },
+    {
+      "model": "ship-wreck",
+      "x": 55,
+      "z": 5,
+      "yaw": 0.9,
+      "scale": 1.45
+    },
+    {
+      "model": "ship-wreck",
+      "x": 26,
+      "z": 20,
+      "yaw": 2.8,
+      "scale": 1.45
+    },
+    {
+      "model": "tower-watch",
+      "x": 9,
+      "z": -38,
+      "yaw": 0.3,
+      "scale": 2.3
+    },
+    {
+      "model": "lantern",
+      "x": 6,
+      "z": -36,
+      "scale": 0.7
+    },
+    {
+      "model": "cannon",
+      "x": -10,
+      "z": -37,
+      "yaw": 3.1,
+      "scale": 0.6
+    },
+    {
+      "model": "cannon",
+      "x": 14,
+      "z": -41,
+      "yaw": 3.3,
+      "scale": 0.6
+    },
+    {
+      "model": "flag-pirate-high",
+      "x": -2,
+      "z": -36,
+      "scale": 0.45
+    },
+    {
+      "model": "fountain-round",
+      "x": -37,
+      "z": 11,
+      "scale": 0.8
+    },
+    {
+      "model": "stall-red",
+      "x": -30,
+      "z": 20,
+      "yaw": 3.4,
+      "scale": 0.85
+    },
+    {
+      "model": "stall-green",
+      "x": -42,
+      "z": 18,
+      "yaw": 2.7,
+      "scale": 0.85
+    },
+    {
+      "model": "tent",
+      "x": -46,
+      "z": 12,
+      "yaw": 1.6,
+      "scale": 0.9
+    },
+    {
+      "model": "lightpost-single",
+      "x": -28,
+      "z": 15,
+      "scale": 0.7
+    },
+    {
+      "model": "lightpost-single",
+      "x": -40,
+      "z": 6,
+      "scale": 0.7
+    },
+    {
+      "model": "structure-platform-dock",
+      "x": -22,
+      "z": 31,
+      "y": -2.2,
+      "yaw": 0.4,
+      "scale": 1.3
+    },
+    {
+      "model": "structure-platform-dock",
+      "x": -30,
+      "z": 36,
+      "y": -2.2,
+      "yaw": 0.1,
+      "scale": 1.3
+    },
+    {
+      "model": "boat-row-small",
+      "x": -10,
+      "z": 31,
+      "y": -3,
+      "yaw": 1.1,
+      "scale": 1.0
+    },
+    {
+      "model": "boat-row-small",
+      "x": 5,
+      "z": 31,
+      "y": -3,
+      "yaw": -0.6,
+      "scale": 1.0
+    },
+    {
+      "model": "ship-pirate-medium",
+      "x": -6,
+      "z": 56,
+      "y": -3.3,
+      "yaw": 1.7,
+      "scale": 1.9
+    },
+    {
+      "model": "signpost",
+      "x": -9,
+      "z": 19,
+      "yaw": 0.2,
+      "scale": 0.65
+    },
+    {
+      "model": "signpost",
+      "x": 18,
+      "z": 11,
+      "yaw": 2.4,
+      "scale": 0.65
+    },
+    {
+      "model": "campfire-pit",
+      "x": -32,
+      "z": -14,
+      "scale": 0.7
+    },
+    {
+      "model": "chest",
+      "x": 33,
+      "z": -6,
+      "yaw": 0.5,
+      "scale": 0.7
+    },
+    {
+      "model": "barrel",
+      "x": 25,
+      "z": 4,
+      "scale": 0.6
+    },
+    {
+      "model": "crate",
+      "x": 24,
+      "z": 1,
+      "yaw": 0.5,
+      "scale": 0.6
+    },
+    {
+      "model": "stall-red",
+      "x": -23,
+      "z": -7,
+      "scale": 1.4
+    },
+    {
+      "model": "stall-green",
+      "x": -12,
+      "z": -3,
+      "scale": 1.3
+    },
+    {
+      "model": "fountain-round",
+      "x": -13,
+      "z": -11,
+      "scale": 1.45
+    },
+    {
+      "model": "lightpost-single",
+      "x": -23,
+      "z": 0,
+      "scale": 1.4
+    },
+    {
+      "model": "lightpost-single",
+      "x": -12,
+      "z": 4,
+      "scale": 1.4
+    },
+    {
+      "model": "tower-watch",
+      "x": -32,
+      "z": 16,
+      "scale": 1.75
+    },
+    {
+      "model": "tent_smallOpen",
+      "x": -25,
+      "z": -14,
+      "scale": 1.4
+    },
+    {
+      "model": "flag-pirate-high",
+      "x": -16,
+      "z": -1,
+      "scale": 0.9
+    },
+    {
+      "model": "barrel",
+      "x": -21,
+      "z": -12,
+      "scale": 1.1
+    },
+    {
+      "model": "crate",
+      "x": -12,
+      "z": -13,
+      "scale": 1.1
+    }
+  ],
+  "clusters": [
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight",
+        "palm-detailed-bend",
+        "tree_palmTall",
+        "tree_palmBend"
+      ],
+      "x": -36,
+      "z": -14,
+      "r": 15,
+      "count": 70,
+      "scale": [
+        0.84,
+        1.32
+      ]
+    },
+    {
+      "models": [
+        "plant_bushLarge",
+        "plant_bushDetailed",
+        "plant_bush",
+        "grass_leafs"
+      ],
+      "x": -36,
+      "z": -14,
+      "r": 15,
+      "count": 45,
+      "scale": [
+        0.63,
+        1.05
+      ]
+    },
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight",
+        "tree_palmTall"
+      ],
+      "x": -46,
+      "z": 6,
+      "r": 8,
+      "count": 14,
+      "scale": [
+        0.84,
+        1.21
+      ]
+    },
+    {
+      "models": [
+        "rocks-large",
+        "rock_largeA",
+        "rock_largeB",
+        "rocks-sand-a",
+        "rock_largeD"
+      ],
+      "x": 42,
+      "z": -2,
+      "r": 15,
+      "count": 26,
+      "scale": [
+        0.74,
+        1.37
+      ]
+    },
+    {
+      "models": [
+        "resource-planks",
+        "barrel",
+        "crate",
+        "box-large"
+      ],
+      "x": 40,
+      "z": 2,
+      "r": 13,
+      "count": 22,
+      "scale": [
+        0.53,
+        0.84
+      ]
+    },
+    {
+      "models": [
+        "rock_tallA",
+        "rock_tallC",
+        "rock_tallF",
+        "cliff_rock",
+        "cliff_half_rock"
+      ],
+      "x": 2,
+      "z": -32,
+      "r": 17,
+      "count": 34,
+      "scale": [
+        0.84,
+        1.47
+      ],
+      "ring": true
+    },
+    {
+      "models": [
+        "rocks-sand-a",
+        "rock-sand-b",
+        "barrel",
+        "crate"
+      ],
+      "x": -2,
+      "z": 21,
+      "r": 13,
+      "count": 14,
+      "scale": [
+        0.53,
+        0.84
+      ]
+    },
+    {
+      "models": [
+        "plant_bush",
+        "grass_leafs",
+        "plant_bushDetailed"
+      ],
+      "x": 2,
+      "z": -4,
+      "r": 13,
+      "count": 30,
+      "scale": [
+        0.63,
+        1.0
+      ],
+      "ring": true
+    },
+    {
+      "models": [
+        "barrel",
+        "crate",
+        "box-large",
+        "lantern",
+        "flag-pennant"
+      ],
+      "x": -36,
+      "z": 16,
+      "r": 9,
+      "count": 26,
+      "scale": [
+        0.53,
+        0.79
+      ]
+    },
+    {
+      "models": [
+        "grass_leafs",
+        "patch-grass-foliage",
+        "plant_bush"
+      ],
+      "x": -14,
+      "z": -12,
+      "r": 11,
+      "count": 26,
+      "scale": [
+        0.63,
+        0.95
+      ]
+    },
+    {
+      "models": [
+        "grass_leafs",
+        "patch-grass-foliage"
+      ],
+      "x": 2,
+      "z": -32,
+      "r": 13,
+      "count": 22,
+      "scale": [
+        0.63,
+        0.95
+      ]
+    },
+    {
+      "models": [
+        "rocks-a",
+        "rocks-b",
+        "rock_largeC"
+      ],
+      "x": 30,
+      "z": -3,
+      "r": 8,
+      "count": 12,
+      "scale": [
+        0.74,
+        1.16
+      ]
+    },
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight",
+        "palm-detailed-bend"
+      ],
+      "x": -24,
+      "z": 26,
+      "r": 8,
+      "count": 14,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight",
+        "tree_palmBend"
+      ],
+      "x": 17,
+      "z": 24,
+      "r": 7,
+      "count": 12,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "grass_leafs",
+        "plant_bush",
+        "patch-grass-foliage",
+        "plant_bushDetailed"
+      ],
+      "x": -20,
+      "z": 0,
+      "r": 12,
+      "count": 44,
+      "scale": [
+        0.8,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "resource-planks",
+        "barrel",
+        "rocks-sand-a",
+        "crate"
+      ],
+      "x": -4,
+      "z": 24,
+      "r": 14,
+      "count": 18,
+      "scale": [
+        0.8,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "tent",
+        "tent_smallOpen",
+        "stall-red",
+        "stall-green",
+        "barrel",
+        "crate",
+        "lantern"
+      ],
+      "x": -36,
+      "z": 20,
+      "r": 8,
+      "count": 14,
+      "scale": [
+        0.8,
+        1.1
+      ]
+    },
+    {
+      "models": [
+        "plant_bush",
+        "grass_leafs",
+        "rock_largeA"
+      ],
+      "x": 20,
+      "z": -6,
+      "r": 8,
+      "count": 18,
+      "scale": [
+        0.8,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight"
+      ],
+      "x": -14,
+      "z": -30,
+      "r": 8,
+      "count": 10,
+      "scale": [
+        0.9,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "rocks-large",
+        "rocks-a",
+        "rock_largeB"
+      ],
+      "x": -50,
+      "z": -24,
+      "r": 7,
+      "count": 10,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "barrel",
+        "crate",
+        "resource-planks"
+      ],
+      "x": -18,
+      "z": -5,
+      "r": 10,
+      "count": 32,
+      "scale": [
+        0.65,
+        1.2
+      ]
+    },
+    {
+      "models": [
+        "palm-bend",
+        "palm-straight"
+      ],
+      "x": -7,
+      "z": -23,
+      "r": 7,
+      "count": 18,
+      "scale": [
+        1.1,
+        1.65
+      ]
+    }
+  ],
+  "islets": [
+    [
+      -52,
+      44,
+      4
+    ],
+    [
+      66,
+      26,
+      5
+    ],
+    [
+      -66,
+      -24,
+      4
+    ],
+    [
+      30,
+      -52,
+      5
+    ]
+  ],
+  "rough": 1.0,
+  "specials": {
+    "flotsam": [
+      [
+        -4,
+        30
+      ],
+      [
+        8,
+        32
+      ],
+      [
+        -12,
+        34
+      ],
+      [
+        -6,
+        2
+      ],
+      [
+        10,
+        0
+      ],
+      [
+        -4,
+        -12
+      ],
+      [
+        24,
+        42
+      ],
+      [
+        -30,
+        44
+      ]
+    ]
+  },
+  "districts": [
+    {
+      "name": "Smuggler Market",
+      "x": -19,
+      "z": -6,
+      "r": 11,
+      "color": "#b19b76"
+    },
+    {
+      "name": "Harbor Quarter",
+      "x": -36,
+      "z": 16,
+      "r": 13,
+      "color": "#c1ad83"
+    },
+    {
+      "name": "Wreckwater",
+      "x": 42,
+      "z": 1,
+      "r": 14,
+      "color": "#978a75"
+    },
+    {
+      "name": "Lighthouse Bluff",
+      "x": 2,
+      "z": -32,
+      "r": 15,
+      "color": "#bdbfa4"
+    }
+  ]
+}

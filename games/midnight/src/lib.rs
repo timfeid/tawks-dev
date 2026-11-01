@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tawks_bot::{full_avatar_url, types::UserResource};
-use workflow::{builder::*, *};
+use workflow::{builder::*, ui::*, *};
 
 use crate::gamestate::{GameState, MidnightAction};
 use game_framework::engine::GameEngine;
@@ -161,114 +161,121 @@ pub fn single_response<E: Serialize>(key: &str, e: E) -> HashMap<String, Value> 
     responses
 }
 
-pub fn title_visual(arg: &str) -> WorkflowVisual {
-    WorkflowVisual {
-        id: "title".into(),
-        display: DisplayVisual::Tile {
-            content: vec![WorkflowDisplay {
-                class: "text-2xl font-halloween text-center my-4".into(),
-                r#type: DisplayType::Text { text: arg.into() },
-            }],
-        },
+/// Builds a Midnight page: every one is set in the game's spooky typeface.
+pub trait MidnightPage {
+    fn midnight_page(self, width: PageWidth, content: Vec<WorkflowDisplay>) -> Self;
+}
+
+impl MidnightPage for WorkflowVisualBuilder {
+    fn midnight_page(self, width: PageWidth, content: Vec<WorkflowDisplay>) -> Self {
+        self.page(width, content).typeface(Typeface::Spooky)
     }
 }
 
-pub fn role_card_display_for(var: &str) -> DisplayType {
-    DisplayType::Div {
-        content: vec![WorkflowDisplay {
-            class: "font-halloween relative p-4 rounded-lg bg-white/10 w-full max-w-64 min-w-48 flex flex-col justify-center items-center w-full gap-4".into(),
-            r#type: DisplayType::Tooltip {
-                tooltip_html: format!("{{{var}.description}}"),
-                class: "text-left".into(),
-                view_display: vec![
-                    WorkflowDisplay {
-                        class: format!("size-16 flex-shrink-0 rounded-full border midnight-tint-{{{var}.alliance}}"),
-                        r#type: DisplayType::Image {
-                            src: format!("{{{var}.image_url}}"),
-                            alt_text: format!("{{{var}.name}}"),
-                        },
-                    },
-                    WorkflowDisplay {
-                        class: "flex-1".into(),
-                        r#type: DisplayType::Div {
-                            content: vec![
-                                WorkflowDisplay {
-                                    class: "font-bold".into(),
-                                    r#type: DisplayType::Text {
-                                        text: format!("{{{var}.name}}"),
-                                    },
-                                },
-                            ],
-                        },
-                    },
-                ],
-            },
-        }],
-    }
+pub fn title_visual(arg: &str) -> WorkflowVisual {
+    WorkflowVisualBuilder::new("title")
+        .midnight_page(PageWidth::Narrow, vec![game_title(arg)])
+        .build()
+}
+
+/// A heading in the game's own typeface.
+pub fn game_title(text: &str) -> WorkflowDisplay {
+    title(text).themed().centered()
+}
+
+/// The heading over a role's night ability: its name in the role's colour
+/// and a line on what to do.
+pub fn ability_header(name: &str, tone: Tone, lead: &str) -> WorkflowDisplay {
+    column(
+        Gap::Tight,
+        vec![
+            title(name).themed().centered().tone(tone),
+            fine(lead).centered(),
+        ],
+    )
+    .align(Align::Center)
+}
+
+pub fn role_image(var: &str, size: Size) -> WorkflowDisplay {
+    media(
+        format!("{{{var}.image_url}}"),
+        format!("{{{var}.name}}"),
+        Aspect::Square,
+        size,
+    )
+    .fit(Fit::Contain)
+    .tone_from(format!("{{{var}.alliance_tone}}"))
+}
+
+/// A role's picture over its name and side, coloured by the side.
+pub fn role_summary(var: &str) -> WorkflowDisplay {
+    column(
+        Gap::Tight,
+        vec![
+            role_image(var, Size::Large),
+            subheading(format!("{{{var}.name}}"))
+                .themed()
+                .centered()
+                .tone_from(format!("{{{var}.alliance_tone}}")),
+            badge(format!("{{{var}.alliance}}"), Tone::Default)
+                .tone_from(format!("{{{var}.alliance_tone}}")),
+        ],
+    )
+    .align(Align::Center)
+}
+
+/// A role card whose description shows on hover.
+pub fn role_card(var: &str) -> WorkflowDisplay {
+    panel(vec![
+        WorkflowDisplayBuilder::new()
+            .tooltip(format!("{{{var}.description}}"), vec![role_summary(var)])
+            .build(),
+    ])
 }
 
 pub fn player_display(variable: &str) -> WorkflowDisplay {
-    WorkflowDisplay {
-        class: "flex gap-2 items-center justify-center".into(),
-        r#type: DisplayType::Div {
-            content: vec![
-                WorkflowDisplay {
-                    class: "rounded-md size-5".into(),
-                    r#type: DisplayType::Image {
-                        src: format!("{{{variable}.avatar_url}}"),
-                        alt_text: format!("{{{variable}.name}}"),
-                    },
-                },
-                WorkflowDisplay {
-                    r#type: DisplayType::Text {
-                        text: format!("{{{variable}.name}}"),
-                    },
-                    class: "text-lg font-medium font-halloween truncate".into(),
-                },
-            ],
-        },
-    }
+    person(
+        format!("{{{variable}.avatar_url}}"),
+        format!("{{{variable}.name}}"),
+    )
+    .size(Size::Small)
 }
 
-pub fn create_reveal_cards_node(display_text: &str) -> WorkflowNodeBuilder {
+pub fn create_reveal_cards_node(display_text: &str, footer: Option<&str>) -> WorkflowNodeBuilder {
+    let mut content = vec![
+        game_title("{title}"),
+        items(
+            "reveal_cards",
+            "card",
+            Layout::Stack { gap: Gap::Loose },
+            vec![
+                column(
+                    Gap::Normal,
+                    vec![
+                        subheading(display_text).themed().centered(),
+                        role_card("card.card"),
+                    ],
+                )
+                .mark("reveal-card"),
+            ],
+        ),
+    ];
+    if let Some(footer) = footer {
+        content.push(body(footer).themed().centered());
+    }
+
     WorkflowNodeBuilder::new("What You Saw")
         .parent_id("select_cards")
-        .visual(title_visual("{title}"))
         .visual(
             WorkflowVisualBuilder::new("reveal_cards_display")
-                .display(DisplayVisual::Tile {
-                    content: vec![WorkflowDisplay {
-                        class: "flex flex-wrap gap-4 w-full justify-center items-center".into(),
-                        r#type: DisplayType::List {
-                            items_key: "reveal_cards".into(),
-                            r#as: "card".into(),
-                            content: vec![WorkflowDisplay {
-                                class: "reveal-card opacity-0 transition-opacity duration-1000 ease-out".into(),
-                                r#type: DisplayType::Div {
-                                    content: vec![
-                                        WorkflowDisplay {
-                                            class: "text-center text-xl font-halloween".into(),
-                                            r#type: DisplayType::Text {
-                                                text: display_text.into(),
-                                            },
-                                        },
-                                        WorkflowDisplay {
-                                            class: "".into(),
-                                            r#type: role_card_display_for("card.card"),
-                                        },
-                                    ],
-                                },
-                            }],
-                        },
-                    }],
-                })
+                .midnight_page(PageWidth::Narrow, content)
                 .build(),
         )
         .visual(WorkflowVisual {
             id: "animation".into(),
             display: DisplayVisual::Animation {
                 meta: HashMap::new(),
-                id: ".reveal-card".into(),
+                id: r#"[data-mark~="reveal-card"]"#.into(),
                 animation_type: "reveal".into(),
                 trigger: Some("on_appear".into()),
                 delay_ms: None,
@@ -277,48 +284,15 @@ pub fn create_reveal_cards_node(display_text: &str) -> WorkflowNodeBuilder {
 }
 
 pub fn hidden_display_for_card_list() -> WorkflowDisplay {
-    WorkflowDisplay {
-        class: "flex gap-2 items-center justify-center".into(),
-        r#type: DisplayType::Div {
-            content: vec![WorkflowDisplay {
-                class: "text-lg font-medium font-halloween truncate".into(),
-                r#type: DisplayType::Text {
-                    text: "{card.name}".into(),
-                },
-            }],
-        },
-    }
+    body("{card.name}").themed()
 }
 
 pub fn player_display_for_card_list(player_prefix: &str) -> WorkflowDisplay {
-    let avatar_url = format!("{{{player_prefix}.avatar_url}}");
-    let name = format!("{{{player_prefix}.name}}");
-
-    WorkflowDisplay {
-        class: "flex gap-2 items-center justify-center".into(),
-        r#type: DisplayType::Condition {
-            condition: NodeCondition::ResponseEquals {
-                field: "card.value.type".into(),
-                value: "player".into(),
-            },
-            content: vec![WorkflowDisplay {
-                class: "flex gap-2 items-center justify-center".into(),
-                r#type: DisplayType::Div {
-                    content: vec![
-                        WorkflowDisplay {
-                            class: "rounded-md size-5".into(),
-                            r#type: DisplayType::Image {
-                                src: avatar_url,
-                                alt_text: name.clone(),
-                            },
-                        },
-                        WorkflowDisplay {
-                            r#type: DisplayType::Text { text: name },
-                            class: "text-lg font-medium font-halloween truncate".into(),
-                        },
-                    ],
-                },
-            }],
+    when(
+        NodeCondition::ResponseEquals {
+            field: "card.value.type".into(),
+            value: "player".into(),
         },
-    }
+        vec![player_display(player_prefix)],
+    )
 }

@@ -54,7 +54,6 @@
             variant: tooltip.variant as any,
             size: tooltip.size as any,
           }),
-          display.class,
         )}
         {onclick}
       >

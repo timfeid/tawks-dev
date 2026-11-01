@@ -17,6 +17,13 @@ export type BumperSnap = {
   balls: BallSnap[];
 };
 
+/** The platform's full and fully closed size, wider for a bigger field. */
+export type BumperSetup = {
+  game: 'bumper';
+  radius: number;
+  min_radius: number;
+};
+
 export type BumperEvent =
   | { kind: 'bump'; a: number; b: number; strength: number; x: number; z: number }
   | { kind: 'fall'; seat: number }

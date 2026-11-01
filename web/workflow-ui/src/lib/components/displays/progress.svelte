@@ -2,6 +2,7 @@
   import { Progress } from '@tawks/ui/progress';
   import { getNestedValue, interpolate, resolveInputValue } from '../../utils';
   import type { Props } from '../workflow-display.svelte';
+  import * as look from '../../look';
 
   let { workflow, display, inputs }: Props = $props();
 
@@ -21,8 +22,7 @@
 
 {#if progress && percent !== null}
   <Progress
-    class={display.class}
-    progressClass={interpolate(inputs, progress.percentage_class)}
+    progressClass={look.toneSolid(look.toneOf(progress.tone, inputs))}
     value={percent}
   />
 {/if}

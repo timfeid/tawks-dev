@@ -1,5 +1,7 @@
 import type {
+  Act,
   ActionType,
+  Backdrop,
   CardLayout,
   CreateWorkflowDefinition,
   DisplayType,
@@ -10,11 +12,13 @@ import type {
   JsonValue,
   NodeCondition,
   NotificationVariant,
+  PageWidth,
   StickyPosition,
   SubmitWhen,
   TableHeader,
   TimeDisplayOpts,
   TransformOp,
+  Typeface,
   WorkflowAction,
   WorkflowDisplay,
   WorkflowInput,
@@ -125,7 +129,6 @@ export class WorkflowNodeBuilder {
   #title: string;
   #description: string | null = null;
   #visuals: WorkflowVisual[] = [];
-  #layout: string | null = null;
   #condition: NodeCondition | null = null;
   #parentId: string | null = null;
 
@@ -153,11 +156,6 @@ export class WorkflowNodeBuilder {
     return this;
   }
 
-  layout(layout: string): this {
-    this.#layout = layout;
-    return this;
-  }
-
   parentId(parent: string): this {
     this.#parentId = parent;
     return this;
@@ -168,7 +166,6 @@ export class WorkflowNodeBuilder {
       title: this.#title,
       description: this.#description,
       visuals: [...this.#visuals],
-      layout: this.#layout,
       condition: this.#condition,
       parent_id: this.#parentId,
     };
@@ -224,8 +221,31 @@ export class WorkflowVisualBuilder {
     return this;
   }
 
-  block(cls: string, content: WorkflowDisplay[]): this {
-    this.#display = { Block: { class: cls, content } };
+  /** The standard page column; see `ui` for what goes in it. */
+  page(width: PageWidth, content: WorkflowDisplay[]): this {
+    this.#display = { Page: { width, content, center: false, backdrop: 'Default', typeface: 'Default' } };
+    return this;
+  }
+
+  /** Centres a page's content up and down, for a page that is mostly one thing. */
+  centered(): this {
+    if (this.#display && 'Page' in this.#display) this.#display.Page.center = true;
+    return this;
+  }
+
+  backdrop(value: Backdrop): this {
+    if (this.#display && 'Page' in this.#display) this.#display.Page.backdrop = value;
+    return this;
+  }
+
+  /** The typeface `themed` text on the page uses. */
+  typeface(value: Typeface): this {
+    if (this.#display && 'Page' in this.#display) this.#display.Page.typeface = value;
+    return this;
+  }
+
+  block(content: WorkflowDisplay[]): this {
+    this.#display = { Block: { content } };
     return this;
   }
 
@@ -246,12 +266,7 @@ export class WorkflowVisualBuilder {
 }
 
 export class WorkflowDisplayBuilder {
-  #class: string;
   #kind: DisplayType | null = null;
-
-  constructor(cls: string) {
-    this.#class = cls;
-  }
 
   userAvatar(key: string): this {
     return this.#set({ UserAvatar: { key } });
@@ -259,10 +274,6 @@ export class WorkflowDisplayBuilder {
 
   commandPalette(key: string): this {
     return this.#set({ CommandPalette: { key } });
-  }
-
-  static sectionTitle(title: string): WorkflowDisplay {
-    return new WorkflowDisplayBuilder('text-lg font-semibold px-4').text(title).build();
   }
 
   loader(): this {
@@ -274,7 +285,6 @@ export class WorkflowDisplayBuilder {
     closedServerActionId: string | null,
     trigger: WorkflowDisplay[],
     content: WorkflowVisual[],
-    contentClass: string,
   ): this {
     return this.#set({
       Popover: {
@@ -282,7 +292,7 @@ export class WorkflowDisplayBuilder {
         content,
         opened_server_action_id: openedServerActionId,
         closed_server_action_id: closedServerActionId,
-        content_class: contentClass,
+        width: 'Medium',
       },
     });
   }
@@ -320,11 +330,13 @@ export class WorkflowDisplayBuilder {
   }
 
   build(): WorkflowDisplay {
-    return { class: this.#class, type: this.#kind ?? { Div: { content: [] } } };
+    return { type: this.#kind ?? { Div: { content: [] } } };
   }
 
   countdown(until: string, as: string, text: string, shakeUnderMsLeft: number | null = null): this {
-    return this.#set({ Countdown: { until, as, text, shake_under_ms_left: shakeUnderMsLeft } });
+    return this.#set({
+      Countdown: { until, as, text, shake_under_ms_left: shakeUnderMsLeft, role: 'Body', tone: '' },
+    });
   }
 
   tile(workflow: string): this {
@@ -351,8 +363,8 @@ export class WorkflowDisplayBuilder {
     });
   }
 
-  tooltip(tooltipHtml: string, cls: string, viewDisplay: WorkflowDisplay[]): this {
-    return this.#set({ Tooltip: { class: cls, tooltip_html: tooltipHtml, view_display: viewDisplay } });
+  tooltip(tooltipHtml: string, viewDisplay: WorkflowDisplay[]): this {
+    return this.#set({ Tooltip: { tooltip_html: tooltipHtml, view_display: viewDisplay } });
   }
 
   input(id: string, input: WorkflowInput): this {
@@ -387,14 +399,12 @@ export class WorkflowDisplayBuilder {
     return this.#set({ Button: { content, input_map: inputMap, action_id: actionId, variant, size, type: 'button' } });
   }
 
-  progress(progressPercentageKey: string, percentageClass: string): this {
-    return this.#set({
-      Progress: { progress_percentage_key: progressPercentageKey, percentage_class: percentageClass },
-    });
+  progress(progressPercentageKey: string): this {
+    return this.#set({ Progress: { progress_percentage_key: progressPercentageKey, tone: '' } });
   }
 
   badge(variant: string, text: string): this {
-    return this.#set({ Badge: { variant, text } });
+    return this.#set({ Badge: { variant, text, tone: '', icon: null } });
   }
 
   revealCards(revealCardKeys: string[]): this {
@@ -406,26 +416,12 @@ export class WorkflowDisplayBuilder {
   }
 
   time(key: string, opts: TimeDisplayOpts): this {
-    return this.#set({ Time: { opts, key } });
+    return this.#set({ Time: { opts, key, role: 'Body', tone: '' } });
   }
 
-  scoreTicker(
-    valueKey: string,
-    lucideIcon: string,
-    iconClass: string,
-    containerClass: string | null = null,
-    popTextClass: string | null = null,
-    popContainerClass: string | null = null,
-  ): this {
-    return this.#set({
-      ScoreTicker: {
-        value_key: valueKey,
-        icon: new WorkflowDisplayBuilder(iconClass).lucideIcon(lucideIcon, null).build(),
-        container_class: containerClass,
-        pop_text_class: popTextClass,
-        pop_container_class: popContainerClass,
-      },
-    });
+  /** A running total that pops up as it grows, with `icon` beside it. */
+  scoreTicker(valueKey: string, icon: WorkflowDisplay): this {
+    return this.#set({ ScoreTicker: { value_key: valueKey, icon } });
   }
 
   form(serverActionId: string, content: WorkflowDisplay[], submitWhen: SubmitWhen): this {
@@ -463,25 +459,12 @@ export class WorkflowDisplayBuilder {
     return this.#set('NhlStreams');
   }
 
-  /**
-   * Render an FPS WebTransport client. The four `*Key` arguments name keys in
-   * `workflow.responses` from which the client reads its server URL, the match
-   * id, its per-player token, and the self-signed cert hash (hex-encoded
-   * SHA-256 of the cert DER).
-   */
-  fpsCanvas(serverUrlKey: string, matchIdKey: string, tokenKey: string, certHashKey: string): this {
-    return this.#set({
-      FpsCanvas: {
-        server_url_key: serverUrlKey,
-        match_id_key: matchIdKey,
-        token_key: tokenKey,
-        cert_hash_key: certHashKey,
-      },
-    });
+  gameInvite(): this {
+    return this.#set('GameInvite');
   }
 
   link(href: string, content: WorkflowDisplay[]): this {
-    return this.#set({ Link: { href, content } });
+    return this.#set({ Link: { href, content, style: 'Plain' } });
   }
 
   text(text: string): this {
@@ -495,7 +478,7 @@ export class WorkflowDisplayBuilder {
   }
 
   icon(lib: IconLibrary, name: string, ariaLabel: string | null = null, url: string | null = null): this {
-    return this.#set({ Icon: { lib, name, aria_label: ariaLabel, url } });
+    return this.#set({ Icon: { lib, name, aria_label: ariaLabel, url, size: 'Inherit', tone: '' } });
   }
 
   card(content: WorkflowDisplay[], layout: CardLayout): this {
@@ -510,6 +493,31 @@ export class WorkflowDisplayBuilder {
     return this.#set({ AudioClip: { src, seconds, marks } });
   }
 
+  /**
+   * Reactions and comments kept as a thread on the chat message `chat` and
+   * `message` resolve to; see `DisplayType::Discussion`.
+   */
+  discussion(
+    chat: string,
+    message: string,
+    reactions: string,
+    comments: string,
+    options: { start?: Act; suggested?: string; inline?: boolean; title?: string } = {},
+  ): this {
+    return this.#set({
+      Discussion: {
+        chat,
+        message,
+        reactions,
+        comments,
+        start: options.start ?? null,
+        suggested: options.suggested ?? null,
+        inline: options.inline ?? false,
+        title: options.title ?? null,
+      },
+    });
+  }
+
   dotsBoard(board: string, action: string): this {
     return this.#set({ DotsBoard: { board, action } });
   }
@@ -522,8 +530,8 @@ export class WorkflowDisplayBuilder {
     return this.#set({ SnakeRun: { level, action } });
   }
 
-  shareResult(value: string, label: string): this {
-    return this.#set({ ShareResult: { value, label } });
+  shareResult(value: string, label: string, celebrate = false): this {
+    return this.#set({ ShareResult: { value, label, celebrate } });
   }
 
   railyardBoard(board: string, action: string, saveAction: string): this {
@@ -544,7 +552,15 @@ export class WorkflowDisplayBuilder {
 
   carousel(itemsKey: string, as: string, content: WorkflowDisplay[]): this {
     return this.#set({
-      Carousel: { items_key: itemsKey, as, content, on_select_action: null, input_map: null, active_key: null },
+      Carousel: {
+        items_key: itemsKey,
+        as,
+        content,
+        on_select_action: null,
+        input_map: null,
+        active_key: null,
+        item_size: 'Medium',
+      },
     });
   }
 
@@ -565,12 +581,13 @@ export class WorkflowDisplayBuilder {
         on_select_action: actionId,
         input_map: inputMap,
         active_key: activeKey,
+        item_size: 'Medium',
       },
     });
   }
 
   table(itemsKey: string, as: string, headers: TableHeader[], row: WorkflowDisplay[]): this {
-    return this.#set({ Table: { items_key: itemsKey, as, headers, row } });
+    return this.#set({ Table: { items_key: itemsKey, as, headers, row, row_state: null } });
   }
 
   wysiyg(contentKey: string): this {
@@ -644,7 +661,6 @@ export class InputTypeBuilder {
     content: WorkflowDisplay[],
     selectedContent: WorkflowDisplay[] | null,
     unselectedContent: WorkflowDisplay[] | null,
-    cls: string,
   ): InputType {
     return {
       Select: {
@@ -655,7 +671,6 @@ export class InputTypeBuilder {
         content,
         selected_content: selectedContent,
         unselected_content: unselectedContent,
-        class: cls,
       },
     };
   }
@@ -693,24 +708,21 @@ export class InputTypeBuilder {
     as: string,
     value: string,
     content: WorkflowDisplay[],
-    cls: string,
+    columns: number,
     min: number | null = null,
     max: number | null = null,
   ): InputType {
-    return { MultiSelectFromList: { items_key: itemsKey, as, value, content, class: cls, min, max } };
+    return { MultiSelectFromList: { items_key: itemsKey, as, value, content, columns, min, max } };
   }
 
   static selectFromList(
     itemsKey: string,
     as: string,
     value: string,
-    cls: string,
-    selectedClass: string,
     content: WorkflowDisplay[],
+    columns: number,
   ): InputType {
-    return {
-      SelectFromList: { items_key: itemsKey, as, value, class: cls, selected_class: selectedClass, content },
-    };
+    return { SelectFromList: { items_key: itemsKey, as, value, content, columns } };
   }
 }
 
@@ -881,7 +893,7 @@ export const tableHeader = (
   key: string,
   width: string | null = null,
   align: string | null = null,
-): TableHeader => ({ label, key, width, align });
+): TableHeader => ({ label, key, width, align, numeric: false, wide_only: false });
 
 export class IconBuilder {
   #lib: IconLibrary;
@@ -917,15 +929,13 @@ export class IconBuilder {
   }
 
   intoDisplayType(): DisplayType {
-    return { Icon: { lib: this.#lib, name: this.#name, aria_label: this.#ariaLabel, url: this.#url } };
+    return {
+      Icon: { lib: this.#lib, name: this.#name, aria_label: this.#ariaLabel, url: this.#url, size: 'Inherit', tone: '' },
+    };
   }
 
   intoWorkflowDisplay(): WorkflowDisplay {
-    return { class: '', type: this.intoDisplayType() };
-  }
-
-  intoWorkflowDisplayWithClass(cls: string): WorkflowDisplay {
-    return { class: cls, type: this.intoDisplayType() };
+    return { type: this.intoDisplayType() };
   }
 }
 

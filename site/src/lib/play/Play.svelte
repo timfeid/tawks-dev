@@ -67,7 +67,6 @@
       status: instance.completed ? 'completed' : 'active',
       complete_message: instance.complete_message,
       visuals: node?.visuals ?? [],
-      layout: node?.layout ?? null,
       user_id: instance.user_id,
       current_node_id: nodeId ?? '',
       waiting: false,

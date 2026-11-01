@@ -1,8 +1,9 @@
 <script lang="ts">
+  import * as look from '../../look';
   import { getNestedValue, resolveInputValue } from '../../utils.js';
   import * as Carousel from '@tawks/ui/carousel/index.js';
   import type { CarouselAPI } from '@tawks/ui/carousel/context.js';
-  import type { JsonValue } from '@tawks/workflow-types';
+  import type { JsonValue, Size } from '@tawks/workflow-types';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
   import { submitServerAction } from '../workflow';
@@ -22,6 +23,7 @@
           on_select_action?: string | null;
           input_map?: Record<string, JsonValue> | null;
           active_key?: string | null;
+          item_size?: Size;
         }),
   );
 
@@ -106,7 +108,7 @@
   >
     <Carousel.Content>
       {#each cards as card}
-        <Carousel.Item class={display.class}>
+        <Carousel.Item class={`basis-auto ${look.width[carouselDisplay.item_size ?? 'Medium']}`}>
           {#each carouselDisplay.content as item}
             <WorkflowDisplay
               from="wf-carousel"

@@ -1,14 +1,17 @@
+import { gamepad, settings } from './settings';
+import {isGameplayTyping}from'./typing';
+
 export type StickValue = { x: number; z: number };
 
-const KEYS: Record<string, [number, number]> = {
-  KeyW: [0, -1], ArrowUp: [0, -1],
-  KeyS: [0, 1], ArrowDown: [0, 1],
-  KeyA: [-1, 0], ArrowLeft: [-1, 0],
-  KeyD: [1, 0], ArrowRight: [1, 0],
-};
-
-const isTyping = (target: EventTarget | null) =>
-  target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+/** Which way each key pushes the stick, from the player's bindings. */
+function direction(code: string): [number, number] | null {
+  const { keys } = settings();
+  if (keys.up.includes(code)) return [0, -1];
+  if (keys.down.includes(code)) return [0, 1];
+  if (keys.left.includes(code)) return [-1, 0];
+  if (keys.right.includes(code)) return [1, 0];
+  return null;
+}
 
 /**
  * Merges keyboard, the first gamepad's left stick and an on-screen joystick
@@ -20,34 +23,41 @@ export class PartyInput {
   enabled = false;
 
   private onKeyDown = (event: KeyboardEvent) => {
-    if (!this.enabled || !(event.code in KEYS) || isTyping(event.target)) return;
+    if(event.isComposing||isGameplayTyping(event.target)){this.clear();return;}
+    if (!this.enabled || !direction(event.code)) return;
     this.held.add(event.code);
     event.preventDefault();
   };
   private onKeyUp = (event: KeyboardEvent) => this.held.delete(event.code);
-  private onBlur = () => this.held.clear();
+  private clear(){this.held.clear();this.touch={x:0,z:0};}
+  private onBlur = () => this.clear();
+  private onFocusIn=(event:FocusEvent)=>{if(isGameplayTyping(event.target))this.clear();};
 
   constructor() {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    document.addEventListener('focusin',this.onFocusIn);
   }
 
   setTouch(value: StickValue) {
+    if(isGameplayTyping()){this.clear();return;}
     this.touch = value;
   }
 
   read(): StickValue {
+    if(!this.enabled||isGameplayTyping()){this.clear();return {x:0,z:0};}
     let x = this.touch.x;
     let z = this.touch.z;
     for (const code of this.held) {
-      x += KEYS[code][0];
-      z += KEYS[code][1];
+      const [dx, dz] = direction(code) ?? [0, 0];
+      x += dx;
+      z += dz;
     }
-    const pad = typeof navigator.getGamepads === 'function' ? Array.from(navigator.getGamepads()).find(Boolean) : null;
+    const pad = gamepad();
     if (pad && pad.axes.length >= 2) {
       const [px, pz] = pad.axes;
-      if (Math.hypot(px, pz) > 0.18) {
+      if (Math.hypot(px, pz) > settings().pad.deadzone) {
         x += px;
         z += pz;
       }
@@ -60,5 +70,7 @@ export class PartyInput {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('focusin',this.onFocusIn);
+    this.clear();
   }
 }

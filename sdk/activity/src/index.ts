@@ -8,9 +8,11 @@ import {
   type Json,
   type Lobby,
   type Me,
+  type MicrophoneState,
+  type PitchSample,
 } from './protocol';
 
-export type { Json, Lobby, Me } from './protocol';
+export type { Json, Lobby, Me, MicrophoneState, PitchSample } from './protocol';
 
 export type Activity<State = Json> = {
   /** The player this frame belongs to. */
@@ -29,6 +31,22 @@ export type Activity<State = Json> = {
    * are reserved.
    */
   call(action: string, inputs: { [key: string]: Json }): Promise<void>;
+  /**
+   * Starts or stops pitch from the player's microphone, for singing games.
+   * tawks asks the player before turning it on and only ever sends pitch,
+   * never audio. Resolves with the resulting state.
+   */
+  microphone(on: boolean): Promise<MicrophoneState>;
+  /** Calls `listener` with each batch of pitch samples; returns a function that stops it. */
+  onPitch(listener: (samples: PitchSample[]) => void): () => void;
+  /**
+   * Puts the game full screen, or leaves it. A frame is not allowed to do
+   * this for itself, so tawks takes the panel around it full screen instead.
+   * Resolves with the state it ended up in.
+   */
+  fullscreen(on: boolean): Promise<boolean>;
+  /** Calls `listener` whenever full screen goes on or off; returns a function that stops it. */
+  onFullscreen(listener: (on: boolean) => void): () => void;
 };
 
 export type ConnectOptions = {
@@ -41,6 +59,7 @@ export function connect<State = Json>({ timeoutMs = 10_000 }: ConnectOptions = {
   if (window.parent === window) {
     return Promise.reject(new Error('Not running inside a tawks activity frame'));
   }
+  hideNativeContextMenu();
 
   return new Promise((resolve, reject) => {
     const hello = { protocol: PROTOCOL, version: VERSION, type: 'hello' };
@@ -72,7 +91,27 @@ function attach<State>(port: MessagePort, resolve: (activity: Activity<State>) =
   let state: State;
   let nextId = 1;
   const listeners = new Set<(state: State) => void>();
+  const pitchListeners = new Set<(samples: PitchSample[]) => void>();
+  let microphoneWaiters: ((state: MicrophoneState) => void)[] = [];
+  let fullscreenWaiters: ((on: boolean) => void)[] = [];
   const pending = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
+
+  const askFullscreen = (on: boolean) =>
+    new Promise<boolean>((resolve) => {
+      // A tawks page from before full screen was in the bridge never answers,
+      // so give up rather than leave the game's button stuck.
+      const waiter = (state: boolean) => {
+        clearTimeout(timer);
+        resolve(state);
+      };
+      const timer = setTimeout(() => {
+        fullscreenWaiters = fullscreenWaiters.filter((pending) => pending !== waiter);
+        resolve(false);
+      }, 1000);
+      fullscreenWaiters.push(waiter);
+      port.postMessage({ type: 'fullscreen', on } satisfies GameMessage);
+    });
+  askHost = askFullscreen;
 
   function request(message: (id: number) => GameMessage) {
     const id = nextId++;
@@ -103,11 +142,42 @@ function attach<State>(port: MessagePort, resolve: (activity: Activity<State>) =
           call(action, inputs) {
             return request((id) => ({ type: 'call', id, action, inputs }));
           },
+          microphone(on) {
+            return new Promise((resolve) => {
+              microphoneWaiters.push(resolve);
+              port.postMessage({ type: 'microphone', on } satisfies GameMessage);
+            });
+          },
+          onPitch(listener) {
+            pitchListeners.add(listener);
+            return () => pitchListeners.delete(listener);
+          },
+          fullscreen: askFullscreen,
+          onFullscreen(listener) {
+            fullscreenListeners.add(listener);
+            return () => fullscreenListeners.delete(listener);
+          },
         });
         break;
       case 'state':
         state = message.state as State;
         for (const listener of listeners) listener(state);
+        break;
+      case 'microphone': {
+        const waiting = microphoneWaiters;
+        microphoneWaiters = [];
+        for (const resolve of waiting) resolve(message.state);
+        break;
+      }
+      case 'fullscreen': {
+        const waiting = fullscreenWaiters;
+        fullscreenWaiters = [];
+        for (const resolve of waiting) resolve(message.on);
+        for (const listener of fullscreenListeners) listener(message.on);
+        break;
+      }
+      case 'pitch':
+        for (const listener of pitchListeners) listener(message.samples);
         break;
       case 'push_to_talk':
         pushToTalk.watch(message.binding, (down) => port.postMessage({ type: 'push_to_talk', down }));
@@ -123,6 +193,58 @@ function attach<State>(port: MessagePort, resolve: (activity: Activity<State>) =
     }
   };
   port.start();
+}
+
+let contextMenuHidden = false;
+
+/**
+ * Hides the browser's own right-click menu over the game, which tawks cannot
+ * do from outside the frame. Fields and selected text keep it.
+ */
+function hideNativeContextMenu() {
+  if (contextMenuHidden) return;
+  contextMenuHidden = true;
+  window.addEventListener('contextmenu', (event) => {
+    const element = event.target instanceof Element ? event.target : null;
+    if (!element || element.closest('input,textarea,select')) return;
+    if (element instanceof HTMLElement && element.isContentEditable) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.containsNode(element, true)) return;
+    event.preventDefault();
+  });
+}
+
+/** Set once a frame is connected, so `goFullscreen` can ask tawks. */
+let askHost: ((on: boolean) => Promise<boolean>) | null = null;
+const fullscreenListeners = new Set<(on: boolean) => void>();
+
+/**
+ * Puts `element` full screen, or leaves full screen. Inside an activity frame
+ * the request goes to tawks, which takes the panel around the frame, since a
+ * frame is not allowed to do it itself. Returns the state it ended up in.
+ */
+export async function goFullscreen(on: boolean, element: Element): Promise<boolean> {
+  if (askHost) return askHost(on);
+  if (!on) {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    return false;
+  }
+  await element.requestFullscreen();
+  return true;
+}
+
+/**
+ * Calls `listener` whenever full screen goes on or off, framed or not, so a
+ * game's own button keeps up with Escape and with the player's other ways out.
+ */
+export function onFullscreenChange(listener: (on: boolean) => void): () => void {
+  const onChange = () => listener(!!document.fullscreenElement);
+  fullscreenListeners.add(listener);
+  document.addEventListener('fullscreenchange', onChange);
+  return () => {
+    fullscreenListeners.delete(listener);
+    document.removeEventListener('fullscreenchange', onChange);
+  };
 }
 
 /**

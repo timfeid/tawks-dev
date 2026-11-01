@@ -2,7 +2,7 @@
   import { submitServerAction } from '../workflow';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
-  import { getContext, setContext } from 'svelte';
+  import { getContext, onDestroy, setContext } from 'svelte';
   import type { WorkflowStateProvider } from '../../workflow';
 
   let { workflow, display, inputs }: Props = $props();
@@ -88,12 +88,29 @@
       pendingTimeout = null;
     }, 350);
   }
+
+  function cancelPending() {
+    if (pendingTimeout) clearTimeout(pendingTimeout);
+    pendingTimeout = null;
+  }
+
+  let seenNode: string | undefined;
+  $effect(() => {
+    const node = workflow.current_node_id;
+    if (seenNode !== undefined && node !== seenNode) {
+      cancelPending();
+      values = {};
+      lastSubmittedValues = new Map();
+    }
+    seenNode = node;
+  });
+
+  onDestroy(cancelPending);
 </script>
 
 {#if form}
   <form
     bind:this={formEl}
-    class={display.class}
     onsubmit={(e) => {
       e.preventDefault();
       if (form?.submit_when === 'OnSubmit') submitAll();

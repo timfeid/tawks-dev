@@ -1,13 +1,191 @@
 {
   "palette": [
     {
-      "label": "Heading",
-      "hint": "Text with a larger class",
+      "label": "Hero",
+      "hint": "The top of a page: title, lead and actions",
       "display": {
-        "class": "text-xl font-semibold",
         "type": {
-          "Text": {
-            "text": "A heading"
+          "Hero": {
+            "eyebrow": "Live results",
+            "title": "Every game counts.",
+            "lead": "Your rivalries. Your records. A place for every final horn.",
+            "aside": [],
+            "actions": [
+              {
+                "type": {
+                  "Link": {
+                    "href": "/",
+                    "content": [
+                      {
+                        "type": {
+                          "Typography": {
+                            "text": "Get started",
+                            "role": "Body",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "style": "Primary"
+                  }
+                }
+              },
+              {
+                "type": {
+                  "Link": {
+                    "href": "/",
+                    "content": [
+                      {
+                        "type": {
+                          "Typography": {
+                            "text": "Learn more",
+                            "role": "Body",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "style": "Secondary"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Section",
+      "hint": "A part of the page with its own heading",
+      "display": {
+        "type": {
+          "Section": {
+            "eyebrow": null,
+            "title": "What's new",
+            "lead": "A line or two about this part of the page.",
+            "aside": [],
+            "content": [
+              {
+                "type": {
+                  "Grid": {
+                    "columns": 2,
+                    "gap": "Loose",
+                    "content": [
+                      {
+                        "type": {
+                          "Feature": {
+                            "icon": "zap",
+                            "title": "Fast",
+                            "body": "Results land the moment a game ends.",
+                            "href": null
+                          }
+                        }
+                      },
+                      {
+                        "type": {
+                          "Feature": {
+                            "icon": "scale",
+                            "title": "Fair",
+                            "body": "Everyone plays the same puzzle.",
+                            "href": null
+                          }
+                        }
+                      }
+                    ],
+                    "fixed": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Panel",
+      "hint": "A bordered box; tone Primary highlights it",
+      "display": {
+        "type": {
+          "Panel": {
+            "tone": "",
+            "content": [
+              {
+                "type": {
+                  "Typography": {
+                    "text": "Before you start",
+                    "role": "Subheading",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
+                  }
+                }
+              },
+              {
+                "type": {
+                  "Typography": {
+                    "text": "Each player needs their own copy.",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Heading",
+      "hint": "A section heading",
+      "display": {
+        "type": {
+          "Typography": {
+            "text": "A heading",
+            "role": "Heading",
+            "tone": "",
+            "style": {
+              "numeric": false,
+              "clamp": 0,
+              "reserve": false,
+              "align": "Start",
+              "struck": false,
+              "lines": false,
+              "themed": false
+            }
           }
         }
       }
@@ -16,10 +194,20 @@
       "label": "Text",
       "hint": "Use {key} to show a response",
       "display": {
-        "class": "",
         "type": {
-          "Text": {
-            "text": "Hello, {name}"
+          "Typography": {
+            "text": "Hello, {name}",
+            "role": "Body",
+            "tone": "",
+            "style": {
+              "numeric": false,
+              "clamp": 0,
+              "reserve": false,
+              "align": "Start",
+              "struck": false,
+              "lines": false,
+              "themed": false
+            }
           }
         }
       }
@@ -28,24 +216,19 @@
       "label": "Button",
       "hint": "Runs a workflow action",
       "display": {
-        "class": "",
         "type": {
-          "Button": {
-            "content": [
-              {
-                "class": "",
-                "type": {
-                  "Text": {
-                    "text": "Press me"
-                  }
-                }
-              }
-            ],
-            "input_map": null,
-            "action_id": "my_action",
-            "variant": "default",
-            "size": "default",
-            "type": "button"
+          "Action": {
+            "label": "Press me",
+            "icon": null,
+            "look": "Primary",
+            "act": {
+              "action": "my_action",
+              "inputs": null,
+              "disabled": null
+            },
+            "full_width": false,
+            "submit": false,
+            "scroll_to": null
           }
         }
       }
@@ -54,49 +237,55 @@
       "label": "Form",
       "hint": "Sends the inputs inside it to an action when its submit button is pressed",
       "display": {
-        "class": "flex flex-col gap-2",
         "type": {
           "Form": {
             "server_action_id": "my_action",
             "content": [
               {
-                "class": "",
                 "type": {
-                  "Input": {
-                    "id": "name",
-                    "input": {
-                      "readonly": null,
-                      "type": {
-                        "Text": {
-                          "placeholder": "Type here"
-                        }
-                      },
-                      "default_value": null,
-                      "required": false,
-                      "on_change_action": null
-                    }
-                  }
-                }
-              },
-              {
-                "class": "",
-                "type": {
-                  "Button": {
+                  "Stack": {
+                    "direction": "Col",
+                    "gap": "Tight",
+                    "align": "Stretch",
+                    "justify": "Start",
+                    "wrap": false,
                     "content": [
                       {
-                        "class": "",
                         "type": {
-                          "Text": {
-                            "text": "Send"
+                          "Input": {
+                            "id": "name",
+                            "input": {
+                              "readonly": null,
+                              "type": {
+                                "Text": {
+                                  "placeholder": "Type here"
+                                }
+                              },
+                              "default_value": null,
+                              "required": false,
+                              "on_change_action": null
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": {
+                          "Action": {
+                            "label": "Send",
+                            "icon": null,
+                            "look": "Primary",
+                            "act": {
+                              "action": "my_action",
+                              "inputs": null,
+                              "disabled": null
+                            },
+                            "full_width": false,
+                            "submit": true,
+                            "scroll_to": null
                           }
                         }
                       }
-                    ],
-                    "input_map": null,
-                    "action_id": "my_action",
-                    "variant": "default",
-                    "size": "default",
-                    "type": "submit"
+                    ]
                   }
                 }
               }
@@ -110,7 +299,6 @@
       "label": "Text input",
       "hint": "Saved under its id. Put it inside a Form so actions receive it",
       "display": {
-        "class": "",
         "type": {
           "Input": {
             "id": "name",
@@ -133,7 +321,6 @@
       "label": "Number input",
       "hint": "With a min and max. Put it inside a Form so actions receive it",
       "display": {
-        "class": "",
         "type": {
           "Input": {
             "id": "amount",
@@ -157,7 +344,6 @@
       "label": "Switch",
       "hint": "A boolean input. Put it inside a Form so actions receive it",
       "display": {
-        "class": "",
         "type": {
           "Input": {
             "id": "enabled",
@@ -174,25 +360,49 @@
     },
     {
       "label": "Row",
-      "hint": "A div that lays its children out",
+      "hint": "Children side by side, wrapping when they run out of room",
       "display": {
-        "class": "flex items-center gap-2",
         "type": {
-          "Div": {
+          "Stack": {
+            "direction": "Row",
+            "gap": "Normal",
+            "align": "Center",
+            "justify": "Start",
+            "wrap": true,
             "content": [
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "Left"
+                  "Typography": {
+                    "text": "Left",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               },
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "Right"
+                  "Typography": {
+                    "text": "Right",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               }
@@ -202,31 +412,18 @@
       }
     },
     {
-      "label": "Card",
-      "hint": "A bordered panel",
+      "label": "Row item",
+      "hint": "A title with a line under it, for lists and leaderboards",
       "display": {
-        "class": "",
         "type": {
-          "Card": {
-            "content": [
-              {
-                "class": "font-semibold",
-                "type": {
-                  "Text": {
-                    "text": "Card title"
-                  }
-                }
-              },
-              {
-                "class": "text-muted-foreground",
-                "type": {
-                  "Text": {
-                    "text": "Some details"
-                  }
-                }
-              }
-            ],
-            "layout": "Vertical"
+          "Row": {
+            "lead": [],
+            "title": "Card title",
+            "meta": "Some details",
+            "trail": [],
+            "state": "",
+            "href": null,
+            "act": null
           }
         }
       }
@@ -235,11 +432,12 @@
       "label": "Badge",
       "hint": "A small label",
       "display": {
-        "class": "",
         "type": {
           "Badge": {
-            "variant": "secondary",
-            "text": "New"
+            "variant": "",
+            "text": "New",
+            "tone": "Info",
+            "icon": null
           }
         }
       }
@@ -248,13 +446,14 @@
       "label": "Icon",
       "hint": "A Lucide icon from the supported set",
       "display": {
-        "class": "size-5",
         "type": {
           "Icon": {
             "lib": "Lucide",
             "name": "sparkles",
-            "aria_label": "Sparkles",
-            "url": null
+            "aria_label": null,
+            "url": null,
+            "size": "Medium",
+            "tone": ""
           }
         }
       }
@@ -263,11 +462,18 @@
       "label": "Image",
       "hint": "Any https image",
       "display": {
-        "class": "w-48 rounded-lg",
         "type": {
-          "Image": {
+          "Media": {
             "src": "https://cdn.tawks.app/avatars/default-1.png",
-            "alt_text": "An avatar"
+            "alt": "An avatar",
+            "aspect": "Square",
+            "size": "Medium",
+            "shape": "Rounded",
+            "fit": "Cover",
+            "badge": [],
+            "caption": [],
+            "tint": "",
+            "caption_placement": "Over"
           }
         }
       }
@@ -276,17 +482,31 @@
       "label": "List",
       "hint": "Repeats its content for each item",
       "display": {
-        "class": "flex flex-col gap-1",
         "type": {
-          "List": {
+          "Items": {
             "items_key": "items",
             "as": "item",
+            "layout": {
+              "Stack": {
+                "gap": "Tight"
+              }
+            },
             "content": [
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "{item.name}"
+                  "Typography": {
+                    "text": "{item.name}",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               }
@@ -299,7 +519,6 @@
       "label": "Table",
       "hint": "Rows from a response list",
       "display": {
-        "class": "",
         "type": {
           "Table": {
             "items_key": "rows",
@@ -309,33 +528,58 @@
                 "label": "Name",
                 "key": "name",
                 "width": null,
-                "align": null
+                "align": null,
+                "numeric": false,
+                "wide_only": false
               },
               {
                 "label": "Score",
                 "key": "score",
                 "width": "6rem",
-                "align": null
+                "align": null,
+                "numeric": false,
+                "wide_only": false
               }
             ],
             "row": [
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "{row.name}"
+                  "Typography": {
+                    "text": "{row.name}",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               },
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "{row.score}"
+                  "Typography": {
+                    "text": "{row.score}",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": true,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               }
-            ]
+            ],
+            "row_state": null
           }
         }
       }
@@ -344,7 +588,6 @@
       "label": "Show when",
       "hint": "Content that appears when a condition holds",
       "display": {
-        "class": "",
         "type": {
           "Condition": {
             "condition": {
@@ -352,10 +595,20 @@
             },
             "content": [
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "You told us your name."
+                  "Typography": {
+                    "text": "You told us your name.",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               }
@@ -368,20 +621,30 @@
       "label": "Link",
       "hint": "http(s) or an in-app path",
       "display": {
-        "class": "link",
         "type": {
           "Link": {
             "href": "https://tawks.app",
             "content": [
               {
-                "class": "",
                 "type": {
-                  "Text": {
-                    "text": "Open tawks"
+                  "Typography": {
+                    "text": "Open tawks",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
                   }
                 }
               }
-            ]
+            ],
+            "style": "Inline"
           }
         }
       }
@@ -404,61 +667,77 @@
               {
                 "id": "page",
                 "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                  "Page": {
+                    "width": "Narrow",
                     "content": [
                       {
-                        "class": "text-2xl font-bold",
                         "type": {
-                          "Text": {
-                            "text": "Hello, {name}!"
+                          "Typography": {
+                            "text": "Hello, {name}!",
+                            "role": "Title",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "flex gap-2",
                         "type": {
                           "Form": {
                             "server_action_id": "wave",
                             "content": [
                               {
-                                "class": "flex-1",
                                 "type": {
-                                  "Input": {
-                                    "id": "name",
-                                    "input": {
-                                      "readonly": null,
-                                      "type": {
-                                        "Text": {
-                                          "placeholder": "Your name"
-                                        }
-                                      },
-                                      "default_value": null,
-                                      "required": false,
-                                      "on_change_action": null
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "class": "",
-                                "type": {
-                                  "Button": {
+                                  "Stack": {
+                                    "direction": "Col",
+                                    "gap": "Tight",
+                                    "align": "Stretch",
+                                    "justify": "Start",
+                                    "wrap": false,
                                     "content": [
                                       {
-                                        "class": "",
                                         "type": {
-                                          "Text": {
-                                            "text": "Wave"
+                                          "Input": {
+                                            "id": "name",
+                                            "input": {
+                                              "readonly": null,
+                                              "type": {
+                                                "Text": {
+                                                  "placeholder": "Your name"
+                                                }
+                                              },
+                                              "default_value": null,
+                                              "required": false,
+                                              "on_change_action": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": {
+                                          "Action": {
+                                            "label": "Wave",
+                                            "icon": null,
+                                            "look": "Primary",
+                                            "act": {
+                                              "action": "wave",
+                                              "inputs": null,
+                                              "disabled": null
+                                            },
+                                            "full_width": false,
+                                            "submit": true,
+                                            "scroll_to": null
                                           }
                                         }
                                       }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "wave",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "submit"
+                                    ]
                                   }
                                 }
                               }
@@ -468,19 +747,31 @@
                         }
                       },
                       {
-                        "class": "text-muted-foreground",
                         "type": {
-                          "Text": {
-                            "text": "{reply}"
+                          "Typography": {
+                            "text": "{reply}",
+                            "role": "Body",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       }
-                    ]
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
                   }
                 }
               }
             ],
-            "layout": null,
             "condition": null,
             "parent_id": null
           }
@@ -509,7 +800,7 @@
           }
         }
       },
-      "source": "use serde_json::json;\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\n/// A greeting page: type a name, press Wave, and the bot answers.\npub fn definition(wave_action: &str) -> CreateWorkflowDefinition {\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-2xl font-bold\").text(\"Hello, {name}!\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .form(\n                        \"wave\",\n                        vec![\n                            WorkflowDisplayBuilder::new(\"flex-1\")\n                                .input(\n                                    \"name\",\n                                    WorkflowInputBuilder::new()\n                                        .r#type(InputTypeBuilder::text(Some(\"Your name\".into())))\n                                        .build(),\n                                )\n                                .build(),\n                            WorkflowDisplayBuilder::new(\"\")\n                                .submit(\n                                    vec![WorkflowDisplayBuilder::new(\"\").text(\"Wave\").build()],\n                                    None,\n                                    \"wave\",\n                                    \"default\",\n                                    \"default\",\n                                )\n                                .build(),\n                        ],\n                        SubmitWhen::OnSubmit,\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{reply}\").build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"hello\", \"Hello\")\n        .response(\"name\", json!(\"there\"))\n        .response(\"reply\", json!(\"\"))\n        .add_action(WorkflowActionBuilder::new(\"wave\").run_server_action().target(wave_action).build())\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Hello\").visual(page).build())\n        .build()\n}\n"
+      "source": "use serde_json::json;\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\nuse workflow_model::ui::*;\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\n\n/// A greeting page: type a name, press Wave, and the bot answers.\npub fn definition(wave_action: &str) -> CreateWorkflowDefinition {\n    let name = WorkflowDisplayBuilder::new()\n        .input(\"name\", WorkflowInputBuilder::new().r#type(InputTypeBuilder::text(Some(\"Your name\".into()))).build())\n        .build();\n    let wave = WorkflowDisplayBuilder::new()\n        .form(\n            \"wave\",\n            vec![column(Gap::Tight, vec![name, primary_action(\"Wave\", act(\"wave\")).submits()])],\n            SubmitWhen::OnSubmit,\n        )\n        .build();\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .page(PageWidth::Narrow, vec![title(\"Hello, {name}!\"), wave, body(\"{reply}\")])\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"hello\", \"Hello\")\n        .response(\"name\", json!(\"there\"))\n        .response(\"reply\", json!(\"\"))\n        .add_action(WorkflowActionBuilder::new(\"wave\").run_server_action().target(wave_action).build())\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Hello\").visual(page).build())\n        .build()\n}\n"
     },
     {
       "key": "guess",
@@ -527,70 +818,96 @@
               {
                 "id": "play",
                 "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                  "Page": {
+                    "width": "Narrow",
                     "content": [
                       {
-                        "class": "text-xl font-semibold",
                         "type": {
-                          "Text": {
-                            "text": "Guess the number"
+                          "Typography": {
+                            "text": "Guess the number",
+                            "role": "Heading",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "text-muted-foreground",
                         "type": {
-                          "Text": {
-                            "text": "{gn_message}"
+                          "Typography": {
+                            "text": "{gn_message}",
+                            "role": "Body",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "flex gap-2",
                         "type": {
                           "Form": {
                             "server_action_id": "guess",
                             "content": [
                               {
-                                "class": "flex-1",
                                 "type": {
-                                  "Input": {
-                                    "id": "gn_guess",
-                                    "input": {
-                                      "readonly": null,
-                                      "type": {
-                                        "Number": {
-                                          "min": 1,
-                                          "max": 100
-                                        }
-                                      },
-                                      "default_value": null,
-                                      "required": true,
-                                      "on_change_action": null
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "class": "",
-                                "type": {
-                                  "Button": {
+                                  "Stack": {
+                                    "direction": "Col",
+                                    "gap": "Tight",
+                                    "align": "Stretch",
+                                    "justify": "Start",
+                                    "wrap": false,
                                     "content": [
                                       {
-                                        "class": "",
                                         "type": {
-                                          "Text": {
-                                            "text": "Guess"
+                                          "Input": {
+                                            "id": "gn_guess",
+                                            "input": {
+                                              "readonly": null,
+                                              "type": {
+                                                "Number": {
+                                                  "min": 1,
+                                                  "max": 100
+                                                }
+                                              },
+                                              "default_value": null,
+                                              "required": true,
+                                              "on_change_action": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": {
+                                          "Action": {
+                                            "label": "Guess",
+                                            "icon": null,
+                                            "look": "Primary",
+                                            "act": {
+                                              "action": "guess",
+                                              "inputs": null,
+                                              "disabled": null
+                                            },
+                                            "full_width": false,
+                                            "submit": true,
+                                            "scroll_to": null
                                           }
                                         }
                                       }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "guess",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "submit"
+                                    ]
                                   }
                                 }
                               }
@@ -599,12 +916,14 @@
                           }
                         }
                       }
-                    ]
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
                   }
                 }
               }
             ],
-            "layout": null,
             "condition": null,
             "parent_id": null
           },
@@ -615,31 +934,53 @@
               {
                 "id": "won",
                 "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                  "Page": {
+                    "width": "Narrow",
                     "content": [
                       {
-                        "class": "text-xl font-semibold",
                         "type": {
-                          "Text": {
-                            "text": "You got it!"
+                          "Typography": {
+                            "text": "You got it!",
+                            "role": "Heading",
+                            "tone": "Success",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "text-muted-foreground",
                         "type": {
-                          "Text": {
-                            "text": "{gn_message}"
+                          "Typography": {
+                            "text": "{gn_message}",
+                            "role": "Body",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       }
-                    ]
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
                   }
                 }
               }
             ],
-            "layout": null,
             "condition": {
               "ResponseEquals": {
                 "field": "gn_done",
@@ -650,8 +991,8 @@
           }
         },
         "responses": {
-          "gn_done": false,
-          "gn_message": "I'm thinking of a number from 1 to 100."
+          "gn_message": "I'm thinking of a number from 1 to 100.",
+          "gn_done": false
         },
         "context": {},
         "actions": [
@@ -704,7 +1045,7 @@
           }
         ]
       },
-      "source": "use serde_json::json;\nuse workflow_model::builder::{\n    Cond, InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,\n    WorkflowInputBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\n\n/// Guess a number the bot is thinking of. The secret stays on the bot: each\n/// guess goes to a server action that answers higher, lower or correct, and a\n/// correct answer moves the page to the win screen.\npub fn definition(check_action: &str) -> CreateWorkflowDefinition {\n    let play = WorkflowVisualBuilder::new(\"play\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Guess the number\").build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{gn_message}\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .form(\n                        \"guess\",\n                        vec![\n                            WorkflowDisplayBuilder::new(\"flex-1\")\n                                .input(\n                                    \"gn_guess\",\n                                    WorkflowInputBuilder::new()\n                                        .r#type(InputTypeBuilder::number(Some(1), Some(100)))\n                                        .required(true)\n                                        .build(),\n                                )\n                                .build(),\n                            WorkflowDisplayBuilder::new(\"\")\n                                .submit(\n                                    vec![WorkflowDisplayBuilder::new(\"\").text(\"Guess\").build()],\n                                    None,\n                                    \"guess\",\n                                    \"default\",\n                                    \"default\",\n                                )\n                                .build(),\n                        ],\n                        SubmitWhen::OnSubmit,\n                    )\n                    .build(),\n            ],\n        )\n        .build();\n    let won = WorkflowVisualBuilder::new(\"won\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"You got it!\").build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"{gn_message}\").build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"guess\", \"Guess the number\")\n        .response(\"gn_message\", json!(\"I'm thinking of a number from 1 to 100.\"))\n        .response(\"gn_done\", json!(false))\n        .add_action(WorkflowActionBuilder::new(\"guess\").run_server_action().target(check_action).build())\n        .add_node(\"play\", WorkflowNodeBuilder::new(\"Play\").visual(play).build())\n        .add_node(\n            \"won\",\n            WorkflowNodeBuilder::new(\"Won\")\n                .parent_id(\"play\")\n                .condition(Cond::response_equals(\"gn_done\", json!(true)))\n                .visual(won)\n                .build(),\n        )\n        .build()\n}\n"
+      "source": "use serde_json::json;\nuse workflow_model::builder::{\n    Cond, InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,\n    WorkflowInputBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\nuse workflow_model::ui::*;\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen};\n\n/// Guess a number the bot is thinking of. The secret stays on the bot: each\n/// guess goes to a server action that answers higher, lower or correct, and a\n/// correct answer moves the page to the win screen.\npub fn definition(check_action: &str) -> CreateWorkflowDefinition {\n    let number = WorkflowDisplayBuilder::new()\n        .input(\n            \"gn_guess\",\n            WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(100))).required(true).build(),\n        )\n        .build();\n    let guess = WorkflowDisplayBuilder::new()\n        .form(\n            \"guess\",\n            vec![column(Gap::Tight, vec![number, primary_action(\"Guess\", act(\"guess\")).submits()])],\n            SubmitWhen::OnSubmit,\n        )\n        .build();\n    let play = WorkflowVisualBuilder::new(\"play\")\n        .page(PageWidth::Narrow, vec![heading(\"Guess the number\"), body(\"{gn_message}\"), guess])\n        .build();\n    let won = WorkflowVisualBuilder::new(\"won\")\n        .page(PageWidth::Narrow, vec![heading(\"You got it!\").tone(Tone::Success), body(\"{gn_message}\")])\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"guess\", \"Guess the number\")\n        .response(\"gn_message\", json!(\"I'm thinking of a number from 1 to 100.\"))\n        .response(\"gn_done\", json!(false))\n        .add_action(WorkflowActionBuilder::new(\"guess\").run_server_action().target(check_action).build())\n        .add_node(\"play\", WorkflowNodeBuilder::new(\"Play\").visual(play).build())\n        .add_node(\n            \"won\",\n            WorkflowNodeBuilder::new(\"Won\")\n                .parent_id(\"play\")\n                .condition(Cond::response_equals(\"gn_done\", json!(true)))\n                .visual(won)\n                .build(),\n        )\n        .build()\n}\n"
     },
     {
       "key": "mood",
@@ -722,63 +1063,67 @@
               {
                 "id": "page",
                 "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                  "Page": {
+                    "width": "Narrow",
                     "content": [
                       {
-                        "class": "text-xl font-semibold",
                         "type": {
-                          "Text": {
-                            "text": "How is your day?"
+                          "Typography": {
+                            "text": "How is your day?",
+                            "role": "Heading",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "flex gap-2",
                         "type": {
-                          "Div": {
+                          "Stack": {
+                            "direction": "Row",
+                            "gap": "Tight",
+                            "align": "Center",
+                            "justify": "Start",
+                            "wrap": true,
                             "content": [
                               {
-                                "class": "",
                                 "type": {
-                                  "Button": {
-                                    "content": [
-                                      {
-                                        "class": "",
-                                        "type": {
-                                          "Text": {
-                                            "text": "Good"
-                                          }
-                                        }
-                                      }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "good",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "button"
+                                  "Action": {
+                                    "label": "Good",
+                                    "icon": null,
+                                    "look": "Secondary",
+                                    "act": {
+                                      "action": "good",
+                                      "inputs": null,
+                                      "disabled": null
+                                    },
+                                    "full_width": false,
+                                    "submit": false,
+                                    "scroll_to": null
                                   }
                                 }
                               },
                               {
-                                "class": "",
                                 "type": {
-                                  "Button": {
-                                    "content": [
-                                      {
-                                        "class": "",
-                                        "type": {
-                                          "Text": {
-                                            "text": "Meh"
-                                          }
-                                        }
-                                      }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "meh",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "button"
+                                  "Action": {
+                                    "label": "Meh",
+                                    "icon": null,
+                                    "look": "Secondary",
+                                    "act": {
+                                      "action": "meh",
+                                      "inputs": null,
+                                      "disabled": null
+                                    },
+                                    "full_width": false,
+                                    "submit": false,
+                                    "scroll_to": null
                                   }
                                 }
                               }
@@ -787,7 +1132,6 @@
                         }
                       },
                       {
-                        "class": "",
                         "type": {
                           "Condition": {
                             "condition": {
@@ -798,10 +1142,20 @@
                             },
                             "content": [
                               {
-                                "class": "text-primary",
                                 "type": {
-                                  "Text": {
-                                    "text": "Glad to hear it."
+                                  "Typography": {
+                                    "text": "Glad to hear it.",
+                                    "role": "Body",
+                                    "tone": "Primary",
+                                    "style": {
+                                      "numeric": false,
+                                      "clamp": 0,
+                                      "reserve": false,
+                                      "align": "Start",
+                                      "struck": false,
+                                      "lines": false,
+                                      "themed": false
+                                    }
                                   }
                                 }
                               }
@@ -810,7 +1164,6 @@
                         }
                       },
                       {
-                        "class": "",
                         "type": {
                           "Condition": {
                             "condition": {
@@ -821,10 +1174,20 @@
                             },
                             "content": [
                               {
-                                "class": "text-muted-foreground",
                                 "type": {
-                                  "Text": {
-                                    "text": "Tomorrow is another one."
+                                  "Typography": {
+                                    "text": "Tomorrow is another one.",
+                                    "role": "Body",
+                                    "tone": "",
+                                    "style": {
+                                      "numeric": false,
+                                      "clamp": 0,
+                                      "reserve": false,
+                                      "align": "Start",
+                                      "struck": false,
+                                      "lines": false,
+                                      "themed": false
+                                    }
                                   }
                                 }
                               }
@@ -832,12 +1195,14 @@
                           }
                         }
                       }
-                    ]
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
                   }
                 }
               }
             ],
-            "layout": null,
             "condition": null,
             "parent_id": null
           }
@@ -888,7 +1253,7 @@
         "multi_instance_per_user": false
       },
       "mocks": {},
-      "source": "use serde_json::json;\nuse workflow_model::builder::{\n    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowNodeBuilder,\n    WorkflowVisualBuilder,\n};\nuse workflow_model::transform::TransformOp;\nuse workflow_model::{CreateWorkflowDefinition, WorkflowDisplay};\n\nfn button(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\nfn set_mood(action: &str, mood: &str) -> workflow_model::WorkflowAction {\n    WorkflowActionBuilder::new(action)\n        .transform_responses(vec![TransformOp::Set { path: \"mood\".into(), value: json!(mood) }], true)\n        .build()\n}\n\n/// No bot needed: buttons change responses with transforms, and conditions\n/// pick what to show.\npub fn definition() -> CreateWorkflowDefinition {\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"How is your day?\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .div(vec![button(\"Good\", \"good\"), button(\"Meh\", \"meh\")])\n                    .build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .condition(\n                        Cond::response_equals(\"mood\", json!(\"good\")),\n                        vec![WorkflowDisplayBuilder::new(\"text-primary\").text(\"Glad to hear it.\").build()],\n                    )\n                    .build(),\n                WorkflowDisplayBuilder::new(\"\")\n                    .condition(\n                        Cond::response_equals(\"mood\", json!(\"meh\")),\n                        vec![WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"Tomorrow is another one.\").build()],\n                    )\n                    .build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"mood\", \"Mood\")\n        .add_action(set_mood(\"good\", \"good\"))\n        .add_action(set_mood(\"meh\", \"meh\"))\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Mood\").visual(page).build())\n        .build()\n}\n"
+      "source": "use serde_json::json;\nuse workflow_model::CreateWorkflowDefinition;\nuse workflow_model::builder::{\n    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\nuse workflow_model::transform::TransformOp;\nuse workflow_model::ui::*;\n\nfn set_mood(action: &str, mood: &str) -> workflow_model::WorkflowAction {\n    WorkflowActionBuilder::new(action)\n        .transform_responses(vec![TransformOp::Set { path: \"mood\".into(), value: json!(mood) }], true)\n        .build()\n}\n\n/// No bot needed: buttons change responses with transforms, and conditions\n/// pick what to show.\npub fn definition() -> CreateWorkflowDefinition {\n    let page = WorkflowVisualBuilder::new(\"page\")\n        .page(\n            PageWidth::Narrow,\n            vec![\n                heading(\"How is your day?\"),\n                row(Gap::Tight, vec![secondary_action(\"Good\", act(\"good\")), secondary_action(\"Meh\", act(\"meh\"))]),\n                when(Cond::response_equals(\"mood\", json!(\"good\")), vec![body(\"Glad to hear it.\").tone(Tone::Primary)]),\n                when(Cond::response_equals(\"mood\", json!(\"meh\")), vec![body(\"Tomorrow is another one.\")]),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"mood\", \"Mood\")\n        .add_action(set_mood(\"good\", \"good\"))\n        .add_action(set_mood(\"meh\", \"meh\"))\n        .add_node(\"home\", WorkflowNodeBuilder::new(\"Mood\").visual(page).build())\n        .build()\n}\n"
     },
     {
       "key": "steps",
@@ -906,168 +1271,86 @@
               {
                 "id": "first",
                 "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                  "Page": {
+                    "width": "Narrow",
                     "content": [
                       {
-                        "class": "text-xl font-semibold",
                         "type": {
-                          "Text": {
-                            "text": "Step 1: who are you?"
+                          "Typography": {
+                            "text": "Step 1: who are you?",
+                            "role": "Heading",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "flex flex-col gap-4",
                         "type": {
                           "Form": {
                             "server_action_id": "next",
                             "content": [
                               {
-                                "class": "",
                                 "type": {
-                                  "Input": {
-                                    "id": "name",
-                                    "input": {
-                                      "readonly": null,
-                                      "type": {
-                                        "Text": {
-                                          "placeholder": "Name"
-                                        }
-                                      },
-                                      "default_value": null,
-                                      "required": true,
-                                      "on_change_action": null
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "class": "",
-                                "type": {
-                                  "Button": {
+                                  "Stack": {
+                                    "direction": "Col",
+                                    "gap": "Normal",
+                                    "align": "Stretch",
+                                    "justify": "Start",
+                                    "wrap": false,
                                     "content": [
                                       {
-                                        "class": "",
                                         "type": {
-                                          "Text": {
-                                            "text": "Next"
-                                          }
-                                        }
-                                      }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "next",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "submit"
-                                  }
-                                }
-                              }
-                            ],
-                            "submit_when": "OnSubmit"
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "layout": null,
-            "condition": null,
-            "parent_id": null
-          },
-          "b_details": {
-            "title": "Step 2",
-            "description": null,
-            "visuals": [
-              {
-                "id": "second",
-                "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
-                    "content": [
-                      {
-                        "class": "text-xl font-semibold",
-                        "type": {
-                          "Text": {
-                            "text": "Step 2: pick a number, {name}"
-                          }
-                        }
-                      },
-                      {
-                        "class": "flex flex-col gap-4",
-                        "type": {
-                          "Form": {
-                            "server_action_id": "next",
-                            "content": [
-                              {
-                                "class": "",
-                                "type": {
-                                  "Input": {
-                                    "id": "favorite",
-                                    "input": {
-                                      "readonly": null,
-                                      "type": {
-                                        "Number": {
-                                          "min": 1,
-                                          "max": 10
-                                        }
-                                      },
-                                      "default_value": null,
-                                      "required": false,
-                                      "on_change_action": null
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "class": "flex gap-2",
-                                "type": {
-                                  "Div": {
-                                    "content": [
-                                      {
-                                        "class": "",
-                                        "type": {
-                                          "Button": {
-                                            "content": [
-                                              {
-                                                "class": "",
-                                                "type": {
-                                                  "Text": {
-                                                    "text": "Back"
-                                                  }
+                                          "Input": {
+                                            "id": "name",
+                                            "input": {
+                                              "readonly": null,
+                                              "type": {
+                                                "Text": {
+                                                  "placeholder": "Name"
                                                 }
-                                              }
-                                            ],
-                                            "input_map": null,
-                                            "action_id": "back",
-                                            "variant": "default",
-                                            "size": "default",
-                                            "type": "button"
+                                              },
+                                              "default_value": null,
+                                              "required": true,
+                                              "on_change_action": null
+                                            }
                                           }
                                         }
                                       },
                                       {
-                                        "class": "",
                                         "type": {
-                                          "Button": {
+                                          "Stack": {
+                                            "direction": "Row",
+                                            "gap": "Tight",
+                                            "align": "Center",
+                                            "justify": "Start",
+                                            "wrap": true,
                                             "content": [
                                               {
-                                                "class": "",
                                                 "type": {
-                                                  "Text": {
-                                                    "text": "Next"
+                                                  "Action": {
+                                                    "label": "Next",
+                                                    "icon": null,
+                                                    "look": "Primary",
+                                                    "act": {
+                                                      "action": "next",
+                                                      "inputs": null,
+                                                      "disabled": null
+                                                    },
+                                                    "full_width": false,
+                                                    "submit": true,
+                                                    "scroll_to": null
                                                   }
                                                 }
                                               }
-                                            ],
-                                            "input_map": null,
-                                            "action_id": "next",
-                                            "variant": "default",
-                                            "size": "default",
-                                            "type": "submit"
+                                            ]
                                           }
                                         }
                                       }
@@ -1080,12 +1363,142 @@
                           }
                         }
                       }
-                    ]
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
                   }
                 }
               }
             ],
-            "layout": null,
+            "condition": null,
+            "parent_id": null
+          },
+          "b_details": {
+            "title": "Step 2",
+            "description": null,
+            "visuals": [
+              {
+                "id": "second",
+                "display": {
+                  "Page": {
+                    "width": "Narrow",
+                    "content": [
+                      {
+                        "type": {
+                          "Typography": {
+                            "text": "Step 2: pick a number, {name}",
+                            "role": "Heading",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": {
+                          "Form": {
+                            "server_action_id": "next",
+                            "content": [
+                              {
+                                "type": {
+                                  "Stack": {
+                                    "direction": "Col",
+                                    "gap": "Normal",
+                                    "align": "Stretch",
+                                    "justify": "Start",
+                                    "wrap": false,
+                                    "content": [
+                                      {
+                                        "type": {
+                                          "Input": {
+                                            "id": "favorite",
+                                            "input": {
+                                              "readonly": null,
+                                              "type": {
+                                                "Number": {
+                                                  "min": 1,
+                                                  "max": 10
+                                                }
+                                              },
+                                              "default_value": null,
+                                              "required": false,
+                                              "on_change_action": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": {
+                                          "Stack": {
+                                            "direction": "Row",
+                                            "gap": "Tight",
+                                            "align": "Center",
+                                            "justify": "Start",
+                                            "wrap": true,
+                                            "content": [
+                                              {
+                                                "type": {
+                                                  "Action": {
+                                                    "label": "Back",
+                                                    "icon": null,
+                                                    "look": "Secondary",
+                                                    "act": {
+                                                      "action": "back",
+                                                      "inputs": null,
+                                                      "disabled": null
+                                                    },
+                                                    "full_width": false,
+                                                    "submit": false,
+                                                    "scroll_to": null
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "type": {
+                                                  "Action": {
+                                                    "label": "Next",
+                                                    "icon": null,
+                                                    "look": "Primary",
+                                                    "act": {
+                                                      "action": "next",
+                                                      "inputs": null,
+                                                      "disabled": null
+                                                    },
+                                                    "full_width": false,
+                                                    "submit": true,
+                                                    "scroll_to": null
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ],
+                            "submit_when": "OnSubmit"
+                          }
+                        }
+                      }
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
+                  }
+                }
+              }
+            ],
             "condition": null,
             "parent_id": "a_start"
           },
@@ -1096,71 +1509,85 @@
               {
                 "id": "summary",
                 "display": {
-                  "Block": {
-                    "class": "mx-auto flex max-w-md flex-col gap-4 p-8",
+                  "Page": {
+                    "width": "Narrow",
                     "content": [
                       {
-                        "class": "text-xl font-semibold",
                         "type": {
-                          "Text": {
-                            "text": "Thanks, {name}"
+                          "Typography": {
+                            "text": "Thanks, {name}",
+                            "role": "Heading",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "text-muted-foreground",
                         "type": {
-                          "Text": {
-                            "text": "You picked {favorite}."
+                          "Typography": {
+                            "text": "You picked {favorite}.",
+                            "role": "Body",
+                            "tone": "",
+                            "style": {
+                              "numeric": false,
+                              "clamp": 0,
+                              "reserve": false,
+                              "align": "Start",
+                              "struck": false,
+                              "lines": false,
+                              "themed": false
+                            }
                           }
                         }
                       },
                       {
-                        "class": "flex gap-2",
                         "type": {
-                          "Div": {
+                          "Stack": {
+                            "direction": "Row",
+                            "gap": "Tight",
+                            "align": "Center",
+                            "justify": "Start",
+                            "wrap": true,
                             "content": [
                               {
-                                "class": "",
                                 "type": {
-                                  "Button": {
-                                    "content": [
-                                      {
-                                        "class": "",
-                                        "type": {
-                                          "Text": {
-                                            "text": "Back"
-                                          }
-                                        }
-                                      }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "back",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "button"
+                                  "Action": {
+                                    "label": "Back",
+                                    "icon": null,
+                                    "look": "Secondary",
+                                    "act": {
+                                      "action": "back",
+                                      "inputs": null,
+                                      "disabled": null
+                                    },
+                                    "full_width": false,
+                                    "submit": false,
+                                    "scroll_to": null
                                   }
                                 }
                               },
                               {
-                                "class": "",
                                 "type": {
-                                  "Button": {
-                                    "content": [
-                                      {
-                                        "class": "",
-                                        "type": {
-                                          "Text": {
-                                            "text": "Done"
-                                          }
-                                        }
-                                      }
-                                    ],
-                                    "input_map": null,
-                                    "action_id": "finish",
-                                    "variant": "default",
-                                    "size": "default",
-                                    "type": "button"
+                                  "Action": {
+                                    "label": "Done",
+                                    "icon": null,
+                                    "look": "Primary",
+                                    "act": {
+                                      "action": "finish",
+                                      "inputs": null,
+                                      "disabled": null
+                                    },
+                                    "full_width": false,
+                                    "submit": false,
+                                    "scroll_to": null
                                   }
                                 }
                               }
@@ -1168,12 +1595,14 @@
                           }
                         }
                       }
-                    ]
+                    ],
+                    "center": false,
+                    "backdrop": "Default",
+                    "typeface": "Default"
                   }
                 }
               }
             ],
-            "layout": null,
             "condition": null,
             "parent_id": "b_details"
           }
@@ -1207,7 +1636,7 @@
         "multi_instance_per_user": false
       },
       "mocks": {},
-      "source": "use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};\nuse workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\n\nfn button(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .button(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\nfn submit(label: &str, action: &str) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"\")\n        .submit(vec![WorkflowDisplayBuilder::new(\"\").text(label).build()], None, action, \"default\", \"default\")\n        .build()\n}\n\n/// Typed values only reach an action from inside a form.\nfn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new(\"flex flex-col gap-4\").form(action, content, SubmitWhen::OnSubmit).build()\n}\n\n/// Three pages: Next and Back move between nodes, and Done completes the instance.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 1: who are you?\").build(),\n                form(\n                    \"next\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"name\",\n                                WorkflowInputBuilder::new()\n                                    .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                                    .required(true)\n                                    .build(),\n                            )\n                            .build(),\n                        submit(\"Next\", \"next\"),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Step 2: pick a number, {name}\").build(),\n                form(\n                    \"next\",\n                    vec![\n                        WorkflowDisplayBuilder::new(\"\")\n                            .input(\n                                \"favorite\",\n                                WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                            )\n                            .build(),\n                        WorkflowDisplayBuilder::new(\"flex gap-2\")\n                            .div(vec![button(\"Back\", \"back\"), submit(\"Next\", \"next\")])\n                            .build(),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let summary = WorkflowVisualBuilder::new(\"summary\")\n        .block(\n            \"mx-auto flex max-w-md flex-col gap-4 p-8\",\n            vec![\n                WorkflowDisplayBuilder::new(\"text-xl font-semibold\").text(\"Thanks, {name}\").build(),\n                WorkflowDisplayBuilder::new(\"text-muted-foreground\").text(\"You picked {favorite}.\").build(),\n                WorkflowDisplayBuilder::new(\"flex gap-2\")\n                    .div(vec![button(\"Back\", \"back\"), button(\"Done\", \"finish\")])\n                    .build(),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .add_node(\"c_summary\", WorkflowNodeBuilder::new(\"Summary\").parent_id(\"b_details\").visual(summary).build())\n        .build()\n}\n"
+      "source": "use workflow_model::builder::{\n    InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,\n    WorkflowNodeBuilder, WorkflowVisualBuilder,\n};\nuse workflow_model::ui::*;\nuse workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay, WorkflowInput};\n\nfn field(id: &str, input: WorkflowInput) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new().input(id, input).build()\n}\n\n/// Typed values only reach an action from inside a form.\nfn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {\n    WorkflowDisplayBuilder::new().form(action, vec![column(Gap::Normal, content)], SubmitWhen::OnSubmit).build()\n}\n\n/// Three pages: Next and Back move between nodes, and Done completes the instance.\npub fn definition() -> CreateWorkflowDefinition {\n    let first = WorkflowVisualBuilder::new(\"first\")\n        .page(\n            PageWidth::Narrow,\n            vec![\n                heading(\"Step 1: who are you?\"),\n                form(\n                    \"next\",\n                    vec![\n                        field(\n                            \"name\",\n                            WorkflowInputBuilder::new()\n                                .r#type(InputTypeBuilder::text(Some(\"Name\".into())))\n                                .required(true)\n                                .build(),\n                        ),\n                        row(Gap::Tight, vec![primary_action(\"Next\", act(\"next\")).submits()]),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let second = WorkflowVisualBuilder::new(\"second\")\n        .page(\n            PageWidth::Narrow,\n            vec![\n                heading(\"Step 2: pick a number, {name}\"),\n                form(\n                    \"next\",\n                    vec![\n                        field(\n                            \"favorite\",\n                            WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),\n                        ),\n                        row(\n                            Gap::Tight,\n                            vec![secondary_action(\"Back\", act(\"back\")), primary_action(\"Next\", act(\"next\")).submits()],\n                        ),\n                    ],\n                ),\n            ],\n        )\n        .build();\n    let summary = WorkflowVisualBuilder::new(\"summary\")\n        .page(\n            PageWidth::Narrow,\n            vec![\n                heading(\"Thanks, {name}\"),\n                body(\"You picked {favorite}.\"),\n                row(Gap::Tight, vec![secondary_action(\"Back\", act(\"back\")), primary_action(\"Done\", act(\"finish\"))]),\n            ],\n        )\n        .build();\n\n    WorkflowDefinitionBuilder::new(\"steps\", \"Steps\")\n        .add_action(WorkflowActionBuilder::new(\"next\").next_node().build())\n        .add_action(WorkflowActionBuilder::new(\"back\").previous_node().build())\n        .add_action(WorkflowActionBuilder::new(\"finish\").submit().build())\n        .add_node(\"a_start\", WorkflowNodeBuilder::new(\"Step 1\").visual(first).build())\n        .add_node(\"b_details\", WorkflowNodeBuilder::new(\"Step 2\").parent_id(\"a_start\").visual(second).build())\n        .add_node(\"c_summary\", WorkflowNodeBuilder::new(\"Summary\").parent_id(\"b_details\").visual(summary).build())\n        .build()\n}\n"
     }
   ]
 }

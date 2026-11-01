@@ -2,6 +2,7 @@
   import { getContext } from 'svelte';
   import type { UserResource } from '@tawks/workflow-types';
   import { cn } from '../utils.js';
+  import { avatarSrc, fallBackToDefaultAvatar } from './avatar-url.js';
 
   let {
     user,
@@ -18,23 +19,15 @@
     return user;
   });
 
-  let url = $derived.by(() => {
-    if (!u) {
-      return `https://cdn.tawks.app/avatars/default-1.png`;
-    }
-
-    const ending = u.avatar_url.startsWith('default/')
-      ? u.avatar_url
-      : `${u.id}/${u.avatar_url}`;
-
-    return `https://cdn.tawks.app/avatars/${ending}`;
-  });
+  let url = $derived(avatarSrc(u));
 </script>
 
 {#if u}
   <img
     src={url}
     alt={u.display_name}
+    data-person-id={u.id}
+    onerror={fallBackToDefaultAvatar}
     class={cn('rounded-lg object-cover', className)}
   />
 {/if}

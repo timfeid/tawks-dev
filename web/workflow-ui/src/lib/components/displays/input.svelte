@@ -12,5 +12,5 @@
 </script>
 
 {#if input}
-  <WorkflowInput class={display.class} {...rest} {workflow} {input} {inputs} />
+  <WorkflowInput {...rest} {workflow} {input} {inputs} />
 {/if}

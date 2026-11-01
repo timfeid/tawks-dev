@@ -1,6 +1,6 @@
 # tawks-dev
 
-SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs, try the playground, call the API and play the sandbox's games from your browser at [tawks-dev.vercel.app](https://tawks-dev.vercel.app).
+SDKs, examples and docs for building bots and games on [tawks](https://tawks.app). Read the docs, try the playground, call the API and play the sandbox's games from your browser at [docs.tawks.app](https://docs.tawks.app).
 
 | Path | What it is |
 | --- | --- |
@@ -26,8 +26,8 @@ SDKs, examples and docs for building bots and games on [tawks](https://tawks.app
 | `tools/gen-types` | generates `web/workflow-types` and the playground's templates from the Rust model |
 | `web` | the workflow renderer, UI kit and editor that tawks draws pages with |
 | `site` | the docs site and the workflow playground |
-| `bots/tawks-dev` | the bot that runs the Tawks Dev niche and publishes `docs/` to it |
-| `docs` | the developer docs, also readable in the Tawks Dev niche |
+| `bots/tawks-dev` | the bot member of the Tawks Dev hub |
+| `docs` | the developer docs, published on the docs site |
 
 ## Getting started
 
@@ -46,7 +46,7 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 pnpm --filter @tawks/example-tictactoe dev
 ```
 
-To build a page from workflow displays, open the [playground](https://tawks-dev.vercel.app/playground), or run it yourself with `pnpm --filter @tawks/site dev` and open `http://localhost:5300/playground`. It runs pages in the browser, answers server actions from mocks you write, and gives you the Rust for what you built. With devhost running, the plug button loads the pages your bot registered and sends their server actions to your bot.
+To build a page from workflow displays, open the [playground](https://docs.tawks.app/playground), or run it yourself with `pnpm --filter @tawks/site dev` and open `http://localhost:5300/playground`. It runs pages in the browser, answers server actions from mocks you write, and gives you the Rust for what you built. With devhost running, the plug button loads the pages your bot registered and sends their server actions to your bot.
 
 ## Running the games
 

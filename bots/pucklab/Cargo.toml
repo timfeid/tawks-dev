@@ -1,0 +1,22 @@
+[package]
+name = "pucklab-bot"
+version = "0.1.0"
+edition = "2024"
+description = "PuckLab account and club workflows backed by the authoritative PuckLab service."
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+base64 = { workspace = true }
+hmac = "0.12"
+rand = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+sha2 = "0.10"
+tawks-bot = { path = "../../sdk/bot" }
+tawks-game-model = { path = "../../sdk/game-model" }
+tokio = { workspace = true, features = ["time", "sync"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

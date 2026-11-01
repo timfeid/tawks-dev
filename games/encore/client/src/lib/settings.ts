@@ -1,0 +1,43 @@
+import { DEFAULT_BINDINGS, type Bindings, type Control, type Layout } from './input';
+
+export type Settings = {
+  /** How late this player's presses land, in milliseconds; subtracted when judging. */
+  inputOffset: number;
+  /** Shifts the notes on screen to line up with the audio. */
+  videoOffset: number;
+  /** How far ahead the highway shows, in milliseconds. */
+  lookahead: number;
+  volume: number;
+  bindings: Record<Layout, Bindings>;
+};
+
+export const DEFAULT_SETTINGS: Settings = {
+  inputOffset: 0,
+  videoOffset: 0,
+  lookahead: 1100,
+  volume: 0.9,
+  bindings: DEFAULT_BINDINGS,
+};
+
+const clamp = (value: unknown, min: number, max: number, fallback: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+
+/** Reads settings the server kept, filling anything missing or malformed with defaults. */
+export function readSettings(raw: unknown): Settings {
+  const from = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>;
+  const bindings = {} as Record<Layout, Bindings>;
+  for (const layout of ['guitar', 'drums'] as Layout[]) {
+    const saved = (from.bindings?.[layout] ?? {}) as Partial<Bindings>;
+    bindings[layout] = { ...DEFAULT_BINDINGS[layout] };
+    for (const control of Object.keys(DEFAULT_BINDINGS[layout]) as Control[]) {
+      if (Array.isArray(saved[control])) bindings[layout][control] = saved[control]!;
+    }
+  }
+  return {
+    inputOffset: clamp(from.inputOffset, -300, 300, 0),
+    videoOffset: clamp(from.videoOffset, -300, 300, 0),
+    lookahead: clamp(from.lookahead, 500, 2500, DEFAULT_SETTINGS.lookahead),
+    volume: clamp(from.volume, 0, 1, DEFAULT_SETTINGS.volume),
+    bindings,
+  };
+}

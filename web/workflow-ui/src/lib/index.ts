@@ -1,7 +1,6 @@
 export { default as WorkflowShell } from './components/ui/workflow-shell.svelte';
 export { default as WorkflowDisplay } from './components/workflow-display.svelte';
 export { default as WorkflowBody } from './components/ui/workflow-body.svelte';
-export { default as WorkflowHeader } from './components/ui/workflow-header.svelte';
 export { default as WorkflowFooter } from './components/ui/workflow-footer.svelte';
 export { default as WorkflowNotification } from './components/ui/workflow-notification.svelte';
 export { default as Icon } from './components/displays/icon/icon.svelte';
@@ -9,3 +8,6 @@ export { default as Wysiwyg } from './components/displays/wysiwyg.svelte';
 export * from './workflow';
 export * from './utils';
 export * from './media';
+export * from './client';
+export * as look from './look';
+export * from './page-title';

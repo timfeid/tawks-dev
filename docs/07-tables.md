@@ -9,7 +9,7 @@ Use an activity when displays are not enough: a canvas or WebGL game, real-time 
 - **Your bot** registers a workflow, as in [Workflows](04-workflows.md), and then registers the activity: a name, an icon and the URL of your web app.
 - **Your workflow** has a page with one `activity` display. It names the response key that holds the game state and the action that receives moves.
 - **Your web app** runs in the frame. It says hello to tawks, receives the state, draws it, and sends moves back.
-- **A niche admin** turns your game on for their niche. Players then pick it from the game menu in any lobby of that niche.
+- **A hub admin** turns your game on for their hub. Players then pick it from the game menu in any lobby of that hub.
 
 Each player has their own workflow instance, so each frame only ever receives that player's state. With the game framework, that is exactly what `view_for` returns, so hidden cards stay hidden.
 
@@ -19,10 +19,9 @@ The display takes the response key to read and the action to run for moves:
 
 ```rust
 let board = WorkflowNodeBuilder::new("Board")
-    .layout("min-h-screen w-full relative")
     .visual(
         WorkflowVisualBuilder::new("board")
-            .tile(vec![WorkflowDisplayBuilder::new("absolute inset-0").activity("game", "input").build()])
+            .tile(vec![WorkflowDisplayBuilder::new().activity("game", "input").build()])
             .build(),
     )
     .build();
@@ -84,12 +83,12 @@ bot.register_activity(&Activity::workflow(&workflow_id, "Rails").icon("train-fro
 
 From the JavaScript SDK, leave `client_url` out of `bot.activity({ ... })`. Every lobby game on tawks, including the ones tawks runs itself, is registered this way, and the code for most of them is in [the tawks-dev repository](https://github.com/timfeid/tawks-dev/tree/main/games).
 
-## Turning it on in a niche
+## Turning it on in a hub
 
-An activity shows up in a niche only when both of these are true:
+An activity shows up in a hub only when both of these are true:
 
-1. Your bot is a member of the niche. A game drawn by its workflow skips this one, since it loads nothing from your server.
-2. A niche owner or admin has turned the game on under **Settings → Games**.
+1. Your bot is a member of the hub. A game drawn by its workflow skips this one, since it loads nothing from your server.
+2. A hub owner or admin has turned the game on under **Settings → Games**.
 
 Players then open a lobby, open its game menu and pick your game. Everyone in the lobby gets the game tab, each with their own frame.
 
@@ -226,7 +225,7 @@ Key presses inside the frame never reach tawks, so a player's push-to-talk key s
 
 ### Without tawks
 
-The [tawks-dev repository](https://github.com/timfeid/tawks-dev) has `devhost`, a small stand-in for tawks that runs on your machine. It answers the calls your bot makes, runs your server actions, and shows your app in one frame per fake player, with the same sandbox, messages and limits as a real lobby. It shows game activities. For a page built from workflow displays, use the [playground](https://tawks-dev.vercel.app/playground): its plug button connects to devhost, loads the pages your bot registered, and sends their server actions to your bot. The first time, your browser asks whether the site may reach apps on your device; allow it, since devhost runs on your machine.
+The [tawks-dev repository](https://github.com/timfeid/tawks-dev) has `devhost`, a small stand-in for tawks that runs on your machine. It answers the calls your bot makes, runs your server actions, and shows your app in one frame per fake player, with the same sandbox, messages and limits as a real lobby. It shows game activities. For a page built from workflow displays, use the [playground](https://docs.tawks.app/playground): its plug button connects to devhost, loads the pages your bot registered, and sends their server actions to your bot. The first time, your browser asks whether the site may reach apps on your device; allow it, since devhost runs on your machine.
 
 ```sh
 cargo run -p tawks-devhost
@@ -240,15 +239,15 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 
 Open `http://localhost:8787`, pick your game, choose how many players, and press Start. Each frame is a different player, so you can play every seat yourself. Every Start opens a new lobby, so your bot starts a fresh game. The log under the frames shows what your bot said in the lobby, and any call or result devhost does not fake yet. A move your game refuses also shows there as an error, which is expected.
 
-![devhost running the tic-tac-toe example with two players side by side, mid-game](https://tawks-dev.vercel.app/img/docs/devhost.webp)
+![devhost running the tic-tac-toe example with two players side by side, mid-game](https://docs.tawks.app/img/docs/devhost.webp)
 
-The [Play page](https://tawks-dev.vercel.app/play) works with your devhost too: open `https://tawks-dev.vercel.app/play?sandbox=http://localhost:8787` (or your `DEVHOST_PORT`). It lists the games your bots registered and lays every seat side by side, the same as with the sandbox. Your browser may ask whether the site can reach apps on your device; allow it.
+The [Play page](https://docs.tawks.app/play) works with your devhost too: open `https://docs.tawks.app/play?sandbox=http://localhost:8787` (or your `DEVHOST_PORT`). It lists the games your bots registered and lays every seat side by side, the same as with the sandbox. Your browser may ask whether the site can reach apps on your device; allow it.
 
 The examples register their app at a `localhost` address by default. Set `CLIENT_URL` when you run one to point it somewhere else, such as another port or a deployed `https` build.
 
 ### In the sandbox
 
-The sandbox at `https://sandbox.tawks.app` is devhost hosted for everyone. Your bot runs wherever you run it, with its own database and services, and connects to the sandbox instead of tawks. Anyone can then play your game on the [Play page](https://tawks-dev.vercel.app/play), every seat side by side, and share a link to a lobby, all without a niche of your own.
+The sandbox at `https://sandbox.tawks.app` is devhost hosted for everyone. Your bot runs wherever you run it, with its own database and services, and connects to the sandbox instead of tawks. Anyone can then play your game on the [Play page](https://docs.tawks.app/play), every seat side by side, and share a link to a lobby, all without a hub of your own.
 
 1. Make a sandbox bot at [sandbox.tawks.app/sandbox/token](https://sandbox.tawks.app/sandbox/token). You sign in with your tawks account, pick a bot name, and get a token, shown once.
 2. Run your bot against the sandbox:
@@ -267,7 +266,7 @@ The sandbox behaves like devhost, with a few differences:
 - Lobbies live in memory and close after half an hour without use. Each visitor gets lobbies of their own, and the Copy link button shares one.
 - A sandbox bot can register 20 workflows and 100 server actions, and each workflow can be at most 256 KB. An activity must use one of the bot's own workflows.
 - Each tawks account can have five sandbox bots. Delete one on the token page to make another; deleting it stops its token at once.
-- Nothing reaches real tawks: no niches, no notifications, no score.
+- Nothing reaches real tawks: no hubs, no notifications, no score.
 
 The sandbox is devhost with `DEVHOST_PUBLIC_HOST` set, so you can run one yourself from the tawks-dev repository with `docker build -f tools/devhost/Dockerfile .`.
 
@@ -275,7 +274,7 @@ The sandbox is devhost with `DEVHOST_PUBLIC_HOST` set, so you can run one yourse
 
 1. Run your app on `http://localhost` with a dev server that sends `Access-Control-Allow-Origin: *`.
 2. Register the activity with that URL from your bot.
-3. Turn the game on in a niche you own, open a lobby there and pick it from the game menu.
+3. Turn the game on in a hub you own, open a lobby there and pick it from the game menu.
 
 Only your own browser can reach `localhost`, so other players see a blank frame until you register the real `https` URL.
 

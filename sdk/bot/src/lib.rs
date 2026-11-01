@@ -7,17 +7,25 @@ use tokio_util::sync::CancellationToken;
 pub mod activity;
 pub mod game;
 pub mod channel_action;
+pub mod daily;
 pub mod bot;
 pub mod notify;
+pub mod outage;
 mod run;
 pub mod sdk;
+pub mod scoreboard;
 pub mod share;
+pub mod store;
+pub mod ticker;
 pub mod services;
 pub mod types;
 pub mod web_client;
 
 pub use activity::Activity;
+pub use daily::DailyFinishes;
+pub use store::Product;
 pub use bot::*;
+pub use outage::connection_failed;
 pub use run::run;
 pub use sdk::*;
 pub use workflow;
@@ -44,7 +52,7 @@ pub fn shutdown_token() -> CancellationToken {
     #[cfg(not(unix))]
     {
         tokio::spawn(async move {
-            let _ = signal::ctrl_c().await;
+            let _ = tokio::signal::ctrl_c().await;
             t.cancel();
         });
     }

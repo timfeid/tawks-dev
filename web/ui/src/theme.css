@@ -8,6 +8,7 @@
 
     --default-font-family: 'Noto Sans Variable', 'Noto Sans', 'Commissioner', 'Nunito Sans', sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --font-brand: 'Inter Variable', 'Inter', sans-serif;
 
     --color-background: hsl(0, 0%, 95%);
     --color-foreground: hsl(0, 0%, 3.9%);

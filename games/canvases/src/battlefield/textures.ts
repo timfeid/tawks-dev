@@ -813,6 +813,7 @@ export const createTextureUtils = (options: TextureUtilsOptions) => {
     texture.generateMipmaps = true;
     texture.anisotropy = 8;
 
+    texture.userData.cardCacheKey = cacheKey;
     cardTextureCache.set(cacheKey, texture);
     drawCard();
     texture.needsUpdate = true;
@@ -824,7 +825,7 @@ export const createTextureUtils = (options: TextureUtilsOptions) => {
       artImage.onload = () => {
         drawCard(artImage);
         texture.needsUpdate = true;
-        textureStatus.set(cacheKey, 'done');
+        if (cardTextureCache.get(cacheKey) === texture) textureStatus.set(cacheKey, 'done');
       };
       artImage.src = card.image_url;
     } else {
@@ -832,6 +833,15 @@ export const createTextureUtils = (options: TextureUtilsOptions) => {
     }
 
     return texture;
+  };
+
+  const releaseCardTexture = (texture: THREE.Texture) => {
+    const key = texture.userData.cardCacheKey as string | undefined;
+    if (key !== undefined && cardTextureCache.get(key) === texture) {
+      cardTextureCache.delete(key);
+      textureStatus.delete(key);
+    }
+    texture.dispose();
   };
 
   const createStatSprite = (label: string, color: string) => {
@@ -2421,6 +2431,7 @@ export const createTextureUtils = (options: TextureUtilsOptions) => {
     createCardBackTexture,
     createPileOutline,
     createCardTexture,
+    releaseCardTexture,
     createStatSprite,
     createStatBarBillboard,
     create3DButton,

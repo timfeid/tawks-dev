@@ -35,6 +35,11 @@ struct Client {
     spectating: bool,
 }
 
+fn unused_port() -> u16 {
+    let reserve=std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    reserve.local_addr().unwrap().port()
+}
+
 impl Client {
     async fn open(port: u16, token: &str) -> Client {
         let (mut socket, _) = connect_async(format!("ws://127.0.0.1:{port}/party/ws")).await.unwrap();
@@ -73,7 +78,7 @@ impl Client {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_recording_runs_from_request_to_stop() {
-    let port = 19500 + (std::process::id() % 1000) as u16;
+    let port = unused_port();
     let server = PartyServer::start(PartyConfig {
         bind: format!("127.0.0.1:{port}").parse().unwrap(),
         public_url: format!("ws://127.0.0.1:{port}/party/ws"),
@@ -83,7 +88,7 @@ async fn a_recording_runs_from_request_to_stop() {
     let recorder = Arc::new(FakeRecorder::default());
     server.set_recorder(recorder.clone());
 
-    let token = server.issue_token_for("rec-room", "u0", "Player u0", "", Some(crate::coven::KEY), false);
+    let token = server.issue_token_for("rec-room", "u0", "Player u0", "", Some(crate::coven::KEY), false, false);
     let mut player = Client::open(port, &token).await;
     player.send(json!({"type": "record", "on": true})).await;
     player.wait("the recording asked for", |c| c.room["recording"]["by"] == "Player u0").await;
@@ -108,7 +113,7 @@ async fn a_recording_runs_from_request_to_stop() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_recording_stops_when_the_last_person_leaves() {
-    let port = 20500 + (std::process::id() % 1000) as u16;
+    let port = unused_port();
     let server = PartyServer::start(PartyConfig {
         bind: format!("127.0.0.1:{port}").parse().unwrap(),
         public_url: format!("ws://127.0.0.1:{port}/party/ws"),
@@ -131,7 +136,7 @@ async fn the_recording_stops_when_the_last_person_leaves() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_guest_cannot_record() {
+async fn a_guest_watches_without_a_seat_and_cannot_record() {
     let port = 21500 + (std::process::id() % 1000) as u16;
     let server = PartyServer::start(PartyConfig {
         bind: format!("127.0.0.1:{port}").parse().unwrap(),
@@ -141,20 +146,10 @@ async fn a_guest_cannot_record() {
     .unwrap();
     let recorder = Arc::new(FakeRecorder::default());
     server.set_recorder(recorder.clone());
-    let token = server.issue_token_for("guest-room", "g0", "Guest", "", None, true);
-    let (mut socket, _) = connect_async(format!("ws://127.0.0.1:{port}/party/ws")).await.unwrap();
-    socket.send(Message::Text(json!({"type": "hello", "token": token}).to_string().into())).await.unwrap();
-    socket.send(Message::Text(json!({"type": "record", "on": true}).to_string().into())).await.unwrap();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-    let mut refused = None;
-    while refused.is_none() && tokio::time::Instant::now() < deadline {
-        if let Ok(Some(Ok(Message::Text(text)))) = timeout(Duration::from_millis(500), socket.next()).await {
-            let msg: Value = serde_json::from_str(&text).unwrap();
-            if msg["type"] == "error" {
-                refused = msg["message"].as_str().map(str::to_string);
-            }
-        }
-    }
-    assert_eq!(refused.as_deref(), Some("Sign in to record."));
+    let token = server.issue_token_for("guest-room", "g0", "Guest", "", None, true, false);
+    let mut guest = Client::open(port, &token).await;
+    assert!(guest.spectating, "a guest watches without a seat");
+    guest.send(json!({"type": "record", "on": true})).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(recorder.started.lock().unwrap().is_empty());
 }

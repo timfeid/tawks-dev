@@ -1,46 +1,51 @@
+<script lang="ts" module>
+  let formatters: { whole: Intl.NumberFormat; tenths: Intl.NumberFormat } | undefined;
+
+  function numberFormats() {
+    formatters ??= {
+      whole: new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 0 }),
+      tenths: new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 1, minimumFractionDigits: 1 }),
+    };
+    return formatters;
+  }
+</script>
+
 <script lang="ts">
-  import { getNestedValue, interpolate, resolveInputValue, evaluateCondition, formatDate, cn, debounce, deepEqual, objectInterpolate } from '../../utils';
-  import { onMount, onDestroy } from 'svelte';
+  import { interpolate } from '../../utils';
+  import { untrack } from 'svelte';
+  import * as look from '../../look';
   import type { Props } from '../workflow-display.svelte';
 
   let { workflow, display, inputs }: Props = $props();
   let countdown = $derived('Countdown' in display.type ? display.type.Countdown : undefined);
   let str = $derived(countdown ? interpolate(inputs, countdown.until) : '');
   let until = $derived(str ? new Date(str) : undefined);
-  console.log(str, until);
   let remainingMs = $state(0);
   let shake = $derived(
     countdown?.shake_under_ms_left && remainingMs < countdown.shake_under_ms_left,
   );
-  let interval = $state<ReturnType<typeof setInterval>>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   let shouldUpdateFast = $derived(remainingMs < (countdown?.shake_under_ms_left ?? 5000));
 
-  function updateRemaining() {
-    const now = new Date();
-    if (until) {
-      const diff = until.getTime() - now.getTime();
-      remainingMs = Math.max(0, diff);
-    }
-
-    const delay = shouldUpdateFast ? 50 : 1000;
-    interval = setTimeout(updateRemaining, delay);
+  function tick(target: number) {
+    remainingMs = Math.max(0, target - Date.now());
+    if (remainingMs === 0) return;
+    timer = setTimeout(() => tick(target), shouldUpdateFast ? 50 : 1000);
   }
 
-  onMount(() => {
-    updateRemaining();
-  });
-
-  onDestroy(() => {
-    clearInterval(interval);
+  $effect(() => {
+    const target = until?.getTime();
+    if (target === undefined || Number.isNaN(target)) {
+      remainingMs = 0;
+      return;
+    }
+    untrack(() => tick(target));
+    return () => clearTimeout(timer);
   });
 
   function updateTime(ms: number) {
-    const formatter = new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 0 });
-    const decimalFormatter = new Intl.NumberFormat(navigator.language, {
-      maximumFractionDigits: 1,
-      minimumFractionDigits: 1,
-    });
+    const { whole: formatter, tenths: decimalFormatter } = numberFormats();
     const totalSeconds = ms / 1000;
     const days = Math.floor(totalSeconds / (24 * 3600));
     const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
@@ -61,9 +66,9 @@
 </script>
 
 {#if countdown}
-  <div class={` flex justify-center`}>
+  <div class="flex justify-center">
     <span
-      class={`${display.class} transition-all duration-200 ${shake ? 'shake animate-pulse' : ''}`}
+      class={[look.text(countdown.role ?? 'Body', look.toneOf(countdown.tone, inputs)), 'tabular-nums transition-all duration-200', shake && 'shake animate-pulse']}
       aria-live="polite"
     >
       {interpolate({ ...inputs, [countdown.as]: updateTime(remainingMs) }, countdown.text)}

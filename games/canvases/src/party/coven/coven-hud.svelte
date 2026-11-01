@@ -10,6 +10,7 @@
     needsBlueChoice,
     needsSecond,
   } from './rules';
+  import { handSpacing } from '../table/hand';
 
   let {
     view,
@@ -54,7 +55,10 @@
   let ability = $state<'peek' | 'cure' | null>(null);
   let peekTarget = $state<number | null>(null);
   let confessing = $state(false);
+  let nightMode = $state<'kill' | 'guard'>('kill');
   let showRules = $state(false);
+  let handWidth = $state(0);
+  const spacing = $derived(handSpacing(handWidth, view?.hand?.length ?? 0, 74));
   let seenHit = 0;
 
   function clearPick() {
@@ -72,7 +76,13 @@
       peekTarget = null;
     }
     if (phase?.kind !== 'confess') confessing = false;
+    if (phase?.kind !== 'night') nightMode = 'kill';
   });
+
+  const bothRoles = $derived(phase?.kind === 'night' && iAmWitch && phase.constable);
+  const guarding = $derived(
+    phase?.kind === 'night' && phase.constable && (!iAmWitch || nightMode === 'guard'),
+  );
 
   function clickCard(index: number) {
     if (!canPlay || !view?.hand) return;
@@ -110,7 +120,7 @@
     if (ability === 'cure') return true;
     if (ability === 'peek') return seat !== mySeat && hidden(seat).length > 0;
     if (phase?.kind === 'dawn') return true;
-    if (phase?.kind === 'night') return phase.constable ? seat !== mySeat : true;
+    if (phase?.kind === 'night') return guarding ? seat !== mySeat : true;
     return false;
   }
 
@@ -146,12 +156,10 @@
       return;
     }
     if (phase?.kind === 'dawn') act({ type: 'place_familiar', target: seat });
-    else if (phase?.kind === 'night')
-      act(
-        phase.constable && !iAmWitch
-          ? { type: 'guard', target: seat }
-          : { type: 'kill', target: seat },
-      );
+    else if (phase?.kind === 'night') {
+      act(guarding ? { type: 'guard', target: seat } : { type: 'kill', target: seat });
+      if (bothRoles && !guarding) nightMode = 'guard';
+    }
   }
 
   function chooseBlue(index: number) {
@@ -237,8 +245,8 @@
         ? 'Look at whose verdict card?'
         : `Which of ${nameOf(peekTarget)}'s cards?`;
     if (phase?.kind === 'dawn' && iAmWitch) return 'Place the Familiar in front of whom?';
+    if (guarding) return 'Whom do you guard tonight?';
     if (phase?.kind === 'night' && iAmWitch) return 'Who dies tonight?';
-    if (phase?.kind === 'night' && phase.constable) return 'Whom do you guard tonight?';
     return '';
   });
   const myVote = $derived.by(() => {
@@ -277,7 +285,19 @@
         class="pointer-events-auto flex items-center gap-2 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-slate-900"
       >
         {prompt}
-        {#if myVote !== null}<span class="font-normal">Chosen: {nameOf(myVote)}</span>{/if}
+        {#if myVote !== null && !guarding}<span class="font-normal"
+            >Chosen: {nameOf(myVote)}</span
+          >{/if}
+        {#if bothRoles}
+          <span class="flex gap-0.5 rounded-full bg-slate-900/20 p-0.5">
+            {#each ['kill', 'guard'] as const as mode (mode)}
+              <button
+                class="rounded-full px-2 {nightMode === mode ? 'bg-slate-900 text-amber-300' : ''}"
+                onclick={() => (nightMode = mode)}>{mode === 'kill' ? 'Kill' : 'Guard'}</button
+              >
+            {/each}
+          </span>
+        {/if}
         {#if picking || ability}<button
             class="ml-1 rounded-full bg-slate-900/20 p-0.5"
             aria-label="Cancel"
@@ -292,9 +312,11 @@
   >
     <div class="{panel} p-2">
       <div
-        class="mb-1 flex items-center justify-between px-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/50"
+        class="mb-1 flex flex-wrap items-center justify-between gap-x-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/50"
       >
-        <span>The town</span><span>Round {view.round}, deck {view.deck}</span>
+        <span class="whitespace-nowrap">The town</span><span class="min-w-0 truncate"
+          >Round {view.round}, deck {view.deck}</span
+        >
       </div>
       {#each view.players as player (player.seat)}
         {@const seat = view.seats[player.seat]}
@@ -336,7 +358,7 @@
       {/each}
     </div>
     <div class="{panel} max-h-48 overflow-y-auto p-2 text-[11px] leading-snug text-white/75">
-      {#each [...view.log].reverse() as entry, i (i)}
+      {#each view.log as entry, i (i)}
         <div class="border-b border-white/5 py-0.5 last:border-0">
           {describe(entry, view.seats)}
         </div>
@@ -472,6 +494,11 @@
           </div>
         {/each}
       </div>
+      {#if room.phase.name === 'game_over'}
+        <div class="mt-3 text-xs text-white/60">
+          Back to the lobby in {Math.ceil(room.phase.seconds)}
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -502,13 +529,14 @@
           <div class="mt-2 flex gap-1">
             {#each meP.verdicts as v, i (i)}
               <span
-                class="flex h-8 flex-1 items-center justify-center rounded border text-[9px] font-bold {v.revealed
+                class="flex h-8 min-w-0 flex-1 items-center justify-center rounded border px-0.5 text-[9px] font-bold {v.revealed
                   ? 'border-white/40'
                   : 'border-dashed border-white/15'}"
                 style="background:{v.card
                   ? VERDICTS[v.card].color + '33'
                   : '#1e1b2e'}; color:{v.card ? VERDICTS[v.card].color : '#94a3b8'}"
-                >{v.card ? VERDICTS[v.card].title : '?'}</span
+                title={v.card ? VERDICTS[v.card].title : undefined}
+                ><span class="truncate">{v.card ? VERDICTS[v.card].title : '?'}</span></span
               >
             {/each}
           </div>
@@ -536,15 +564,15 @@
               >
             </span>
           </div>
-          <div class="mt-1 flex gap-1.5 overflow-x-auto pb-1">
+          <div class="mt-1 flex pb-1" bind:clientWidth={handWidth}>
             {#each view.hand ?? [] as card, i (i)}
               <button
-                class="flex h-24 w-[4.6rem] shrink-0 flex-col rounded-lg border px-1.5 py-1 text-left transition {cardClass(
+                class="relative flex h-24 w-[4.6rem] shrink-0 flex-col rounded-lg border px-1.5 py-1 text-left shadow-md transition hover:z-10 {cardClass(
                   card,
-                )} {selected === i ? '-translate-y-2 ring-2 ring-amber-300' : ''} {canPlay
+                )} {selected === i ? 'z-10 -translate-y-2 ring-2 ring-amber-300' : ''} {canPlay
                   ? 'hover:-translate-y-1'
                   : 'opacity-70'}"
-                style="background:{COLOR_HEX[CARDS[card].color]}"
+                style="background:{COLOR_HEX[CARDS[card].color]}; margin-left:{i ? spacing : 0}px"
                 disabled={!canPlay}
                 onclick={() => clickCard(i)}
                 title={CARDS[card].text}

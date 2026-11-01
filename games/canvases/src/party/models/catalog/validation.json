@@ -1,0 +1,96 @@
+[
+  {
+    "file": "cowboy.glb",
+    "sha256": "9d7a009664f211b512bc6da2484ec4c6b061da3e39e8cd3fb43ddea04a18e97f",
+    "nodes": 25,
+    "bones": 23,
+    "accessors": 401,
+    "bufferViews": 401,
+    "extensionsUsed": [],
+    "animations": [
+      "Death",
+      "Defeat",
+      "Idle",
+      "Run",
+      "Victory"
+    ]
+  },
+  {
+    "file": "goblin.glb",
+    "sha256": "5011bea3e5df2fcd71c5ccfc1f068274170d2d297e66e5c5392c15ee351ec11f",
+    "nodes": 25,
+    "bones": 23,
+    "accessors": 376,
+    "bufferViews": 376,
+    "extensionsUsed": [],
+    "animations": [
+      "Death",
+      "Defeat",
+      "Idle",
+      "Run",
+      "Victory"
+    ]
+  },
+  {
+    "file": "knight.glb",
+    "sha256": "06d389d7b344e8333daaf95a051d4688813c7013f6ec06efcd770f7352bb3235",
+    "nodes": 25,
+    "bones": 23,
+    "accessors": 381,
+    "bufferViews": 381,
+    "extensionsUsed": [],
+    "animations": [
+      "Death",
+      "Defeat",
+      "Idle",
+      "Run",
+      "Victory"
+    ]
+  },
+  {
+    "file": "ninja.glb",
+    "sha256": "5f9fa4f3a9a50e7aea4e8be349fe43fd58b460920765ee26c677ca880705eb51",
+    "nodes": 26,
+    "bones": 24,
+    "accessors": 381,
+    "bufferViews": 381,
+    "extensionsUsed": [],
+    "animations": [
+      "Death",
+      "Defeat",
+      "Idle",
+      "Run",
+      "Victory"
+    ]
+  },
+  {
+    "file": "pirate.glb",
+    "sha256": "e8d381fee6e7a7de5f4b2575b202e0aacce14a21f748a5baac137590bed7744e",
+    "nodes": 25,
+    "bones": 23,
+    "accessors": 396,
+    "bufferViews": 396,
+    "extensionsUsed": [],
+    "animations": [
+      "Death",
+      "Defeat",
+      "Idle",
+      "Run",
+      "Victory"
+    ]
+  },
+  {
+    "file": "robot.glb",
+    "sha256": "69bbdb5202fb108db19222da7bbaa08bdd72e058a2989246de447d633b118325",
+    "nodes": 51,
+    "bones": 36,
+    "accessors": 424,
+    "bufferViews": 424,
+    "extensionsUsed": [],
+    "animations": [
+      "Idle",
+      "Run",
+      "Victory"
+    ]
+  }
+]

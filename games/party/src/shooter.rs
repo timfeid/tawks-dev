@@ -95,6 +95,21 @@ pub fn arena() -> Vec<Block> {
     blocks
 }
 
+/// A map laid out for four, spread out for a bigger field: every block moves
+/// out from the middle and grows by `size` across the floor, but keeps its
+/// height so the jumps and crouches still work the same.
+pub fn stretch(blocks: Vec<Block>, size: f32) -> Vec<Block> {
+    blocks
+        .into_iter()
+        .map(|b| Block { x: b.x * size, z: b.z * size, hx: b.hx * size, hz: b.hz * size, ..b })
+        .collect()
+}
+
+/// Spawn spots moved out from the middle by `size`, to match a stretched map.
+pub fn spread(spots: &[(f32, f32)], size: f32) -> Vec<(f32, f32)> {
+    spots.iter().map(|&(x, z)| (x * size, z * size)).collect()
+}
+
 pub fn spawn_points() -> Vec<(f32, f32)> {
     vec![
         (-22.0, -22.0),
@@ -193,27 +208,34 @@ impl Timberline {
     }
 
     pub fn build() -> Self {
+        Self::build_for(1.0)
+    }
+
+    /// The map spread out by `size` for a bigger field. The ridges, lookout,
+    /// rocks and logs grow across the floor; stairs keep their steps and the
+    /// trees keep their size, they just stand further apart.
+    pub fn build_for(size: f32) -> Self {
         let mut map = Timberline { blocks: Vec::new(), kinds: Vec::new(), spawns: Vec::new() };
         // Everything below is placed once for the north half and mirrored
         // through the centre for the south.
         for sign in [-1.0f32, 1.0] {
-            let m = |x: f32, z: f32| (x * sign, z * sign);
+            let m = |x: f32, z: f32| (x * sign * size, z * sign * size);
 
             // The ridge, reached by two flights of stairs from the meadow.
             let (x, z) = m(0.0, -21.5);
-            map.solid(x, z, 14.0, 4.5, RIDGE_TOP, "earth");
+            map.solid(x, z, 14.0 * size, 4.5 * size, RIDGE_TOP, "earth");
             for across in [-9.5f32, 9.5] {
-                map.stairs(false, -17.0 * sign, sign, across * sign, 1.2, RIDGE_TOP);
+                map.stairs(false, -17.0 * sign * size, sign, across * sign * size, 1.2, RIDGE_TOP);
             }
             // Rocks on the ridge to duck behind.
             for (rx, rz, hx, hz) in [(-5.5, -19.6, 1.3, 0.7), (4.0, -23.5, 1.0, 1.0), (12.0, -19.5, 0.8, 1.2)] {
                 let (x, z) = m(rx, rz);
-                map.solid(x, z, hx, hz, RIDGE_TOP + 1.05, "rock");
+                map.solid(x, z, hx * size, hz * size, RIDGE_TOP + 1.05, "rock");
             }
 
             // The bridge from the ridge to the lookout, high enough to walk under.
             let (x, z) = m(0.0, -9.75);
-            map.floating(x, z, 1.1, 7.25, 1.95, RIDGE_TOP, "wood");
+            map.floating(x, z, 1.1, 7.25 * size, 1.95, RIDGE_TOP, "wood");
 
             // Meadow cover: low rocks and a fallen log, good for crouching.
             for (rx, rz, hx, hz, top, kind) in [
@@ -223,7 +245,7 @@ impl Timberline {
                 (4.5, -13.0, 0.9, 0.9, 0.95, "rock"),
             ] {
                 let (x, z) = m(rx, rz);
-                map.solid(x, z, hx, hz, top, kind);
+                map.solid(x, z, hx * size, hz * size, top, kind);
             }
 
             // The woods on this side's flank.
@@ -238,9 +260,9 @@ impl Timberline {
         }
 
         // The lookout in the middle, with stairs up from east and west.
-        map.solid(0.0, 0.0, 2.5, 2.5, RIDGE_TOP, "wood");
-        map.stairs(true, 2.5, 1.0, 0.0, 1.1, RIDGE_TOP);
-        map.stairs(true, -2.5, -1.0, 0.0, 1.1, RIDGE_TOP);
+        map.solid(0.0, 0.0, 2.5 * size, 2.5 * size, RIDGE_TOP, "wood");
+        map.stairs(true, 2.5 * size, 1.0, 0.0, 1.1, RIDGE_TOP);
+        map.stairs(true, -2.5 * size, -1.0, 0.0, 1.1, RIDGE_TOP);
         map
     }
 }
@@ -379,12 +401,18 @@ pub struct PaintBlasters {
     player_damage: bool,
     allow_movement: bool,
     teams: HashMap<u8, u8>,
+    /// Partners, when played in pairs: shots pass through them.
+    allies: HashMap<u8, u8>,
     skills: HashMap<u8, Skill>,
+    /// How much wider than the map for four, for the size of the field.
+    size: f32,
+    shot_range: f32,
 }
 
 impl PaintBlasters {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
-        let spawns = spawn_points();
+        let size = crate::bout::crowd_scale(contestants.len());
+        let spawns = spread(&spawn_points(), size);
         let fighters = contestants
             .iter()
             .enumerate()
@@ -413,7 +441,7 @@ impl PaintBlasters {
         PaintBlasters {
             fighters,
             time: 0.0,
-            blocks: arena(),
+            blocks: stretch(arena(), size),
             block_kinds: Vec::new(),
             spawns,
             rng: StdRng::seed_from_u64(seed),
@@ -422,16 +450,25 @@ impl PaintBlasters {
             damage: SHOT_DAMAGE,
             respawn_seconds: RESPAWN_SECONDS,
             round_seconds: ROUND_SECONDS,
-            half_x: ARENA_HALF,
-            half_z: ARENA_HALF,
+            half_x: ARENA_HALF * size,
+            half_z: ARENA_HALF * size,
             player_damage: true,
             allow_movement: true,
             teams: HashMap::new(),
+            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
             skills: contestants
                 .iter()
                 .map(|c| (c.seat, Skill(c.skill)))
                 .collect(),
+            size,
+            // A paintball still carries across the yard when the yard is bigger.
+            shot_range: SHOT_RANGE * size,
         }
+    }
+
+    /// How much wider than the map for four this field plays.
+    pub fn size(&self) -> f32 {
+        self.size
     }
 
     /// The skill a playlist wrapper needs when it drives its own bots.
@@ -452,6 +489,9 @@ impl PaintBlasters {
     /// "map" that disagrees with collisions.
     pub fn use_target_range(&mut self) {
         let (blocks, spawns, half_x) = target_range(self.fighters.len());
+        // The range already gets a lane per player, so it is never stretched.
+        self.size = 1.0;
+        self.shot_range = SHOT_RANGE;
         self.blocks = blocks;
         self.spawns = spawns;
         self.half_x = half_x;
@@ -473,12 +513,12 @@ impl PaintBlasters {
     /// Popgun Knockout: every direct hit is decisive and there are no
     /// respawns.  The wrapper owns the shorter party-round finish/ranking.
     pub fn use_popgun_knockout(&mut self) {
-        let map = Timberline::build();
+        let map = Timberline::build_for(self.size);
         self.blocks = map.blocks;
         self.block_kinds = map.kinds;
         self.spawns = map.spawns;
-        self.half_x = 26.0;
-        self.half_z = 26.0;
+        self.half_x = 26.0 * self.size;
+        self.half_z = 26.0 * self.size;
         self.damage = MAX_HP;
         self.respawn_seconds = f32::INFINITY;
         self.round_seconds = f32::INFINITY;
@@ -495,11 +535,16 @@ impl PaintBlasters {
     }
 
     pub fn use_ricochet_table(&mut self) {
-        let (blocks, spawns) = ricochet_table();
-        self.blocks = blocks;
-        self.spawns = spawns;
-        self.half_x = 34.0;
-        self.half_z = 24.0;
+        let (blocks, mut spawns) = ricochet_table();
+        // Six spots seat six; any more get the middle of each short end
+        // rather than doubling up on a corner.
+        if self.fighters.len() > spawns.len() {
+            spawns.extend([(-30.0, 0.0), (30.0, 0.0)]);
+        }
+        self.blocks = stretch(blocks, self.size);
+        self.spawns = spread(&spawns, self.size);
+        self.half_x = 34.0 * self.size;
+        self.half_z = 24.0 * self.size;
         for (index, fighter) in self.fighters.iter_mut().enumerate() {
             let (x, z) = self.spawns[index % self.spawns.len()];
             fighter.x = x;
@@ -513,17 +558,21 @@ impl PaintBlasters {
     }
 
     pub fn use_retake_site(&mut self) {
-        self.blocks = retake_site();
-        self.spawns = vec![
-            (-10.0, -26.0),
-            (-26.0, 26.0),
-            (10.0, -26.0),
-            (26.0, 26.0),
-            (0.0, -28.0),
-            (0.0, 27.0),
-        ];
-        self.half_x = 34.0;
-        self.half_z = 32.0;
+        let size = self.size;
+        self.blocks = stretch(retake_site(), size);
+        self.spawns = spread(
+            &[
+                (-10.0, -26.0),
+                (-26.0, 26.0),
+                (10.0, -26.0),
+                (26.0, 26.0),
+                (0.0, -28.0),
+                (0.0, 27.0),
+            ],
+            size,
+        );
+        self.half_x = 34.0 * size;
+        self.half_z = 32.0 * size;
         self.damage = 50;
         self.respawn_seconds = f32::INFINITY;
         self.round_seconds = f32::INFINITY;
@@ -540,6 +589,7 @@ impl PaintBlasters {
                 [(-26.0, 26.0), (26.0, 26.0), (0.0, 27.0), (18.0, 27.0)]
             };
             let (x, z) = candidates[team_index % candidates.len()];
+            let (x, z) = (x * size, z * size);
             fighter.x = x;
             fighter.z = z;
             fighter.y = 0.0;
@@ -547,6 +597,31 @@ impl PaintBlasters {
             fighter.vy = 0.0;
             fighter.vz = 0.0;
             fighter.yaw = facing_center(x, z);
+        }
+    }
+
+    /// A team game on its own map: one hit puts a player out until the mode
+    /// brings them back with `place`, and the mode decides when it is over.
+    pub fn use_team_field(&mut self, blocks: Vec<Block>, kinds: Vec<&'static str>, half_x: f32, half_z: f32) {
+        self.blocks = blocks;
+        self.block_kinds = kinds;
+        self.half_x = half_x;
+        self.half_z = half_z;
+        self.damage = MAX_HP;
+        self.respawn_seconds = f32::INFINITY;
+        self.round_seconds = f32::INFINITY;
+        self.teams.clear();
+    }
+
+    pub fn set_team(&mut self, seat: u8, team: u8) {
+        self.teams.insert(seat, team);
+    }
+
+    /// Puts a player back on their feet at a spot, facing across the field.
+    pub fn place(&mut self, seat: u8, x: f32, z: f32) {
+        let y = ground_height(&self.blocks, x, z);
+        if let Some(fighter) = self.fighters.iter_mut().find(|f| f.seat == seat) {
+            *fighter = Fighter { x, y, z, yaw: facing_center(x, z), kills: fighter.kills, deaths: fighter.deaths, ..blank(seat) };
         }
     }
 
@@ -621,7 +696,7 @@ impl PaintBlasters {
         } else {
             None
         };
-        let range = hit.map(|(_, t)| t).unwrap_or(wall.min(SHOT_RANGE));
+        let range = hit.map(|(_, t)| t).unwrap_or(wall.min(self.shot_range));
         events.push(json!({
             "kind": "shot",
             "seat": seat,
@@ -670,7 +745,7 @@ impl PaintBlasters {
             &self.blocks,
             self.half_x,
             self.half_z,
-            SHOT_RANGE,
+            self.shot_range,
         )
     }
 
@@ -686,6 +761,7 @@ impl PaintBlasters {
             .iter()
             .filter(|f| f.seat != seat && f.alive())
             .filter(|f| self.team_of(seat).is_none() || self.team_of(seat) != self.team_of(f.seat))
+            .filter(|f| !crate::bout::allied(self.allies.get(&seat).copied(), self.allies.get(&f.seat).copied()))
             .filter_map(|f| {
                 fpmove::ray_player(origin, dir, (f.x, f.y, f.z), PLAYER_RADIUS, f.height())
                     .map(|t| (f.seat, t))
@@ -767,6 +843,7 @@ impl Bout for PaintBlasters {
             "game": "shooter",
             "half": self.half_x,
             "half_z": self.half_z,
+            "scale": self.size,
             "hp": MAX_HP,
             "eye": EYE_HEIGHT,
             "height": PLAYER_HEIGHT,
@@ -967,4 +1044,31 @@ fn wrap_angle(a: f32) -> f32 {
         angle += tau;
     }
     angle
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn players(count: u8) -> Vec<Contestant> {
+        (0..count).map(Contestant::person).collect()
+    }
+
+    #[test]
+    fn a_bigger_field_gets_a_bigger_yard() {
+        let four = PaintBlasters::new(&players(4), 1);
+        assert_eq!(four.half_x, ARENA_HALF, "four play it as built");
+        assert_eq!(four.blocks.len(), arena().len());
+        assert!(four.blocks.iter().zip(arena()).all(|(a, b)| a.x == b.x && a.hx == b.hx));
+        assert_eq!((four.fighters[0].x, four.fighters[0].z), spawn_points()[0]);
+
+        let eight = PaintBlasters::new(&players(8), 1);
+        let grown = eight.half_x / ARENA_HALF;
+        assert!((grown - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert!((eight.blocks[0].hx / arena()[0].hx - grown).abs() < 1e-4, "the cover grows with it");
+        assert_eq!(eight.blocks[0].top, arena()[0].top, "but stays the same height");
+        assert!(eight.fighters.iter().all(|f| f.x.abs() < eight.half_x && f.z.abs() < eight.half_z));
+        assert_eq!(eight.setup()["half"], json!(eight.half_x), "and the client is told");
+        assert_eq!(eight.setup()["scale"], json!(eight.size));
+    }
 }

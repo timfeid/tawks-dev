@@ -1,0 +1,1190 @@
+{
+  "id": "volcano",
+  "coast": [
+    [
+      -54,
+      2
+    ],
+    [
+      -64,
+      -4
+    ],
+    [
+      -62,
+      -10
+    ],
+    [
+      -52,
+      -18
+    ],
+    [
+      -44,
+      -30
+    ],
+    [
+      -30,
+      -42
+    ],
+    [
+      -12,
+      -46
+    ],
+    [
+      4,
+      -48
+    ],
+    [
+      20,
+      -44
+    ],
+    [
+      34,
+      -38
+    ],
+    [
+      48,
+      -28
+    ],
+    [
+      57,
+      -14
+    ],
+    [
+      62,
+      -2
+    ],
+    [
+      64,
+      8
+    ],
+    [
+      54,
+      14
+    ],
+    [
+      52,
+      22
+    ],
+    [
+      40,
+      32
+    ],
+    [
+      24,
+      40
+    ],
+    [
+      8,
+      44
+    ],
+    [
+      -8,
+      42
+    ],
+    [
+      -22,
+      40
+    ],
+    [
+      -36,
+      34
+    ],
+    [
+      -48,
+      24
+    ],
+    [
+      -54,
+      12
+    ]
+  ],
+  "land": [
+    {
+      "kind": "hill",
+      "x": 0,
+      "z": -6,
+      "r": 40,
+      "h": 13
+    },
+    {
+      "kind": "crater",
+      "x": 0,
+      "z": -6,
+      "r": 13,
+      "h": -8.5
+    },
+    {
+      "kind": "hill",
+      "x": -40,
+      "z": 10,
+      "r": 9,
+      "h": 2.4
+    },
+    {
+      "kind": "hill",
+      "x": 44,
+      "z": 0,
+      "r": 8,
+      "h": 1.8
+    },
+    {
+      "kind": "plateau",
+      "x": 6,
+      "z": -36,
+      "r": 9,
+      "h": 5
+    },
+    {
+      "kind": "river",
+      "lava": true,
+      "points": [
+        [
+          -12,
+          -12
+        ],
+        [
+          -22,
+          -14
+        ],
+        [
+          -32,
+          -10
+        ],
+        [
+          -42,
+          -6
+        ],
+        [
+          -53,
+          -4
+        ]
+      ],
+      "r": 2.4,
+      "h": -1.4
+    }
+  ],
+  "zones": [
+    {
+      "name": "Obsidian Beach",
+      "x": 0,
+      "z": 34,
+      "r": 10
+    },
+    {
+      "name": "Lava Fields",
+      "x": 46,
+      "z": -2,
+      "r": 12
+    },
+    {
+      "name": "Lava Tube",
+      "x": 33,
+      "z": -6,
+      "r": 10
+    },
+    {
+      "name": "Fortress Ruins",
+      "x": 6,
+      "z": -36,
+      "r": 10
+    },
+    {
+      "name": "The Crater",
+      "x": 0,
+      "z": -6,
+      "r": 13
+    },
+    {
+      "name": "Ash Village",
+      "x": -40,
+      "z": 8,
+      "r": 11
+    },
+    {
+      "name": "Lava River",
+      "x": -32,
+      "z": -10,
+      "r": 9
+    },
+    {
+      "name": "Ashen Exchange",
+      "x": -16,
+      "z": 12,
+      "r": 11
+    },
+    {
+      "name": "Ember Fortress",
+      "x": 5,
+      "z": -36,
+      "r": 12
+    },
+    {
+      "name": "Obsidian Fields",
+      "x": 46,
+      "z": -1,
+      "r": 14
+    },
+    {
+      "name": "Crater Rim",
+      "x": 1,
+      "z": -5,
+      "r": 14
+    }
+  ],
+  "paths": [
+    {
+      "id": "lap",
+      "closed": true,
+      "points": [
+        [
+          0,
+          34,
+          [
+            "start",
+            "shop",
+            "coin"
+          ]
+        ],
+        [
+          14,
+          32,
+          [
+            "hazard",
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          18,
+          38,
+          [
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          22,
+          34,
+          [
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          26,
+          27,
+          [
+            "coin",
+            "loss",
+            "coin"
+          ]
+        ],
+        [
+          36,
+          18,
+          [
+            "hazard",
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          48,
+          12,
+          [
+            "coin",
+            "hazard",
+            "coin",
+            "loss"
+          ]
+        ],
+        [
+          44,
+          0,
+          [
+            "prize_spot",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          52,
+          -8,
+          [
+            "coin",
+            "item",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          44,
+          -18,
+          [
+            "loss",
+            "coin",
+            "event",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          30,
+          -28,
+          [
+            "coin",
+            "cannon",
+            "coin",
+            "item"
+          ]
+        ],
+        [
+          18,
+          -33,
+          [
+            "hazard",
+            "coin",
+            "shop",
+            "coin"
+          ]
+        ],
+        [
+          4,
+          -36,
+          [
+            "prize_spot",
+            "coin",
+            "loss",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          8,
+          -28,
+          [
+            "coin",
+            "hazard",
+            "coin"
+          ]
+        ],
+        [
+          0,
+          -25,
+          [
+            "item",
+            "coin",
+            "loss"
+          ]
+        ],
+        [
+          -6,
+          -29,
+          [
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          -10,
+          -35,
+          [
+            "coin",
+            "item",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          -24,
+          -30,
+          [
+            "loss",
+            "coin",
+            "event",
+            "coin"
+          ]
+        ],
+        [
+          -34,
+          -22,
+          [
+            "hazard",
+            "coin",
+            "item",
+            "coin",
+            "loss"
+          ]
+        ],
+        [
+          -42,
+          -10,
+          [
+            "coin",
+            "hazard",
+            "coin",
+            "cannon"
+          ]
+        ],
+        [
+          -34,
+          -6,
+          [
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          -30,
+          1,
+          [
+            "loss",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          -37,
+          6,
+          [
+            "coin",
+            "event",
+            "coin"
+          ]
+        ],
+        [
+          -44,
+          4,
+          [
+            "shop",
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          -38,
+          16,
+          [
+            "coin",
+            "loss",
+            "coin",
+            "hazard"
+          ]
+        ],
+        [
+          -28,
+          25,
+          [
+            "prize_spot",
+            "coin",
+            "item",
+            "coin"
+          ]
+        ],
+        [
+          -14,
+          31,
+          [
+            "coin",
+            "hazard",
+            "coin",
+            "loss"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "crater",
+      "points": [
+        [
+          26,
+          27
+        ],
+        [
+          14,
+          12
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          -6,
+          -10
+        ],
+        [
+          -14,
+          -20
+        ],
+        [
+          -24,
+          -30
+        ]
+      ],
+      "kinds": [
+        "hazard",
+        "item",
+        "hazard",
+        "coin",
+        "hazard",
+        "loss",
+        "prize_spot",
+        "hazard",
+        "coin",
+        "hazard",
+        "loss",
+        "item",
+        "hazard",
+        "coin",
+        "hazard",
+        "loss",
+        "coin",
+        "hazard",
+        "item",
+        "hazard",
+        "coin",
+        "loss"
+      ]
+    },
+    {
+      "id": "lava-tube",
+      "under": true,
+      "points": [
+        [
+          36,
+          18
+        ],
+        [
+          34,
+          6
+        ],
+        [
+          33,
+          -6
+        ],
+        [
+          32,
+          -18
+        ],
+        [
+          30,
+          -28
+        ]
+      ],
+      "kinds": [
+        "hazard",
+        "coin",
+        "hazard",
+        "item",
+        "coin",
+        "loss",
+        "hazard",
+        "coin",
+        "item",
+        "hazard",
+        "coin",
+        "loss",
+        "coin",
+        "coin"
+      ]
+    },
+    {
+      "id": "ash-crossing",
+      "join_paths": true,
+      "points": [
+        [
+          -28,
+          25
+        ],
+        [
+          -23,
+          19
+        ],
+        [
+          -14,
+          12
+        ],
+        [
+          -18,
+          3
+        ],
+        [
+          -25,
+          -10
+        ],
+        [
+          -34,
+          -22
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "loss",
+        "item",
+        "coin",
+        "hazard",
+        "coin",
+        "shop"
+      ]
+    },
+    {
+      "id": "crater-rim",
+      "join_paths": true,
+      "points": [
+        [
+          -14,
+          12
+        ],
+        [
+          -3,
+          20
+        ],
+        [
+          10,
+          22
+        ],
+        [
+          26,
+          27
+        ]
+      ],
+      "kinds": [
+        "coin",
+        "hazard",
+        "coin",
+        "event",
+        "coin",
+        "item"
+      ]
+    }
+  ],
+  "props": [
+    {
+      "model": "tower-watch",
+      "x": 10,
+      "z": -40,
+      "yaw": 0.4,
+      "scale": 2.2
+    },
+    {
+      "model": "tower-square-base",
+      "x": -1,
+      "z": -40,
+      "scale": 1.2
+    },
+    {
+      "model": "siege-catapult",
+      "x": 14,
+      "z": -36,
+      "yaw": 3.3,
+      "scale": 1.6
+    },
+    {
+      "model": "siege-catapult",
+      "x": -4,
+      "z": -33,
+      "yaw": 2.6,
+      "scale": 1.6
+    },
+    {
+      "model": "iron-fence",
+      "x": 2,
+      "z": -31,
+      "yaw": 0.1,
+      "scale": 1.0
+    },
+    {
+      "model": "gravestone-cross",
+      "x": 8,
+      "z": -30,
+      "yaw": 0.3,
+      "scale": 0.7
+    },
+    {
+      "model": "gravestone-round",
+      "x": 11,
+      "z": -31,
+      "yaw": -0.2,
+      "scale": 0.7
+    },
+    {
+      "model": "crypt-small",
+      "x": -8,
+      "z": -40,
+      "yaw": 0.6,
+      "scale": 1.8
+    },
+    {
+      "model": "tent",
+      "x": -46,
+      "z": 12,
+      "yaw": 1.6,
+      "scale": 0.95
+    },
+    {
+      "model": "tent_smallOpen",
+      "x": -40,
+      "z": 2,
+      "yaw": 1.2,
+      "scale": 0.9
+    },
+    {
+      "model": "campfire_stones",
+      "x": -36,
+      "z": 8,
+      "scale": 0.8
+    },
+    {
+      "model": "log_stack",
+      "x": -48,
+      "z": 4,
+      "yaw": 1.1,
+      "scale": 0.75
+    },
+    {
+      "model": "cart",
+      "x": -34,
+      "z": 14,
+      "yaw": 2.2,
+      "scale": 0.9
+    },
+    {
+      "model": "bridge_stone",
+      "x": -43,
+      "z": -7,
+      "yaw": 1.45,
+      "scale": 1.1
+    },
+    {
+      "model": "boat-row-small",
+      "x": 6,
+      "z": 44,
+      "y": -3,
+      "yaw": 0.4,
+      "scale": 1.05
+    },
+    {
+      "model": "signpost",
+      "x": 22,
+      "z": 24,
+      "yaw": 2.6,
+      "scale": 0.65
+    },
+    {
+      "model": "signpost",
+      "x": 39,
+      "z": 15,
+      "yaw": 2.2,
+      "scale": 0.65
+    },
+    {
+      "model": "statue_obelisk",
+      "x": 0,
+      "z": 30,
+      "scale": 1.1
+    },
+    {
+      "model": "chest",
+      "x": 4,
+      "z": -6,
+      "yaw": 0.4,
+      "scale": 0.7
+    },
+    {
+      "model": "tower-square-base",
+      "x": -16,
+      "z": 17,
+      "scale": 1.5
+    },
+    {
+      "model": "tower-square-mid-windows",
+      "x": -16,
+      "z": 17,
+      "scale": 2.25,
+      "lift": 3.2
+    },
+    {
+      "model": "tower-square-top-roof-high",
+      "x": -16,
+      "z": 17,
+      "scale": 2.25,
+      "lift": 6.4
+    },
+    {
+      "model": "stall-red",
+      "x": -24,
+      "z": 8,
+      "scale": 1.1
+    },
+    {
+      "model": "cart",
+      "x": -8,
+      "z": 16,
+      "scale": 1.25
+    },
+    {
+      "model": "statue_obelisk",
+      "x": -9,
+      "z": 7,
+      "scale": 2
+    },
+    {
+      "model": "column-large",
+      "x": -21,
+      "z": 18,
+      "scale": 1.8
+    },
+    {
+      "model": "column-large",
+      "x": -4,
+      "z": -36,
+      "scale": 1.8
+    },
+    {
+      "model": "column-large",
+      "x": 15,
+      "z": -35,
+      "scale": 1.8
+    },
+    {
+      "model": "statue_columnDamaged",
+      "x": 5,
+      "z": -30,
+      "scale": 1.9
+    }
+  ],
+  "clusters": [
+    {
+      "models": [
+        "lava-pool"
+      ],
+      "x": 46,
+      "z": -2,
+      "r": 13,
+      "count": 9,
+      "scale": [
+        0.53,
+        1.05
+      ]
+    },
+    {
+      "models": [
+        "lava-pool"
+      ],
+      "x": 0,
+      "z": -6,
+      "r": 10,
+      "count": 6,
+      "scale": [
+        0.58,
+        1.16
+      ]
+    },
+    {
+      "models": [
+        "rock_largeA",
+        "rock_largeB",
+        "rock_largeC",
+        "rock_tallA",
+        "stone_largeB"
+      ],
+      "x": 46,
+      "z": -2,
+      "r": 14,
+      "count": 26,
+      "scale": [
+        0.74,
+        1.37
+      ],
+      "paint": "#2f2826"
+    },
+    {
+      "models": [
+        "rock_tallA",
+        "rock_tallC",
+        "rock_tallF",
+        "cliff_rock",
+        "cliff_large_rock"
+      ],
+      "x": 0,
+      "z": -6,
+      "r": 15,
+      "count": 32,
+      "scale": [
+        0.95,
+        1.58
+      ],
+      "ring": true,
+      "paint": "#3a302c"
+    },
+    {
+      "models": [
+        "tree_thin",
+        "stump_round",
+        "log_stack"
+      ],
+      "x": -40,
+      "z": 8,
+      "r": 11,
+      "count": 18,
+      "scale": [
+        0.74,
+        1.16
+      ],
+      "paint": "#3b3330"
+    },
+    {
+      "models": [
+        "rocks-a",
+        "rocks-b",
+        "stone_smallG"
+      ],
+      "x": -32,
+      "z": -10,
+      "r": 10,
+      "count": 22,
+      "scale": [
+        0.63,
+        1.05
+      ],
+      "paint": "#2f2826"
+    },
+    {
+      "models": [
+        "rock_largeD",
+        "rocks-large",
+        "cliff_half_rock"
+      ],
+      "x": 6,
+      "z": -36,
+      "r": 10,
+      "count": 16,
+      "scale": [
+        0.74,
+        1.26
+      ],
+      "ring": true,
+      "paint": "#3a302c"
+    },
+    {
+      "models": [
+        "rocks-sand-a",
+        "rock-sand-b",
+        "rocks-a"
+      ],
+      "x": 0,
+      "z": 36,
+      "r": 12,
+      "count": 14,
+      "scale": [
+        0.63,
+        0.95
+      ],
+      "paint": "#2a2321"
+    },
+    {
+      "models": [
+        "rock_tallC",
+        "rock_tallF",
+        "stone_largeB"
+      ],
+      "x": -24,
+      "z": -30,
+      "r": 8,
+      "count": 12,
+      "scale": [
+        0.84,
+        1.37
+      ],
+      "paint": "#3a302c"
+    },
+    {
+      "models": [
+        "tree_thin",
+        "tree_tall",
+        "stump_round"
+      ],
+      "x": -30,
+      "z": 18,
+      "r": 10,
+      "count": 32,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "rock_largeA",
+        "rock_tallC",
+        "stone_largeB",
+        "rocks-a"
+      ],
+      "x": 24,
+      "z": 10,
+      "r": 11,
+      "count": 22,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "paint": "#2f2826"
+    },
+    {
+      "models": [
+        "rock_largeB",
+        "rock_tallF",
+        "stone_smallG"
+      ],
+      "x": -20,
+      "z": -2,
+      "r": 10,
+      "count": 18,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "paint": "#2f2826"
+    },
+    {
+      "models": [
+        "rock_tallA",
+        "rock_largeD",
+        "stone_largeB"
+      ],
+      "x": 16,
+      "z": -22,
+      "r": 9,
+      "count": 16,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "paint": "#3a302c"
+    },
+    {
+      "models": [
+        "lava-pool"
+      ],
+      "x": -14,
+      "z": 14,
+      "r": 10,
+      "count": 4,
+      "scale": [
+        0.6,
+        1
+      ]
+    },
+    {
+      "models": [
+        "tree_thin",
+        "stump_round"
+      ],
+      "x": 18,
+      "z": 28,
+      "r": 9,
+      "count": 14,
+      "scale": [
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "models": [
+        "rocks-large",
+        "rock_tallA"
+      ],
+      "x": -12,
+      "z": 14,
+      "r": 8,
+      "count": 26,
+      "scale": [
+        1.1,
+        1.8
+      ]
+    },
+    {
+      "models": [
+        "tree_thin",
+        "stump_round"
+      ],
+      "x": -20,
+      "z": 23,
+      "r": 9,
+      "count": 24,
+      "scale": [
+        1,
+        1.65
+      ]
+    }
+  ],
+  "smoke": [
+    [
+      0,
+      -6
+    ],
+    [
+      46,
+      -2
+    ]
+  ],
+  "islets": [
+    [
+      60,
+      28,
+      4
+    ],
+    [
+      -60,
+      22,
+      3
+    ],
+    [
+      28,
+      -54,
+      4
+    ],
+    [
+      -34,
+      -50,
+      3
+    ]
+  ],
+  "rough": 1.8,
+  "specials": {},
+  "districts": [
+    {
+      "name": "Ashen Exchange",
+      "x": -16,
+      "z": 12,
+      "r": 11,
+      "color": "#74695c"
+    },
+    {
+      "name": "Ember Fortress",
+      "x": 5,
+      "z": -36,
+      "r": 12,
+      "color": "#685b55"
+    },
+    {
+      "name": "Obsidian Fields",
+      "x": 46,
+      "z": -1,
+      "r": 14,
+      "color": "#433d43"
+    },
+    {
+      "name": "Crater Rim",
+      "x": 1,
+      "z": -5,
+      "r": 14,
+      "color": "#7a4938"
+    }
+  ]
+}

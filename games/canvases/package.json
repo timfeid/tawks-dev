@@ -4,9 +4,20 @@
   "description": "The canvases for the open-source tawks lobby games: Cards, Tracklines, and the party games Tawkathon, Coven and Landlord.",
   "type": "module",
   "exports": {
-    "./*": "./src/*"
+    "./party/protocol": "./src/party/protocol.ts",
+    "./party/roster": "./src/party/roster.ts",
+    "./party/costumes/selection": "./src/party/costumes/selection.ts",
+    "./party/costumes/client": "./src/party/costumes/client.ts",
+    "./party/characters": "./src/party/characters.ts",
+    "./party/bags": "./src/party/bags.ts",
+    "./party/costumes/framing": "./src/party/costumes/framing.ts",
+    "./party/costumes/body-build": "./src/party/costumes/body-build.ts",
+    "./party/reactions/catalog": "./src/party/reactions/catalog.ts",
+    "./*": "./src/*",
+    "./party/reaction-capture": "./src/party/reaction-capture.ts"
   },
   "dependencies": {
+    "@tawks/activity-sdk": "workspace:^",
     "@tawks/bout-sdk": "workspace:^",
     "@tawks/example-bumper-balls": "workspace:^",
     "@tawks/ui": "workspace:^",
@@ -18,11 +29,15 @@
     "@lucide/svelte": "^0.561.0",
     "@types/three": "^0.182.0",
     "svelte": "^5.37.1",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vite": "^7.1.5"
   },
   "peerDependencies": {
     "@lucide/svelte": "*",
     "svelte": "^5.0.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "preview": "vite --config dev/vite.config.ts"
+  }
 }

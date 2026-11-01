@@ -75,7 +75,7 @@ test('transform ops match the engine', async () => {
 });
 
 test('next node prefers a matching conditioned child', async () => {
-  const node = (parent_id: string | null, condition: unknown = null) => ({ title: '', description: null, visuals: [], layout: null, condition, parent_id });
+  const node = (parent_id: string | null, condition: unknown = null) => ({ title: '', description: null, visuals: [], condition, parent_id });
   const def = {
     id: 'x', name: 'x', description: null, responses: {}, context: {}, actions: [], starting_server_action: null, multi_instance_per_user: false,
     nodes: { a: node(null), b_plain: node('a'), c_vip: node('a', { ResponseEquals: { field: 'vip', value: true } }) },
@@ -85,7 +85,7 @@ test('next node prefers a matching conditioned child', async () => {
 });
 
 test('an update from a server action re-picks the node within its group', async () => {
-  const node = (parent_id: string | null, condition: unknown = null) => ({ title: '', description: null, visuals: [], layout: null, condition, parent_id });
+  const node = (parent_id: string | null, condition: unknown = null) => ({ title: '', description: null, visuals: [], condition, parent_id });
   const def = {
     id: 'x', name: 'x', description: null, responses: {}, context: {}, starting_server_action: 'load', multi_instance_per_user: false,
     actions: [{ id: 'finish', action_type: 'RunServerAction', target: 'finish', allow_while_loading: false, progress_node: true }],

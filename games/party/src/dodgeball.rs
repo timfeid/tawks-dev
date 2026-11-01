@@ -99,6 +99,8 @@ pub fn court() -> Vec<Block> {
 }
 
 pub struct Dodgeball {
+    /// Partners, when played in pairs: a ball passes them by.
+    allies: HashMap<u8, u8>,
     pub players: Vec<Player>,
     pub balls: Vec<Ball>,
     pub time: f32,
@@ -107,17 +109,26 @@ pub struct Dodgeball {
     brains: HashMap<u8, BotBrain>,
     skills: HashMap<u8, Skill>,
     placements: Option<Vec<Vec<u8>>>,
+    /// How much bigger than the gym for four, for the size of the crowd.
+    size: f32,
+    half_x: f32,
+    half_z: f32,
 }
 
 impl Dodgeball {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
+        let size = crate::bout::crowd_scale(contestants.len());
+        let (half_x, half_z) = (COURT_HALF_X * size, COURT_HALF_Z * size);
+        // Each end lines up across the court, centred on the middle; two a
+        // side is the layout it was built for.
+        let per_end = contestants.len().div_ceil(2).max(2);
         // Halves take turns, so a pair faces off across the line.
         let players = contestants
             .iter()
             .enumerate()
             .map(|(i, c)| {
                 let end = if i % 2 == 0 { -1.0 } else { 1.0 };
-                let spread = ((i / 2) as f32 - 0.5) * 6.0;
+                let spread = ((i / 2) as f32 - (per_end - 1) as f32 / 2.0) * 6.0 * size;
                 let mut player = Player {
                     seat: c.seat,
                     body: Body::default(),
@@ -130,7 +141,7 @@ impl Dodgeball {
                     end,
                 };
                 player.body.x = spread;
-                player.body.z = end * (COURT_HALF_Z - 2.0);
+                player.body.z = end * (half_z - 2.0);
                 player.body.on_ground = true;
                 player
             })
@@ -149,10 +160,12 @@ impl Dodgeball {
             })
             .collect();
         Dodgeball {
+            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
             players,
-            balls: line_of_balls(),
+            // More players get more balls, and the court grows to fit the line.
+            balls: line_of_balls(crate::bout::crowd_count(BALL_COUNT, contestants.len())),
             time: 0.0,
-            blocks: court(),
+            blocks: crate::shooter::stretch(court(), size),
             rng: StdRng::seed_from_u64(seed),
             brains,
             skills: contestants
@@ -160,6 +173,9 @@ impl Dodgeball {
                 .map(|c| (c.seat, Skill(c.skill)))
                 .collect(),
             placements: None,
+            size,
+            half_x,
+            half_z,
         }
     }
 
@@ -232,8 +248,8 @@ impl Dodgeball {
                             ball.vz *= keep;
                         }
                     }
-                    let bound_x = COURT_HALF_X - BALL_RADIUS;
-                    let bound_z = COURT_HALF_Z - BALL_RADIUS;
+                    let bound_x = self.half_x - BALL_RADIUS;
+                    let bound_z = self.half_z - BALL_RADIUS;
                     if ball.x.abs() > bound_x {
                         ball.x = ball.x.clamp(-bound_x, bound_x);
                         ball.vx = -ball.vx * BALL_BOUNCE;
@@ -256,6 +272,10 @@ impl Dodgeball {
             };
             for player in self.players.iter() {
                 if player.seat == thrower || !player.playing() {
+                    continue;
+                }
+                // A partner's ball goes straight past.
+                if crate::bout::allied(self.allies.get(&thrower).copied(), self.allies.get(&player.seat).copied()) {
                     continue;
                 }
                 let dx = ball.x - player.body.x;
@@ -381,7 +401,7 @@ impl Dodgeball {
             player.body = Body {
                 x: 0.0,
                 y: 0.0,
-                z: player.end * (COURT_HALF_Z - 1.5),
+                z: player.end * (self.half_z - 1.5),
                 vx: 0.0,
                 vy: 0.0,
                 vz: 0.0,
@@ -443,10 +463,10 @@ impl Dodgeball {
     }
 }
 
-fn line_of_balls() -> Vec<Ball> {
-    (0..BALL_COUNT)
+fn line_of_balls(count: usize) -> Vec<Ball> {
+    (0..count)
         .map(|i| {
-            let spread = (i as f32 - (BALL_COUNT as f32 - 1.0) / 2.0) * 3.4;
+            let spread = (i as f32 - (count as f32 - 1.0) / 2.0) * 3.4;
             Ball {
                 id: i as u8,
                 x: spread,
@@ -486,8 +506,8 @@ impl Bout for Dodgeball {
     fn setup(&self) -> Value {
         json!({
             "game": "dodgeball",
-            "half_x": COURT_HALF_X,
-            "half_z": COURT_HALF_Z,
+            "half_x": self.half_x,
+            "half_z": self.half_z,
             "eye": EYE_HEIGHT,
             "height": PLAYER_HEIGHT,
             "radius": PLAYER_RADIUS,
@@ -529,8 +549,8 @@ impl Bout for Dodgeball {
                 input,
                 dt,
                 &blocks,
-                COURT_HALF_X,
-                COURT_HALF_Z,
+                self.half_x,
+                self.half_z,
             );
             self.pick_up(seat, events);
             if input.fire {
@@ -576,8 +596,8 @@ impl Bout for Dodgeball {
                     me.eye(),
                     p.chest(),
                     &self.blocks,
-                    COURT_HALF_X,
-                    COURT_HALF_Z,
+                    self.half_x,
+                    self.half_z,
                 )
             })
             .min_by(|a, b| {
@@ -607,14 +627,14 @@ impl Bout for Dodgeball {
                     0.0
                 };
                 let skill = self.skill(seat);
-                if brain.aim_for > BOT_AIM_DELAY + skill.reaction() * 0.6 && distance < 26.0 {
+                if brain.aim_for > BOT_AIM_DELAY + skill.reaction() * 0.6 && distance < 26.0 * self.size {
                     input.fire = !self.rng.random_bool(skill.hesitation());
                     brain.aim_for = 0.0;
                 }
                 // Hold the line rather than charging into the throw.
                 input.stick = Stick {
                     x: brain.strafe * 0.7,
-                    z: if distance > 14.0 { -0.5 } else { 0.0 },
+                    z: if distance > 14.0 * self.size { -0.5 } else { 0.0 },
                 }
                 .clamped();
             }
@@ -697,5 +717,33 @@ impl Bout for Dodgeball {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn players(count: u8) -> Vec<Contestant> {
+        (0..count).map(Contestant::person).collect()
+    }
+
+    #[test]
+    fn a_bigger_crowd_gets_a_bigger_gym_and_more_balls() {
+        let four = Dodgeball::new(&players(4), 1);
+        assert_eq!(four.setup()["half_x"], json!(COURT_HALF_X), "four play it as built");
+        assert_eq!(four.balls.len(), BALL_COUNT);
+        let xs: Vec<f32> = four.players.iter().map(|p| p.body.x).collect();
+        assert_eq!(xs, vec![-3.0, -3.0, 3.0, 3.0]);
+        assert_eq!(four.players[0].body.z, -(COURT_HALF_Z - 2.0));
+
+        let eight = Dodgeball::new(&players(8), 1);
+        let grow = eight.half_x / COURT_HALF_X;
+        assert!((grow - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert_eq!(eight.setup()["half_z"], json!(eight.half_z), "and the client is told");
+        assert_eq!(eight.balls.len(), 10, "twice the players, twice the balls");
+        assert!(eight.balls.iter().all(|b| b.x.abs() < eight.half_x - BALL_RADIUS));
+        assert!(eight.players.iter().all(|p| p.body.x.abs() < eight.half_x - 1.0), "everyone starts on court");
+        assert!((eight.blocks[0].x / court()[0].x - grow).abs() < 1e-4, "the crates spread out");
     }
 }

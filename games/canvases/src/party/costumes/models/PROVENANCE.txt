@@ -1,0 +1,53 @@
+PuckLab jersey fitted to the Tawkathon base — 2026-10-28
+
+Source and permission
+The user explicitly authorized reusing their own PuckLab mesh jersey.
+Source: D:\pucklab-snapshot\prototypes\hockey5v5\assets\kits\skater_md.npz
+Extracted part: kit_bodi_up / submesh0, authored through the user's
+md_fit.py -> md_bake.py -> md_rig.py garment pipeline.
+
+Only garment positions, triangles, and UV2 coordinates were extracted.
+The source archive also contains game-derived parts, which are excluded.
+No source body, skeleton, skin weights, face, gloves, shoes, or game textures
+are included. This is user-provided artwork, with permission for this use;
+it is not relabeled as a CC0 asset.
+
+Included asset
+hockey-jersey.glb: approximately 162 KiB and 4,999 triangles, reduced from
+75,798 garment triangles. The three named parts are jersey_torso,
+jersey_sleeve_negx, and jersey_sleeve_posx. UV2 becomes TEXCOORD_0.
+The embedded blue/gold Tawks demo atlas is newly authored artwork; its vector
+source is jersey-atlas.svg. The larger chest crest uses a bold cream mark and
+a gold border on navy. Its width compensates for the round base's circumference
+so it renders circular. The embedded atlas is supersampled at 2048 x 1536;
+anisotropic filtering keeps the mark readable when the character turns.
+The collar island is fitted to the neck separately from the sleeve islands;
+sleeves have rounded shoulders, and the garment uses smooth cloth normals.
+
+Attachment and animation
+The torso attaches directly to Tawkathon's existing torso group. Sleeves
+use the inverse rest transform described in ../jersey.ts before attaching
+to the procedural shoulder groups. This lets idle, cheer, and fall poses
+move the garment with the existing character. Loading failure retains the
+procedural shirt. A blue cloth lining closes armhole gaps on the round body.
+The garment carries no imported skeleton or animations.
+
+Atlas layout
+Logical coordinates: 1024 x 768, glTF top-left image convention. The current
+2048 x 1536 bitmap doubles all coordinates, dimensions, and insets below.
+Body: (0, 0, 1024, 512). Sleeve: (0, 512, 384, 256).
+Sock region: (384, 512, 256, 256). Each region has a 6-pixel inset.
+For a replacement CanvasTexture use flipY=false and sRGB color space.
+
+Account-specific designs
+The current asset uses the demo atlas. Automatic saved PuckLab jersey sync
+is not connected. PuckLab's existing API can supply a sanitized recipe via
+GET /v1/jersey/<account>?roster=<id> and a crest via
+GET /v1/jersey/<account>/crest.png?roster=<id>.
+A future integration should resolve the account through Tawks-PuckLab
+account linking and render the saved recipe into this atlas layout.
+
+Local refit evidence
+/data/tawkathon-jersey contains refit.py, mesh-report.json, the attachment
+contract, and the fit preview used to produce this asset. The source was
+inspected read-only; no PuckLab source or game-derived full model changed.

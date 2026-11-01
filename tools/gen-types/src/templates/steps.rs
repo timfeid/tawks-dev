@@ -1,82 +1,70 @@
-use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};
 use workflow_model::builder::{
     InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder,
     WorkflowNodeBuilder, WorkflowVisualBuilder,
 };
+use workflow_model::ui::*;
+use workflow_model::{CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay, WorkflowInput};
 
-fn button(label: &str, action: &str) -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new("")
-        .button(vec![WorkflowDisplayBuilder::new("").text(label).build()], None, action, "default", "default")
-        .build()
-}
-
-fn submit(label: &str, action: &str) -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new("")
-        .submit(vec![WorkflowDisplayBuilder::new("").text(label).build()], None, action, "default", "default")
-        .build()
+fn field(id: &str, input: WorkflowInput) -> WorkflowDisplay {
+    WorkflowDisplayBuilder::new().input(id, input).build()
 }
 
 /// Typed values only reach an action from inside a form.
 fn form(action: &str, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new("flex flex-col gap-4").form(action, content, SubmitWhen::OnSubmit).build()
+    WorkflowDisplayBuilder::new().form(action, vec![column(Gap::Normal, content)], SubmitWhen::OnSubmit).build()
 }
 
 /// Three pages: Next and Back move between nodes, and Done completes the instance.
 pub fn definition() -> CreateWorkflowDefinition {
     let first = WorkflowVisualBuilder::new("first")
-        .block(
-            "mx-auto flex max-w-md flex-col gap-4 p-8",
+        .page(
+            PageWidth::Narrow,
             vec![
-                WorkflowDisplayBuilder::new("text-xl font-semibold").text("Step 1: who are you?").build(),
+                heading("Step 1: who are you?"),
                 form(
                     "next",
                     vec![
-                        WorkflowDisplayBuilder::new("")
-                            .input(
-                                "name",
-                                WorkflowInputBuilder::new()
-                                    .r#type(InputTypeBuilder::text(Some("Name".into())))
-                                    .required(true)
-                                    .build(),
-                            )
-                            .build(),
-                        submit("Next", "next"),
+                        field(
+                            "name",
+                            WorkflowInputBuilder::new()
+                                .r#type(InputTypeBuilder::text(Some("Name".into())))
+                                .required(true)
+                                .build(),
+                        ),
+                        row(Gap::Tight, vec![primary_action("Next", act("next")).submits()]),
                     ],
                 ),
             ],
         )
         .build();
     let second = WorkflowVisualBuilder::new("second")
-        .block(
-            "mx-auto flex max-w-md flex-col gap-4 p-8",
+        .page(
+            PageWidth::Narrow,
             vec![
-                WorkflowDisplayBuilder::new("text-xl font-semibold").text("Step 2: pick a number, {name}").build(),
+                heading("Step 2: pick a number, {name}"),
                 form(
                     "next",
                     vec![
-                        WorkflowDisplayBuilder::new("")
-                            .input(
-                                "favorite",
-                                WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),
-                            )
-                            .build(),
-                        WorkflowDisplayBuilder::new("flex gap-2")
-                            .div(vec![button("Back", "back"), submit("Next", "next")])
-                            .build(),
+                        field(
+                            "favorite",
+                            WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(1), Some(10))).build(),
+                        ),
+                        row(
+                            Gap::Tight,
+                            vec![secondary_action("Back", act("back")), primary_action("Next", act("next")).submits()],
+                        ),
                     ],
                 ),
             ],
         )
         .build();
     let summary = WorkflowVisualBuilder::new("summary")
-        .block(
-            "mx-auto flex max-w-md flex-col gap-4 p-8",
+        .page(
+            PageWidth::Narrow,
             vec![
-                WorkflowDisplayBuilder::new("text-xl font-semibold").text("Thanks, {name}").build(),
-                WorkflowDisplayBuilder::new("text-muted-foreground").text("You picked {favorite}.").build(),
-                WorkflowDisplayBuilder::new("flex gap-2")
-                    .div(vec![button("Back", "back"), button("Done", "finish")])
-                    .build(),
+                heading("Thanks, {name}"),
+                body("You picked {favorite}."),
+                row(Gap::Tight, vec![secondary_action("Back", act("back")), primary_action("Done", act("finish"))]),
             ],
         )
         .build();

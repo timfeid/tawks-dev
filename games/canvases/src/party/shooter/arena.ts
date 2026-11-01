@@ -58,6 +58,8 @@ function floorTexture(targetRange = false, popgunPit = false, ricochetTable = fa
   return texture;
 }
 
+/** Speedball's sides: red starts at the negative end, blue at the positive. */
+const TEAM_COLORS = ['#ef4444', '#3b82f6'];
 const BLOCK_COLORS = ['#ffd6a5', '#bde0fe', '#ffc8dd', '#caffbf', '#e4d1ff', '#ffe08a'];
 
 function splatTexture() {
@@ -118,6 +120,7 @@ export class ShooterArena {
   private fighters = new Map<number, FighterView>();
   private targets = new Map<number, THREE.Group>();
   private bomb: THREE.Group | null = null;
+  private flag: THREE.Group | null = null;
   private bombLamp: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> | null = null;
   private bombRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial> | null = null;
   private bombFill: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial> | null = null;
@@ -193,6 +196,11 @@ export class ShooterArena {
     this.materials.length = 0;
     this.floorMap?.dispose();
     this.floorMap = null;
+    this.bomb = null;
+    this.bombLamp = null;
+    this.bombRing = null;
+    this.bombFill = null;
+    this.flag = null;
     this.local = null;
     this.built = false;
   }
@@ -277,18 +285,21 @@ export class ShooterArena {
     }
     const halfX = setup.half;
     const halfZ = setup.half_z ?? setup.half;
+    // Painted marks laid out for four move out with a map spread for more.
+    const scale = setup.scale ?? 1;
     // The target range builds above and returns, so it never reaches here.
     const isTargetRange = false;
     const isPopgunPit = setup.game === 'popgun';
     const isRicochetTable = setup.game === 'ricochet';
     const isRetakeSite = setup.game === 'retake';
+    const isSpeedball = setup.game === 'speedball';
     const ground = floorTexture(isTargetRange, isPopgunPit, isRicochetTable, isRetakeSite);
     this.floorMap = ground;
     const floor = new THREE.Mesh(
       this.track(new THREE.BoxGeometry(halfX * 2, 0.5, halfZ * 2)),
       this.trackMaterial(
-        isPopgunPit
-          ? new THREE.MeshStandardMaterial({ color: '#557f3b', roughness: 1 })
+        isPopgunPit || isSpeedball
+          ? new THREE.MeshStandardMaterial({ color: isSpeedball ? '#3c7a36' : '#557f3b', roughness: 1 })
           : new THREE.MeshStandardMaterial({ map: ground, color: isRetakeSite ? '#8a9aa2' : '#ffffff', roughness: 0.95 }),
       ),
     );
@@ -296,8 +307,8 @@ export class ShooterArena {
     floor.receiveShadow = true;
     this.group.add(floor);
 
-    const wallMaterial = this.trackMaterial(new THREE.MeshStandardMaterial({ color: isRetakeSite ? '#15212a' : isTargetRange ? '#172331' : isPopgunPit ? '#4a3b2a' : isRicochetTable ? '#102637' : '#7f9bb5', roughness: 0.85 }));
-    const stripeColor = isRetakeSite ? '#f59e0b' : isTargetRange ? '#32d5b5' : isPopgunPit ? '#5f8f3f' : isRicochetTable ? '#ffb347' : '#ffd23f';
+    const wallMaterial = this.trackMaterial(new THREE.MeshStandardMaterial({ color: isSpeedball ? '#12161b' : isRetakeSite ? '#15212a' : isTargetRange ? '#172331' : isPopgunPit ? '#4a3b2a' : isRicochetTable ? '#102637' : '#7f9bb5', roughness: 0.85 }));
+    const stripeColor = isSpeedball ? '#f4f4f5' : isRetakeSite ? '#f59e0b' : isTargetRange ? '#32d5b5' : isPopgunPit ? '#5f8f3f' : isRicochetTable ? '#ffb347' : '#ffd23f';
     const stripe = this.trackMaterial(new THREE.MeshStandardMaterial({ color: stripeColor, roughness: 0.6, emissive: isTargetRange ? '#1a766c' : isRicochetTable ? '#80460d' : '#000000', emissiveIntensity: (isTargetRange || isRicochetTable) ? 0.42 : 0 }));
     for (const [dx, dz] of [
       [1, 0],
@@ -340,10 +351,11 @@ export class ShooterArena {
       const bankMaterial = this.trackMaterial(new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#7d410d', emissiveIntensity: 0.6, roughness: 0.38 }));
       for (const z of [-18, -6, 6, 18]) {
         const chevron = new THREE.Mesh(this.track(new THREE.BoxGeometry(3.8, 0.05, 0.28)), bankMaterial);
-        chevron.position.set(0, 0.035, z);
+        chevron.position.set(0, 0.035, z * scale);
         this.group.add(chevron);
       }
     }
+    if (isSpeedball) this.buildSpeedballField(setup, halfX, halfZ, scale);
     if (isRetakeSite) {
       const amber = this.trackMaterial(new THREE.MeshStandardMaterial({ color: '#fbbf24', emissive: '#d97706', emissiveIntensity: 1.2, roughness: 0.3 }));
       const cyan = this.trackMaterial(new THREE.MeshStandardMaterial({ color: '#22d3ee', emissive: '#0891b2', emissiveIntensity: 0.9, roughness: 0.35 }));
@@ -360,7 +372,7 @@ export class ShooterArena {
       this.group.add(core);
       for (const x of [-18, 0, 18]) {
         const entry = new THREE.Mesh(this.track(new THREE.BoxGeometry(3.5, 0.04, 0.22)), cyan);
-        entry.position.set(x, 0.03, 19);
+        entry.position.set(x * scale, 0.03, 19 * scale);
         this.group.add(entry);
       }
     }
@@ -372,6 +384,10 @@ export class ShooterArena {
     );
     const nature = isPopgunPit ? this.natureMaterials() : null;
     setup.blocks.forEach((block, index) => {
+      if (isSpeedball) {
+        this.inflatable(block);
+        return;
+      }
       if (nature && block.kind) {
         this.natureBlock(block, nature);
         return;
@@ -387,6 +403,105 @@ export class ShooterArena {
       this.group.add(cap);
     });
     this.built = true;
+  }
+
+  /** Turf lines, the centre mark and the two flag stations. */
+  private buildSpeedballField(setup: ShooterSetup, halfX: number, halfZ: number, scale: number) {
+    const chalk = this.trackMaterial(new THREE.MeshStandardMaterial({ color: '#f4f4f5', roughness: 0.9 }));
+    const line = (x: number, z: number, w: number, d: number) => {
+      const mark = new THREE.Mesh(this.track(new THREE.BoxGeometry(w, 0.03, d)), chalk);
+      mark.position.set(x, 0.02, z);
+      this.group.add(mark);
+    };
+    line(0, 0, 0.16, halfZ * 2);
+    for (const x of [-halfX + 6 * scale, halfX - 6 * scale]) line(x, 0, 0.12, halfZ * 2);
+    const centre = new THREE.Mesh(this.track(new THREE.RingGeometry(1.6, 1.78, 40)), chalk);
+    centre.rotation.x = -Math.PI / 2;
+    centre.position.y = 0.03;
+    this.group.add(centre);
+    for (const station of setup.stations ?? []) {
+      const color = TEAM_COLORS[station.team] ?? '#ffffff';
+      const glow = this.trackMaterial(new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45, roughness: 0.5 }));
+      const pad = new THREE.Mesh(this.track(new THREE.BoxGeometry(2.4, 0.04, station.half_z * 2)), glow);
+      pad.position.set(station.x, 0.025, station.z);
+      this.group.add(pad);
+      // A hanging frame at the back of the station, where the flag goes.
+      for (const dz of [-station.half_z, station.half_z]) {
+        const post = new THREE.Mesh(this.track(new THREE.CylinderGeometry(0.08, 0.08, 3, 10)), glow);
+        post.position.set(station.x + Math.sign(station.x) * 1, 1.5, station.z + dz);
+        this.group.add(post);
+      }
+      const bar = new THREE.Mesh(this.track(new THREE.BoxGeometry(0.12, 0.12, station.half_z * 2)), glow);
+      bar.position.set(station.x + Math.sign(station.x) * 1, 3, station.z);
+      this.group.add(bar);
+    }
+  }
+
+  /** Speedball bunkers: the collision stays a box, the look is an inflatable of that kind. */
+  private inflatable(block: ShooterBlock) {
+    const color = Math.abs(block.x) < 0.5 ? '#facc15' : block.x < 0 ? TEAM_COLORS[0] : TEAM_COLORS[1];
+    const skin = this.trackMaterial(new THREE.MeshStandardMaterial({ color, roughness: 0.32, metalness: 0.05 }));
+    const add = (geometry: THREE.BufferGeometry) => {
+      const mesh = new THREE.Mesh(this.track(geometry), skin);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+      return mesh;
+    };
+    switch (block.kind) {
+      case 'can':
+      case 'mini': {
+        add(new THREE.CylinderGeometry(block.hx, block.hx, block.top, 28)).position.set(block.x, block.top / 2, block.z);
+        return;
+      }
+      case 'dorito': {
+        const cone = add(new THREE.ConeGeometry(block.hx * 1.3, block.top, 3));
+        cone.position.set(block.x, block.top / 2, block.z);
+        cone.rotation.y = block.x < 0 ? Math.PI / 6 : -Math.PI / 6;
+        return;
+      }
+      case 'temple': {
+        const temple = add(new THREE.CylinderGeometry(block.hx * 0.55, block.hx * 1.38, block.top, 4));
+        temple.position.set(block.x, block.top / 2, block.z);
+        temple.rotation.y = Math.PI / 4;
+        return;
+      }
+      case 'snake': {
+        const along = block.hx >= block.hz;
+        const radius = block.top / 2;
+        const length = Math.max(0.1, (along ? block.hx : block.hz) * 2 - radius * 2);
+        const snake = add(new THREE.CapsuleGeometry(radius, length, 8, 18));
+        snake.rotation.set(along ? 0 : Math.PI / 2, 0, along ? Math.PI / 2 : 0);
+        snake.position.set(block.x, radius, block.z);
+        return;
+      }
+      default: {
+        add(new THREE.BoxGeometry(block.hx * 2, block.top, block.hz * 2)).position.set(block.x, block.top / 2, block.z);
+      }
+    }
+  }
+
+  /** The flag: on its stand in the middle, on the ground where it fell, or over its carrier. */
+  private syncFlag(flag: NonNullable<ShooterSnap['flag']>) {
+    if (!this.flag) {
+      const group = new THREE.Group();
+      const pole = new THREE.Mesh(
+        this.track(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8)),
+        this.trackMaterial(new THREE.MeshStandardMaterial({ color: '#d4d4d8', metalness: 0.6, roughness: 0.3 })),
+      );
+      pole.position.y = 0.8;
+      const cloth = new THREE.Mesh(
+        this.track(new THREE.BoxGeometry(0.02, 0.5, 0.75)),
+        this.trackMaterial(new THREE.MeshStandardMaterial({ color: '#facc15', emissive: '#a16207', emissiveIntensity: 0.5, roughness: 0.6 })),
+      );
+      cloth.position.set(0, 1.3, 0.4);
+      group.add(pole, cloth);
+      this.group.add(group);
+      this.flag = group;
+    }
+    const carrier = flag.holder === null ? null : this.fighters.get(flag.holder);
+    if (carrier) this.flag.position.set(carrier.position.x, carrier.position.y + 1.1, carrier.position.z);
+    else this.flag.position.set(flag.x, 0, flag.z);
   }
 
   private natureMaterials() {
@@ -509,6 +624,17 @@ export class ShooterArena {
       const blaster = buildBlaster(def, this.keep);
       blaster.scale.setScalar(0.9);
       rig.group.add(blaster);
+      if (player.team !== undefined && setup?.game === 'speedball') {
+        // A team band, since everyone picks their own character.
+        const color = TEAM_COLORS[player.team] ?? '#ffffff';
+        const band = new THREE.Mesh(
+          this.track(new THREE.TorusGeometry(0.42, 0.06, 8, 28)),
+          this.trackMaterial(new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6 })),
+        );
+        band.rotation.x = Math.PI / 2;
+        band.position.y = 2.25;
+        rig.group.add(band);
+      }
       // No name tags: in a shooter they give away where everyone is.
       this.group.add(rig.group);
       this.fighters.set(player.seat, {
@@ -532,6 +658,7 @@ export class ShooterArena {
     }
 
     if (snap.objective) this.syncBomb(snap.objective);
+    if (snap.flag) this.syncFlag(snap.flag);
 
     const liveTargets = new Set((snap.targets ?? []).map((target) => target.id));
     for (const [id, target] of this.targets) {
@@ -878,6 +1005,7 @@ export class ShooterArena {
     this.splats.forEach((splat) => splat.sprite.material.dispose());
     this.splats = [];
     this.bomb = null;
+    this.flag = null;
     this.bombLamp = null;
     this.bombRing = null;
     this.bombFill = null;

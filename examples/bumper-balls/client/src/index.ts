@@ -1,10 +1,10 @@
 import { lerp, type BoutModule } from '@tawks/bout-sdk';
 import { BumperArena } from './arena';
-import type { BallSnap, BumperEvent, BumperSnap } from './snapshot';
+import type { BallSnap, BumperEvent, BumperSetup, BumperSnap } from './snapshot';
 
-export type { BumperEvent, BumperSnap } from './snapshot';
+export type { BumperEvent, BumperSetup, BumperSnap } from './snapshot';
 
-const bumperBalls: BoutModule<BumperSnap, null, BumperEvent> = {
+const bumperBalls: BoutModule<BumperSnap, BumperSetup | null, BumperEvent> = {
   create: (host) => new BumperArena(host),
 
   blend(a, b, t) {

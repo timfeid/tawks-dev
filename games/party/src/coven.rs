@@ -1227,6 +1227,7 @@ impl Coven {
         let me = viewer.map(|s| &self.players[s as usize]);
         let i_am_witch = me.map(|p| p.alive && p.ever_witch).unwrap_or(false);
         let witches = if i_am_witch { self.witches() } else { Vec::new() };
+        let over = self.is_over();
         let players: Vec<Value> = self
             .players
             .iter()
@@ -1237,6 +1238,7 @@ impl Coven {
                     .enumerate()
                     .map(|(i, v)| {
                         let known = v.revealed
+                            || over
                             || viewer == Some(p.seat)
                             || me.map(|m| m.peeked.contains(&(p.seat, i))).unwrap_or(false);
                         json!({"revealed": v.revealed, "card": if known { Some(v.card) } else { None }})
@@ -1247,7 +1249,7 @@ impl Coven {
                     "character": p.character,
                     "character_title": p.character.title(),
                     "alive": p.alive,
-                    "witch": if p.alive { i_am_witch && witches.contains(&p.seat) } else { p.ever_witch },
+                    "witch": if p.alive && !over { i_am_witch && witches.contains(&p.seat) } else { p.ever_witch },
                     "verdicts": verdicts,
                     "table": p.table,
                     "accusations": p.accusations(),
@@ -1461,6 +1463,28 @@ mod tests {
     }
 
     #[test]
+    fn a_witch_who_is_also_the_constable_both_kills_and_guards() {
+        let mut g = game(5);
+        let w = g.witches()[0];
+        for player in g.players.iter_mut() {
+            for slot in player.verdicts.iter_mut().filter(|v| v.card == Verdict::Constable) {
+                slot.card = Verdict::Innocent;
+            }
+        }
+        g.players[w as usize].verdicts.push(VerdictSlot { card: Verdict::Constable, revealed: false });
+        assert_eq!(g.constable(), Some(w));
+        let seat = current(&g);
+        g.deck.push(Card::Nightfall);
+        g.act(seat, Action::Draw).unwrap();
+        let mut others = (0..5u8).filter(|s| *s != w);
+        let (victim, guarded) = (others.next().unwrap(), others.next().unwrap());
+        g.act(w, Action::Kill { target: victim }).unwrap();
+        assert!(matches!(g.phase, Phase::Night { .. }), "the night waits for the guard");
+        g.act(w, Action::Guard { target: guarded }).unwrap();
+        assert!(matches!(g.phase, Phase::Confess { guarded: Some(s), .. } if s == guarded));
+    }
+
+    #[test]
     fn a_guarded_or_confessing_victim_survives_the_night() {
         for confess in [false, true] {
             let mut g = game(7);
@@ -1658,6 +1682,19 @@ mod tests {
         let spectator = g.view_for(None);
         assert!(spectator["hand"].is_null());
         assert!(spectator["witches"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_end_shows_every_card() {
+        let mut g = game(5);
+        let witch = g.witches()[0];
+        let town = (0..5).find(|s| !g.players[*s as usize].ever_witch).unwrap();
+        g.finish(Team::Witches);
+        let view = g.view_for(Some(town));
+        assert_eq!(view["players"][witch as usize]["witch"], true);
+        for p in view["players"].as_array().unwrap() {
+            assert!(p["verdicts"].as_array().unwrap().iter().all(|v| v["card"].is_string()));
+        }
     }
 
     #[test]

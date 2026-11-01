@@ -7,15 +7,13 @@ use ulid::Ulid;
 
 use workflow::server_action::ServerActionResult;
 use workflow::service::WorkflowResourceWithContext;
-use workflow::{
-    CreateWorkflowDefinition, DisplayType, DisplayVisual, NodeCondition,
-    WorkflowDisplay,
-};
-use workflow::{WorkflowVisual, builder::*};
+use workflow::{CreateWorkflowDefinition, NodeCondition};
+use workflow::{builder::*, ui::*};
 
+use crate::MidnightPage;
 use crate::gamestate::{GameState, PlayerResource, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
-use crate::{create_reveal_cards_node, player_display, title_visual};
+use crate::{create_reveal_cards_node, game_title};
 use game_framework::engine::GameEngine;
 
 // ----------------------------------------------------------------------------
@@ -26,17 +24,6 @@ pub const TAKER_ROLE_ID: &str = "taker";
 pub const TAKER_WORKFLOW_ID: &str = "taker_ability_workflow";
 
 pub const TAKER_STEAL_ACTION: &str = "games.midnight.taker.steal_card";
-
-// ----------------------------------------------------------------------------
-// Visuals
-// ----------------------------------------------------------------------------
-
-// (you had this helper already; keeping it local like the Lost module style)
-fn select_card_lists_visual(content: Vec<WorkflowDisplay>) -> WorkflowVisual {
-    WorkflowVisualBuilder::new("taker_select_card_lists")
-        .display(DisplayVisual::Tile { content })
-        .build()
-}
 
 // ----------------------------------------------------------------------------
 // Workflow definition
@@ -52,47 +39,39 @@ pub fn taker_ability_workflow(steal_action_target_id: String) -> CreateWorkflowD
                     "reveal_cards".into(),
                 ))))
                 .description("Pick a player to steal from")
-                .visual(title_visual("{title}"))
-                .visual(select_card_lists_visual(vec![
-                    WorkflowDisplayBuilder::new("space-y-2")
-                        .list(
-                            "players",
-                            "player",
+                .visual(
+                    WorkflowVisualBuilder::new("taker_select_card_lists")
+                        .midnight_page(
+                            PageWidth::Narrow,
                             vec![
-                                WorkflowDisplayBuilder::new("w-full")
-                                    .submit(
-                                        vec![player_display("player")],
-                                        Some(HashMap::from([(
-                                            "selected_player".into(),
-                                            "{player.id}".into(),
-                                        )])),
-                                        TAKER_STEAL_ACTION,
-                                        "outline",
-                                        "default",
-                                    )
-                                    .build(),
+                                game_title("{title}"),
+                                items(
+                                    "players",
+                                    "player",
+                                    Layout::Stack { gap: Gap::Tight },
+                                    vec![
+                                        list_row("{player.name}")
+                                            .lead_with(vec![avatar(
+                                                "{player.avatar_url}",
+                                                "{player.name}",
+                                                Size::Small,
+                                            )])
+                                            .on_press(
+                                                act(TAKER_STEAL_ACTION)
+                                                    .input("selected_player", "{player.id}"),
+                                            ),
+                                    ],
+                                ),
                             ],
                         )
                         .build(),
-                ]))
+                )
                 .build(),
         )
         .add_node(
             "reveal_new_role",
-            create_reveal_cards_node("{display_text}")
+            create_reveal_cards_node("{display_text}", Some("This is now your role"))
                 .condition(NodeCondition::ResponseExists("reveal_cards".into()))
-                .visual(
-                    WorkflowVisualBuilder::new("your-role")
-                        .display(DisplayVisual::Tile {
-                            content: vec![WorkflowDisplay {
-                                class: "font-halloween text-center italic".into(),
-                                r#type: DisplayType::Text {
-                                    text: "This is now your role".into(),
-                                },
-                            }],
-                        })
-                        .build(),
-                )
                 .build(),
         )
         .add_action(

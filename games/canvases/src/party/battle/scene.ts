@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildCharacter, type CharacterRig } from '../characters';
+import { headingOf, turnToward } from '../facing';
 import type { BattleSetup, BattleSnap, CharacterDef, GameEvent, Member } from '../protocol';
 
 type TankView = { seat: number; group: THREE.Group; turret: THREE.Group; characterId: string };
@@ -54,7 +55,7 @@ export class BattleField {
   private shells = new Map<number, THREE.Mesh>();
   private crates: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>[] = [];
   private titan: THREE.Group | null = null;
-  private telegraph: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial> | null = null;
+  private telegraph: THREE.Group | null = null;
   private sparks: Spark[] = [];
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
@@ -198,15 +199,16 @@ export class BattleField {
     titan.userData.cap = cap;
     this.group.add(titan);
 
-    const telegraph = new THREE.Mesh(
-      this.track(new THREE.RingGeometry(1, 1.4, 44)),
-      this.material(new THREE.MeshBasicMaterial({ color: '#ff5f6d', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide })),
-    );
-    telegraph.rotation.x = -Math.PI / 2;
-    telegraph.position.y = 0.06;
-    telegraph.visible = false;
-    this.group.add(telegraph);
-    this.telegraph = telegraph;
+    const telegraph=new THREE.Group();telegraph.name='titan-attack-telegraph';
+    const material=this.material(new THREE.MeshBasicMaterial({color:'#ff5f6d',transparent:true,opacity:.28,depthWrite:false,side:THREE.DoubleSide}));
+    const arc=Math.acos(.15);
+    const shapes:[string,THREE.BufferGeometry][]=[
+      ['slam',this.track(new THREE.CircleGeometry(9.5,48))],
+      ['sweep',this.track(new THREE.RingGeometry(0,8,40,1,Math.PI/2-arc,arc*2))],
+      ['charge',this.track(new THREE.PlaneGeometry(9.6,25))],
+    ];
+    for(const [attack,geometry]of shapes){geometry.rotateX(-Math.PI/2);if(attack==='charge')geometry.translate(0,0,-7.7);const mesh=new THREE.Mesh(geometry,material);mesh.name=attack;telegraph.add(mesh);}
+    telegraph.position.y=.06;telegraph.visible=false;this.group.add(telegraph);this.telegraph=telegraph;
     return titan;
   }
 
@@ -268,6 +270,7 @@ export class BattleField {
         view.tag.material.map?.dispose();
         view.tag.material.dispose();
         view.tag.removeFromParent();
+        this.textures = this.textures.filter((texture) => texture !== view.tag.material.map);
         this.raiders.delete(seat);
       }
     }
@@ -352,16 +355,19 @@ export class BattleField {
       core.rotation.y = time * 1.4;
       core.scale.setScalar(open ? 1.25 + Math.sin(time * 6) * 0.1 : 0.9);
       const cap = this.titan.userData.cap as THREE.Mesh;
+      // Keep the opening/core and raiders readable under the large cap.
+      const capMaterial=cap.material as THREE.MeshStandardMaterial;
+      capMaterial.transparent=true;capMaterial.opacity=open?.55:1;capMaterial.depthWrite=!open;
       // It rears back as it winds up, then slams down.
       cap.position.y = 5.1 + (titan.state === 'winding' ? Math.sin(time * 9) * 0.22 : 0);
       if (this.telegraph) {
         const winding = titan.state === 'winding';
         this.telegraph.visible = winding;
         if (winding) {
-          const reach = titan.attack === 'sweep' ? 8 : titan.attack === 'charge' ? 4 : 9.5;
-          this.telegraph.position.set(titan.x, 0.06, titan.z);
-          this.telegraph.scale.setScalar(reach);
-          this.telegraph.material.opacity = 0.25 + Math.abs(Math.sin(time * 7)) * 0.45;
+          this.telegraph.position.set(titan.x,.06,titan.z);
+          this.telegraph.rotation.y=titan.facing;
+          for(const object of this.telegraph.children){const mesh=object as THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;mesh.visible=mesh.name===titan.attack;mesh.material.opacity=.18+Math.abs(Math.sin(time*7))*.16;}
+
         }
       }
     }
@@ -371,7 +377,7 @@ export class BattleField {
       if (!player) continue;
       view.rig.group.position.set(player.x, 0, player.z);
       const speed = Math.hypot(player.vx ?? 0, player.vz ?? 0);
-      if (speed > 0.3) view.rig.group.rotation.y = Math.atan2(player.vx ?? 0, player.vz ?? 0) + Math.PI;
+      if (speed > 0.3) view.rig.group.rotation.y = turnToward(view.rig.group.rotation.y, headingOf(player.vx ?? 0, player.vz ?? 0), dt);
       view.rig.animate(player.out ? 'fall' : speed > 0.8 ? 'ride' : 'idle', time + seat * 0.3, speed > 0.8 ? 7 : 0);
       view.tag.position.set(player.x, 2.4, player.z);
       view.tag.visible = !player.out;

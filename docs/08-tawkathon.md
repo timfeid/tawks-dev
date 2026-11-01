@@ -1,6 +1,6 @@
 # Tawkathon bouts
 
-Tawkathon is the board game people play in a lobby. Players take turns around an island board, and between turns everyone votes on the next bout: a short real-time minigame for two to four players. The winners collect coins, and the board carries on.
+Tawkathon is the board game people play in a lobby. Players take turns around an island board, and between turns everyone votes on the next bout: a short real-time minigame for two to eight players. The winners collect coins, and the board carries on.
 
 Each bout has two halves:
 
@@ -35,7 +35,8 @@ pub trait Bout: Send {
 }
 ```
 
-- **Inputs.** `Input` carries an analog `stick` (`x` to the right, `z` toward the camera, clamped to the unit circle), `yaw` and `pitch` for aiming, and `fire`, `jump` and `crouch`. `fire` is true only on the tick after a press. Call `stick.clamped()` before using it; inputs come from players, so never trust their range.
+- **Inputs.** `Input` carries an analog `stick` (`x` to the right, `z` toward the camera, clamped to the unit circle), `yaw` and `pitch` for aiming, and `fire`, `jump` and `crouch`. `fire` is true only on the tick after a press. `press` is one `left`, `right` or `both` tap for bouts that count presses rather than read held keys: the client sends `{ type: 'press', hand }` the moment a key goes down, and the room hands queued taps over one a tick, in order. Call `stick.clamped()` before using it; inputs come from players, so never trust their range.
+- **Holding a button.** In a `FirstPerson` bout, holding the trigger sends `fire` again about every 280 ms. A bout that acts while the button is held treats it as held until a little over that long has passed with no `fire`. Ghost Busting runs its vacuum this way: hold it on a ghost to suck it in.
 - **Setup.** Anything that never changes during the bout, such as a track layout or the walls of a maze, goes in `setup`. It is sent once with the room, not twenty times a second.
 - **Snapshots.** A snapshot is a JSON object with `game` (your key), `time` and `limit` in seconds (the clock at the top of the screen reads them), and whatever your renderer needs. Round floats to three decimals to keep it small.
 - **Events.** Push one JSON object per moment the players should see or hear, such as a bump, a splash or a goal. Give each a `kind`.
@@ -53,7 +54,7 @@ pub const SPEC: BoutSpec = BoutSpec {
     controls: Controls::Move,
     format: Format::FreeForAll,
     min_players: 2,
-    max_players: 4,
+    max_players: 8,
     create: |contestants, seed| Box::new(BumperBalls::new(contestants, seed)),
 };
 ```

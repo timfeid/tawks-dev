@@ -1,0 +1,12 @@
+[
+  { "id": "reaction-wink", "name": "Wink", "price": 2, "icon": "smile", "animation": "wink", "description": "Your Tawkathon character closes one eye and grins." },
+  { "id": "reaction-big-laugh", "name": "Big laugh", "price": 2, "icon": "laugh", "animation": "big-laugh", "description": "Squinted eyes and a wide open laugh." },
+  { "id": "reaction-tongue-out", "name": "Tongue out", "price": 2, "icon": "smile-plus", "animation": "tongue-out", "description": "A cheeky tongue out for whoever is looking." },
+  { "id": "reaction-starry-eyes", "name": "Starry eyes", "price": 2, "icon": "star", "animation": "starry-eyes", "description": "Eyes turn to twinkling gold stars." },
+  { "id": "reaction-heart-eyes", "name": "Heart eyes", "price": 2, "icon": "heart", "animation": "heart-eyes", "description": "Eyes turn to beating red hearts." },
+  { "id": "reaction-smug-grin", "name": "Smug grin", "price": 2, "icon": "annoyed", "animation": "smug-grin", "description": "Lidded eyes and a smile on one side." },
+  { "id": "reaction-shocked", "name": "Shocked", "price": 2, "icon": "zap", "animation": "shocked", "description": "Wide eyes and a small round mouth." },
+  { "id": "reaction-sleepy", "name": "Sleepy", "price": 2, "icon": "moon", "animation": "sleepy", "description": "Heavy eyelids and a drifting z." },
+  { "id": "reaction-angry-steam", "name": "Angry steam", "price": 2, "icon": "angry", "animation": "angry-steam", "description": "Angled brows, a frown and puffs of steam." },
+  { "id": "reaction-blush", "name": "Blush", "price": 2, "icon": "sparkles", "animation": "blush", "description": "Rosy cheeks and a shy little smile." }
+]

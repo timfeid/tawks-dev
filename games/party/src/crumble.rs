@@ -9,6 +9,7 @@ use crate::ground::{self, Runner};
 use crate::bout::{Contestant, Input, Bout, Skill};
 
 pub const TILE: f32 = 2.6;
+/// How many tiles out from the middle the floor runs for four players.
 pub const GRID: i32 = 7;
 /// How long a tile lasts once someone stands on it.
 pub const CRACK_SECONDS: f32 = 2.4;
@@ -65,19 +66,26 @@ pub struct CrumbleRun {
     pub players: Vec<Faller>,
     pub tiles: Vec<Tile>,
     pub time: f32,
+    /// How many tiles out from the middle the floor runs. A bigger field gets
+    /// more tiles rather than bigger ones, so each step still covers one.
+    pub grid: i32,
+    /// How much wider than the floor for four, for the size of the field.
+    size: f32,
     rng: StdRng,
     skills: std::collections::HashMap<u8, Skill>,
     react: std::collections::HashMap<u8, f32>,
+    goals: std::collections::HashMap<u8,(f32,f32)>,
+    biases: std::collections::HashMap<u8,f32>,
     placements: Option<Vec<Vec<u8>>>,
     next_collapse: f32,
 }
 
-fn floor_tiles() -> Vec<Tile> {
+fn floor_tiles(grid: i32) -> Vec<Tile> {
     let mut tiles = Vec::new();
-    for col in -GRID..=GRID {
-        for row in -GRID..=GRID {
+    for col in -grid..=grid {
+        for row in -grid..=grid {
             // Cut the corners so the floor reads as a rounded pad.
-            if (col * col + row * row) as f32 > (GRID as f32 + 0.6).powi(2) {
+            if (col * col + row * row) as f32 > (grid as f32 + 0.6).powi(2) {
                 continue;
             }
             tiles.push(Tile {
@@ -95,7 +103,9 @@ fn floor_tiles() -> Vec<Tile> {
 
 impl CrumbleRun {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
-        let spread = ground::ring(contestants.len().max(1), GRID as f32 * TILE * 0.55, 0.4);
+        let size = crate::bout::crowd_scale(contestants.len());
+        let grid = (GRID as f32 * size).round() as i32;
+        let spread = ground::ring(contestants.len().max(1), grid as f32 * TILE * 0.55, 0.4);
         let players = contestants
             .iter()
             .enumerate()
@@ -110,17 +120,26 @@ impl CrumbleRun {
             .collect();
         CrumbleRun {
             players,
-            tiles: floor_tiles(),
+            tiles: floor_tiles(grid),
             time: 0.0,
+            grid,
+            size,
             rng: StdRng::seed_from_u64(seed),
             skills: contestants
                 .iter()
                 .map(|c| (c.seat, Skill(c.skill)))
                 .collect(),
             react: Default::default(),
+            goals:Default::default(),
+            biases:{let mut random=StdRng::seed_from_u64(seed^0xC4AC);contestants.iter().map(|c|(c.seat,random.random_range(0.0..20.0))).collect()},
             placements: None,
             next_collapse: SPONTANEOUS_FROM,
         }
+    }
+
+    /// How far from the middle the floor's edge is.
+    pub fn radius(&self) -> f32 {
+        (self.grid as f32 + 0.5) * TILE
     }
 
     fn tile_at(&self, x: f32, z: f32) -> Option<usize> {
@@ -140,7 +159,7 @@ impl CrumbleRun {
 
     /// The next tile to step onto: nearby, still solid, and with solid
     /// neighbours so you do not strand yourself.
-    fn hop_to(&self, from: (f32, f32)) -> Option<(f32, f32)> {
+    fn hop_to(&self, from: (f32, f32),bias:f32,care:f32) -> Option<(f32, f32)> {
         let current = self.tile_at(from.0, from.1);
         let score = |tile: &Tile| {
             let away = ((tile.x - from.0).powi(2) + (tile.z - from.1).powi(2)).sqrt();
@@ -153,13 +172,14 @@ impl CrumbleRun {
                         && (other.row - tile.row).abs() <= 1
                 })
                 .count() as f32;
-            away - neighbours * 2.2
+            away - neighbours * 2.2+(tile.x*1.71+tile.z*2.13+bias).sin()*0.8+tile.x.hypot(tile.z)*care
         };
         let solid = || {
             self.tiles
                 .iter()
                 .enumerate()
-                .filter(|(index, tile)| tile.state == TileState::Solid && Some(*index) != current)
+                .filter(|(index, tile)| tile.state == TileState::Solid && Some(*index) != current
+                    && (1..=12).all(|step|{let t=step as f32/12.;self.tile_state(from.0+(tile.x-from.0)*t,from.1+(tile.z-from.1)*t).is_some_and(|s|matches!(s,TileState::Solid|TileState::Cracking))}))
         };
         let near = solid()
             .filter(|(_, tile)| {
@@ -217,7 +237,7 @@ impl Bout for CrumbleRun {
             "game": "crumble",
             "rule": "Every tile you stand on gives way. Keep moving.",
             "tile": TILE,
-            "radius": (GRID as f32 + 0.5) * TILE,
+            "radius": self.radius(),
             "tiles": self.tiles.iter().map(|tile| json!({ "x": tile.x, "z": tile.z })).collect::<Vec<_>>(),
         })
     }
@@ -228,6 +248,7 @@ impl Bout for CrumbleRun {
         }
         self.time += dt;
 
+        let radius = self.radius();
         for index in 0..self.players.len() {
             let seat = self.players[index].seat;
             let stick = inputs
@@ -241,7 +262,7 @@ impl Bout for CrumbleRun {
                 continue;
             }
             ground::step_runner(&mut player.run, stick, dt, ground::RUN_SPEED);
-            ground::hold_inside(&mut player.run, (GRID as f32 + 0.5) * TILE);
+            ground::hold_inside(&mut player.run, radius);
         }
         let mut runners: Vec<Runner> = self.players.iter().map(|p| p.run).collect();
         ground::separate(&mut runners);
@@ -285,7 +306,10 @@ impl Bout for CrumbleRun {
 
         // Once the round has warmed up, the floor starts going on its own.
         if self.time >= self.next_collapse {
-            self.next_collapse = self.time + self.rng.random_range(1.4..2.8);
+            // A floor twice the size loses tiles twice as often, so it runs
+            // out on the same clock.
+            self.next_collapse =
+                self.time + self.rng.random_range(1.4..2.8) / (self.size * self.size);
             let solid: Vec<usize> = self
                 .tiles
                 .iter()
@@ -362,10 +386,25 @@ impl Bout for CrumbleRun {
             .tile_at(here.0, here.1)
             .map(|index| self.tiles[index].state)
             .unwrap_or(TileState::Gone);
+        // Finish crossing to the tile centre before reassessing; stopping at
+        // its edge let inertia carry every bot back into the same old hole.
+        if let Some(&target)=self.goals.get(&seat){
+            if (here.0-target.0).hypot(here.1-target.1)>0.25&&self.tile_state(target.0,target.1).is_some_and(|s|matches!(s,TileState::Solid|TileState::Cracking)){
+                return Input{stick:ground::steer(here,target),..Default::default()};
+            }
+            self.goals.remove(&seat);
+        }
         // Hold your ground until it starts to go, then find the next tile.
         if under_foot == TileState::Solid {
-            self.react.insert(seat, skill.reaction());
+            self.react.insert(seat, skill.reaction()*(0.75+0.35*(self.time+self.biases[&seat]).sin().abs()));
             return Input::default();
+        }
+        // A sharp player conserves safe floor instead of burning through
+        // every fresh tile as fast as its reaction timer allows. Always leave
+        // enough time to cross a neighbouring tile before this one drops.
+        if let Some(index)=self.tile_at(here.0,here.1){
+            let tile=&self.tiles[index];let conserve=(skill.level()-0.4).max(0.)*2.3;
+            if tile.state==TileState::Cracking&&tile.timer>CRACK_SECONDS-conserve{return Input::default();}
         }
         // Noticing takes a moment, and a clumsy bot takes longer.
         let waited = self.react.entry(seat).or_insert(skill.reaction());
@@ -373,9 +412,10 @@ impl Bout for CrumbleRun {
         if *waited > 0.0 {
             return Input::default();
         }
-        let Some(target) = self.hop_to(here) else {
+        let Some(target) = self.hop_to(here,self.biases[&seat],skill.level()*0.8) else {
             return Input::default();
         };
+        self.goals.insert(seat,target);
         Input {
             stick: ground::steer(here, target),
             ..Default::default()
@@ -412,5 +452,37 @@ impl Bout for CrumbleRun {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field(n: u8) -> Vec<Contestant> {
+        (0..n)
+            .map(|seat| Contestant {
+                seat,
+                is_bot: true,
+                skill: crate::bout::DEFAULT_SKILL,
+                team: seat % 2,
+                ally: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_bigger_field_gets_a_wider_floor() {
+        let four = CrumbleRun::new(&field(4), 1);
+        assert_eq!(four.grid, GRID, "four play it as built");
+        assert_eq!(four.radius(), (GRID as f32 + 0.5) * TILE);
+        assert_eq!(four.tiles.len(), floor_tiles(GRID).len());
+        let eight = CrumbleRun::new(&field(8), 1);
+        let wider = eight.radius() / four.radius();
+        assert!((wider - 2f32.sqrt()).abs() < 0.05, "eight get the room of two fours, {wider}");
+        let more = eight.tiles.len() as f32 / four.tiles.len() as f32;
+        assert!((1.8..2.2).contains(&more), "about twice the tiles, {more}");
+        assert_eq!(eight.setup()["radius"], json!(eight.radius()), "and the client is told");
+        assert_eq!(eight.setup()["tiles"].as_array().map(|t| t.len()), Some(eight.tiles.len()));
     }
 }

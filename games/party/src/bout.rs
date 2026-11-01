@@ -14,7 +14,7 @@ const fn spec(
         controls,
         format: Format::FreeForAll,
         min_players: 2,
-        max_players: 4,
+        max_players: 8,
         create,
     }
 }
@@ -76,6 +76,13 @@ pub static BOUTS: &[BoutSpec] = &[
         |c, s| Box::new(crate::potato::HotPotato::new(c, s)),
     ),
     spec(
+        crate::relay::KEY,
+        "Bomb Relay",
+        "Carry the bomb through the gates and touch the next runner. The fuse gets shorter every round.",
+        Controls::Move,
+        |c, s| Box::new(crate::relay::BombRelay::new(c, s)),
+    ),
+    spec(
         "balloon",
         "Balloon Brawl",
         "Dash into a rival to burst a balloon. Lose four and you are out.",
@@ -83,11 +90,25 @@ pub static BOUTS: &[BoutSpec] = &[
         |c, s| Box::new(crate::balloon::BalloonBrawl::new(c, s)),
     ),
     spec(
+        "sumo",
+        "Sumo",
+        "Shove your rivals off the platform. It keeps shrinking.",
+        Controls::Move,
+        |c, s| Box::new(crate::sumo::Sumo::new(c, s)),
+    ),
+    spec(
         "ledge",
         "Ledge Shuffle",
-        "When the horn sounds, get on a ledge. There is always one short.",
-        Controls::Move,
+        "Shove rivals off a ledge that crumbles from the rim in. Stand still to brace. Last one up wins.",
+        Controls::MoveAction,
         |c, s| Box::new(crate::ledge::LedgeShuffle::new(c, s)),
+    ),
+    spec(
+        "coins",
+        "Coin Scramble",
+        "Grab the coins raining in. Charge a rival to shake their coins loose.",
+        Controls::MoveAction,
+        |c, s| Box::new(crate::coins::CoinScramble::new(c, s)),
     ),
     spec(
         "target",
@@ -121,6 +142,44 @@ pub static BOUTS: &[BoutSpec] = &[
         )
     },
     spec(
+        crate::hill::KEY,
+        "King of the Hill",
+        "Hold the summit while the slope and everyone else push you off.",
+        Controls::Move,
+        |c, s| Box::new(crate::hill::KingOfTheHill::new(c, s)),
+    ),
+    BoutSpec {
+        format: Format::Teams,
+        ..spec(
+            crate::speedball::KEY,
+            "Speedball",
+            "Hang the centre flag at their station or take everyone out. First to three rounds.",
+            Controls::FirstPerson,
+            |c, s| Box::new(crate::speedball::Speedball::new(c, s)),
+        )
+    },
+    spec(
+        crate::memory::KEY,
+        "Memory Tiles",
+        "Watch the tiles light up, then walk them back in order and stomp each one. One wrong tile and you are out.",
+        Controls::MoveAction,
+        |c, s| Box::new(crate::memory::MemoryTiles::new(c, s)),
+    ),
+    spec(
+        crate::rising::KEY,
+        "Rising Water",
+        "The arena is flooding. Jump up the platforms before they crumble. Last one above water wins.",
+        Controls::MoveAction,
+        |c, s| Box::new(crate::rising::RisingWater::new(c, s)),
+    ),
+    spec(
+        crate::minecart::KEY,
+        "Minecart Rush",
+        "Lean into each junction to take the short branch. Ram a rival and you both get knocked back.",
+        Controls::Move,
+        |c, s| Box::new(crate::minecart::MinecartRush::new(c, s)),
+    ),
+    spec(
         "tank",
         "Tank Clash",
         "Bounce shells off the walls. Most wrecks wins.",
@@ -133,6 +192,30 @@ pub static BOUTS: &[BoutSpec] = &[
         "Dodge the wind-up, then strike the core while it is winded.",
         Controls::MoveAction,
         |c, s| Box::new(crate::titan::TitanSiege::new(c, s)),
+    ),
+    BoutSpec {
+        format: Format::Teams,
+        ..spec(
+            crate::tug::KEY,
+            "Tug of War",
+            "Alternate your presses to heave the rope. The side it hauls over the water goes in.",
+            Controls::MoveAction,
+            |c, s| Box::new(crate::tug::TugOfWar::new(c, s)),
+        )
+    },
+    spec(
+        crate::buzzer::KEY,
+        "Buzzer Round",
+        "Quick questions for everyone at once. The first right answer scores. One guess each.",
+        Controls::Move,
+        |c, s| Box::new(crate::buzzer::BuzzerRound::new(c, s)),
+    ),
+    spec(
+        crate::ghosts::KEY,
+        "Ghost Busting",
+        "Hold a ghost in your vacuum's cone to suck it in. Gold is worth three; the big one takes two of you.",
+        Controls::FirstPerson,
+        |c, s| Box::new(crate::ghosts::GhostBusting::new(c, s)),
     ),
 ];
 

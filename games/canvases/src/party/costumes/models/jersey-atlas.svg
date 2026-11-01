@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="1536" viewBox="0 0 1024 768">
+  <path fill="#164b77" d="M0 0h1024v768H0z"/>
+  <path fill="#fff" d="M0 410h1024v22H0zm0 55h1024v10H0zM0 654h384v20H0zm0 56h384v9H0z"/>
+  <path fill="#f8cc44" d="M0 438h1024v20H0zM0 682h384v18H0z"/>
+  <!-- Compensated for the round body's circumference: circular when worn. -->
+  <ellipse cx="256" cy="226" rx="43" ry="81" fill="#102f4c"/>
+  <ellipse cx="256" cy="226" rx="40" ry="76" fill="#ffdc5e"/>
+  <ellipse cx="256" cy="226" rx="30" ry="57" fill="#102f4c"/>
+  <path fill="#fff8df" d="M237 192h38v21h-12v53h-14v-53h-12z"/>
+</svg>

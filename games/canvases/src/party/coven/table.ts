@@ -165,7 +165,7 @@ export class CovenTable {
             this.group.add(group);
             let label: THREE.Sprite | null = null;
             if (slot.card && !slot.revealed) {
-              label = tagSprite(VERDICTS[slot.card].title, VERDICTS[slot.card].color, 1.5);
+              label = tagSprite(VERDICTS[slot.card].title, VERDICTS[slot.card].color, CARD_W);
               label.position.y = 0.5;
               group.add(label);
             }
@@ -200,7 +200,7 @@ export class CovenTable {
     }
     this.syncPiles(view);
     const count = view?.deck ?? 0;
-    this.deck.scale.y = Math.max(1, count * 1.2);
+    this.deck.scale.y = Math.max(1, count * 0.1);
     this.deck.position.y = TABLE_TOP + 0.02 * this.deck.scale.y;
     this.deck.visible = count > 0;
     const top = view?.discard_top ?? null;

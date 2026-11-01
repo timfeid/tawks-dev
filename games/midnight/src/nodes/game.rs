@@ -14,11 +14,9 @@ pub fn create() -> WorkflowNode {
         .description("The game is underway")
         .visual(game_tile())
         .visual(
+            // Night abilities are injected into this tile by its id.
             WorkflowVisualBuilder::new("games.midnight_tile")
-                .display(DisplayVisual::Block {
-                    class: "max-w-3xl mx-auto".into(),
-                    content: vec![],
-                })
+                .display(DisplayVisual::Tile { content: vec![] })
                 .build(),
         )
         .visual(vote_tile())

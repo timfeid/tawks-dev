@@ -126,7 +126,7 @@ impl Notifier {
             .await
     }
 
-    /// `icon` is a push icon URL; `Some("none")` shows no icon at all.
+    /// `icon` is a push icon URL; without one the push shows the tawks icon.
     #[allow(clippy::too_many_arguments)]
     pub async fn send_with_icon(
         &self,

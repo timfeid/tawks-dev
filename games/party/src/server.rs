@@ -33,6 +33,13 @@ pub trait SessionRecorder: Send + Sync {
     fn stop(&self, match_id: &str);
 }
 
+/// Where ratings of Tawkathon bouts go: filed for the team and rewarded.
+/// It returns at once and does its work in the background.
+pub type FeedbackFuture=std::pin::Pin<Box<dyn std::future::Future<Output=Result<crate::feedback::FeedbackReceipt,String>>+Send>>;
+pub trait FeedbackSink: Send + Sync {
+    fn submit(&self,feedback:crate::room::BoutFeedback)->FeedbackFuture;
+}
+
 #[derive(Clone, Debug)]
 pub enum RecorderStatus {
     Live,
@@ -60,6 +67,8 @@ enum RoomCmd {
     Connect {
         conn: u64,
         claims: Claims,
+        native: bool,
+        wardrobe: Option<crate::roster::Wardrobe>,
         out: mpsc::UnboundedSender<Message>,
     },
     Disconnect {
@@ -69,15 +78,21 @@ enum RoomCmd {
         conn: u64,
         msg: ClientMsg,
     },
+    FeedbackStored{conn:u64,feedback:crate::room::BoutFeedback,result:Result<crate::feedback::FeedbackReceipt,String>},
     Recorder(RecorderStatus),
+    CostumeLoaded { user_id: String, costume: crate::roster::Costume },
 }
 
 struct Inner {
+    wardrobe_web: std::sync::RwLock<Option<Arc<tawks_bot::web_client::WebClient>>>,
+    milestone_web: std::sync::RwLock<Option<Arc<tawks_bot::web_client::WebClient>>>,
     secret: [u8; 32],
+    native_passes: auth::NativePasses,
     public_url: String,
     rooms: DashMap<String, mpsc::UnboundedSender<RoomCmd>>,
     next_conn: AtomicU64,
     recorder: std::sync::RwLock<Option<Arc<dyn SessionRecorder>>>,
+    feedback: std::sync::RwLock<Option<Arc<dyn FeedbackSink>>>,
 }
 
 #[derive(Clone)]
@@ -87,20 +102,31 @@ pub struct PartyServer {
 
 impl PartyServer {
     pub async fn start(config: PartyConfig) -> anyhow::Result<Self> {
+        Self::start_with(config, Router::new()).await
+    }
+
+    /// Starts the party socket with more routes served on the same port.
+    pub async fn start_with(config: PartyConfig, extra: Router) -> anyhow::Result<Self> {
         let secret = signing_secret("PARTY_SECRET");
         let server = PartyServer {
             inner: Arc::new(Inner {
+                wardrobe_web: std::sync::RwLock::new(None),
+                milestone_web: std::sync::RwLock::new(None),
                 secret,
+                native_passes: auth::NativePasses::default(),
                 public_url: config.public_url.clone(),
                 rooms: DashMap::new(),
                 next_conn: AtomicU64::new(1),
                 recorder: std::sync::RwLock::new(None),
+                feedback: std::sync::RwLock::new(None),
             }),
         };
         let app = Router::new()
             .route("/party/ws", get(ws_handler))
             .route("/party/health", get(|| async { "ok" }))
-            .with_state(server.clone());
+            .route("/party/native-pass", axum::routing::post(native_pass_handler).layer(axum::extract::DefaultBodyLimit::max(32 * 1024)))
+            .with_state(server.clone())
+            .merge(extra);
         let listener = tokio::net::TcpListener::bind(config.bind).await?;
         info!(bind = %config.bind, public_url = %config.public_url, "party server listening");
         tokio::spawn(async move {
@@ -109,6 +135,30 @@ impl PartyServer {
             }
         });
         Ok(server)
+    }
+
+    pub fn set_wardrobe_client(&self, web: Arc<tawks_bot::web_client::WebClient>) { *self.inner.wardrobe_web.write().unwrap()=Some(web); }
+    pub fn set_milestone_client(&self, web: Arc<tawks_bot::web_client::WebClient>) {
+        *self.inner.milestone_web.write().unwrap() = Some(web);
+    }
+
+    fn report_milestones(&self, events: Vec<serde_json::Value>) {
+        if events.is_empty() {
+            return;
+        }
+        let Some(web) = self.inner.milestone_web.read().unwrap().clone() else { return };
+        for event in events {
+            let web = web.clone();
+            tokio::spawn(async move {
+                if let Err(error) = web.mutate::<_, ()>("milestone_event", &event).await {
+                    warn!(%error, "a Tawkathon milestone event did not send");
+                }
+            });
+        }
+    }
+    async fn wardrobe(&self, user: &str) -> Option<crate::roster::Wardrobe> {
+        let web=self.inner.wardrobe_web.read().ok()?.clone()?;
+        tokio::time::timeout(Duration::from_secs(3),web.query("party_wardrobe_for",&user)).await.ok()?.ok()
     }
 
     pub fn public_url(&self) -> &str {
@@ -122,7 +172,7 @@ impl PartyServer {
         name: &str,
         avatar_url: &str,
     ) -> String {
-        self.issue_token_for(match_id, user_id, name, avatar_url, None, false)
+        self.issue_token_for(match_id, user_id, name, avatar_url, None, false, false)
     }
 
     pub fn issue_token_for(
@@ -133,6 +183,7 @@ impl PartyServer {
         avatar_url: &str,
         game: Option<&str>,
         guest: bool,
+        owner: bool,
     ) -> String {
         let claims = Claims {
             match_id: match_id.to_string(),
@@ -140,12 +191,21 @@ impl PartyServer {
             name: name.to_string(),
             avatar_url: avatar_url.to_string(),
             exp: auth::now_unix() + auth::TOKEN_TTL_SECS,
-            spectator: false,
+            spectator: guest,
             guest,
             drives: Vec::new(),
             game: game.map(str::to_string),
+            owner,
         };
         auth::sign(&claims, &self.inner.secret)
+    }
+
+    pub fn set_feedback(&self, sink: Arc<dyn FeedbackSink>) {
+        *self.inner.feedback.write().unwrap() = Some(sink);
+    }
+
+    fn feedback_sink(&self) -> Option<Arc<dyn FeedbackSink>> {
+        self.inner.feedback.read().unwrap().clone()
     }
 
     pub fn set_recorder(&self, recorder: Arc<dyn SessionRecorder>) {
@@ -175,6 +235,7 @@ impl PartyServer {
             guest: false,
             drives: Vec::new(),
             game: None,
+            owner: false,
         };
         auth::sign(&claims, &self.inner.secret)
     }
@@ -198,6 +259,22 @@ impl PartyServer {
     }
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativePassRequest { token: String, user_id: String, match_id: String }
+
+async fn native_pass_handler(State(server): State<PartyServer>, axum::Json(request): axum::Json<NativePassRequest>) -> axum::response::Response {
+    let now = auth::now_unix();
+    let token = server.inner.native_passes.exchange(&request.token, &request.user_id, &request.match_id, &server.inner.secret, now);
+    match token {
+        Some(token) => (
+            [(axum::http::header::CACHE_CONTROL, "no-store")],
+            axum::Json(serde_json::json!({"token":token,"user_id":request.user_id,"match_id":request.match_id,"expires_at":now+auth::NATIVE_PASS_TTL_SECS})),
+        ).into_response(),
+        None => (axum::http::StatusCode::UNAUTHORIZED, "Rejoin the game before opening Tawkathon.").into_response(),
+    }
+}
+
 async fn ws_handler(ws: WebSocketUpgrade, State(server): State<PartyServer>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(server, socket))
 }
@@ -216,7 +293,14 @@ async fn handle_socket(server: PartyServer, socket: WebSocket) {
         },
         _ => return,
     };
-    let Some(claims) = auth::verify(&token, &server.inner.secret, auth::now_unix()) else {
+    let now = auth::now_unix();
+    let native = token.starts_with("native-");
+    let claims = if native {
+        server.inner.native_passes.consume(&token, now)
+    } else {
+        auth::verify(&token, &server.inner.secret, now)
+    };
+    let Some(claims) = claims else {
         let _ = sink
             .send(encode(&ServerMsg::Error {
                 message: "Your party pass expired. Reconnecting.".into(),
@@ -231,18 +315,22 @@ async fn handle_socket(server: PartyServer, socket: WebSocket) {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Message>();
     let writer = tokio::spawn(async move {
         while let Some(message) = out_rx.recv().await {
-            if sink.send(message).await.is_err() {
+            // About 20s of snapshots behind: the player has stalled, so close rather than queue without limit.
+            if out_rx.len() > 600 || sink.send(message).await.is_err() {
                 break;
             }
         }
         let _ = sink.close().await;
     });
 
+    let wardrobe = if !claims.guest && !claims.spectator { server.wardrobe(&claims.user_id).await } else {None};
     let match_id = claims.match_id.clone();
     let mut room = server.room(&match_id);
     let connect = |claims: Claims, out: mpsc::UnboundedSender<Message>| RoomCmd::Connect {
         conn,
         claims,
+        native,
+        wardrobe: wardrobe.clone(),
         out,
     };
     if room.send(connect(claims.clone(), out_tx.clone())).is_err() {
@@ -252,7 +340,8 @@ async fn handle_socket(server: PartyServer, socket: WebSocket) {
     }
     drop(out_tx);
 
-    while let Some(Ok(message)) = stream.next().await {
+    // Clients ping every 2s; a background tab can stretch that to a minute, so 90s of silence is a half-open socket.
+    while let Ok(Some(Ok(message))) = tokio::time::timeout(Duration::from_secs(90), stream.next()).await {
         match message {
             Message::Text(text) => {
                 if let Ok(msg) = serde_json::from_str::<ClientMsg>(&text) {
@@ -288,21 +377,18 @@ fn send_to(conn: &Conn, msg: &ServerMsg) {
 }
 
 fn broadcast_room(room: &Room, conns: &HashMap<u64, Conn>) {
-    let view = room.view();
-    let seated = encode(&ServerMsg::Room {
-        room: view.clone(),
-        spectating: false,
-    });
-    let watching = encode(&ServerMsg::Room {
-        room: view,
-        spectating: true,
-    });
+    // Each seat sees its own traps and nobody else's, so the view is built
+    // per seat; spectators and the unseated share one with none of them.
+    let mut by_seat: HashMap<Option<u8>, Message> = HashMap::new();
     for conn in conns.values() {
-        let _ = conn.out.send(if conn.seated {
-            seated.clone()
-        } else {
-            watching.clone()
+        let seat = if conn.seated { room.seat_of(&conn.user_id) } else { None };
+        let message = by_seat.entry(seat).or_insert_with(|| {
+            encode(&ServerMsg::Room {
+                room: room.view_for(seat),
+                spectating: !conn.seated,
+            })
         });
+        let _ = conn.out.send(message.clone());
     }
 }
 
@@ -319,22 +405,44 @@ fn snap_message(room: &Room, events: Vec<serde_json::Value>) -> Option<Message> 
 async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::UnboundedReceiver<RoomCmd>) {
     info!(%match_id, "party room opened");
     let mut room = Room::new(match_id.clone(), rand::rng().random());
+    room.dev_tools = dev_tools();
     let mut conns: HashMap<u64, Conn> = HashMap::new();
     let mut interval = tokio::time::interval(Duration::from_secs_f32(TICK_DT));
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut idle_ticks = 0u64;
     let mut events = Vec::new();
+    let mut pending_feedback=std::collections::HashSet::new();
+    let mut milestones = crate::milestones::MilestoneTracker::default();
 
     loop {
         tokio::select! {
             cmd = rx.recv() => {
                 let Some(cmd) = cmd else { break };
                 match cmd {
-                    RoomCmd::Connect { conn, claims, out } => {
-                        if let Some(game) = claims.game.as_deref() {
+                    RoomCmd::FeedbackStored{conn,feedback,result}=>{
+                        pending_feedback.remove(&(feedback.party_id.clone(),feedback.user_id.clone(),feedback.bout.number,!feedback.note.is_empty()));
+                        let (saved,rewarded,message)=match result{
+                            Ok(receipt)=>{room.commit_feedback(&feedback);(true,receipt.rewarded,None)},
+                            Err(error)=>{warn!(%error,party=%feedback.party_id,"saving bout feedback failed");(false,false,Some("Your feedback wasn't saved. Please try again.".to_string()))}
+                        };
+                        if let Some(entry)=conns.get(&conn){send_to(entry,&ServerMsg::FeedbackResult{number:feedback.bout.number,with_note:!feedback.note.is_empty(),saved,rewarded,message});}
+                    }
+                    RoomCmd::CostumeLoaded { user_id, costume } => { room.apply_costume(&user_id,costume); }
+                    RoomCmd::Connect { conn, claims, native, wardrobe, out } => {
+                        if native && !room.native_compatible() {
+                            let _ = out.send(encode(&ServerMsg::Error {message:"This match is using a browser-only game or board. Rejoin from native Tawkathon after it finishes.".into(),code:Some("unsupported")}));
+                            continue;
+                        }
+                        if let Some(game) = claims.game.as_deref().filter(|_| !claims.spectator) {
                             room.prefer_game(game);
                         }
                         let seated = !claims.spectator && room.connect(&claims.user_id, &claims.name, &claims.avatar_url).is_ok();
+                        milestones.note_player(&claims.user_id, claims.guest);
+                        if seated && native { room.enable_native_mode(); }
+                        if seated { if let Some(wardrobe)=wardrobe {room.apply_costume(&claims.user_id,wardrobe.costume);} }
+                        if seated && claims.owner {
+                            room.set_owner(&claims.user_id);
+                        }
                         let entry = Conn { user_id: claims.user_id, name: claims.name, avatar_url: claims.avatar_url, out, seated, spectator: claims.spectator, guest: claims.guest };
                         send_to(&entry, &ServerMsg::Welcome {
                             user_id: &entry.user_id,
@@ -344,7 +452,8 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                             snapshot_hz: TICK_HZ / SNAPSHOT_EVERY_TICKS as u32,
                             guest: entry.guest,
                         });
-                        send_to(&entry, &ServerMsg::Room { room: room.view(), spectating: !entry.seated });
+                        let seat = if entry.seated { room.seat_of(&entry.user_id) } else { None };
+                        send_to(&entry, &ServerMsg::Room { room: room.view_for(seat), spectating: !entry.seated });
                         if let Some(snap) = snap_message(&room, Vec::new()) {
                             let _ = entry.out.send(snap);
                         }
@@ -369,7 +478,28 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                         if entry.spectator && !matches!(msg, ClientMsg::Ping { .. }) {
                             continue;
                         }
+                        if room.board_paused()&&!msg.allowed_while_candy_paused(){continue;}
                         let result = match msg {
+                            ClientMsg::Face { yaw } => room.face(&user_id, yaw),
+                            ClientMsg::PositionInput { x, z } => room.position_input(&user_id, x, z),
+                            ClientMsg::ActivateItem => room.activate_item(&user_id),
+                            ClientMsg::CancelItem => room.cancel_item(&user_id),
+                            ClientMsg::DriveInput {throttle,steer,horn} => room.drive_input(&user_id,throttle,steer,horn),
+                            ClientMsg::RaidInput {x,z,yaw} => room.raid_input(&user_id,x,z,yaw),
+                            ClientMsg::RaidSlash => room.raid_slash(&user_id),
+                            ClientMsg::CrawlerInput{x,z} => room.crawler_input(&user_id,x,z),
+                            ClientMsg::RaidFire{on,yaw} => room.raid_fire(&user_id,on,yaw),
+                            ClientMsg::BuyCandy => room.buy_candy(&user_id),
+                            ClientMsg::JoinCandyVisit => room.join_candy_visit(&user_id),
+                            ClientMsg::CandyVisitInput{x,z} => room.candy_visit_input(&user_id,x,z),
+                            ClientMsg::WalkVacuum {yaw,pitch,on,blow} => room.aim_walk_vacuum_with(&user_id,yaw,pitch,on,blow),
+                            ClientMsg::RefreshCostume => {
+                                if room.phase == crate::room::Phase::Lobby && !entry.guest {
+                                    let server=server.clone(); let sender=server.room(&match_id); let user_id=user_id.clone();
+                                    tokio::spawn(async move {if let Some(wardrobe)=server.wardrobe(&user_id).await {let _=sender.send(RoomCmd::CostumeLoaded{user_id,costume:wardrobe.costume});}});
+                                }
+                                Ok(())
+                            },
                             ClientMsg::Input { x, z, yaw, pitch, jump, crouch } => {
                                 room.set_input(&user_id, crate::bout::Stick { x, z }, yaw, pitch, jump, crouch);
                                 Ok(())
@@ -378,15 +508,76 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                                 room.queue_fire(&user_id, yaw, pitch);
                                 Ok(())
                             }
+                            ClientMsg::Press { hand } => {
+                                room.queue_press(&user_id, hand);
+                                Ok(())
+                            }
                             ClientMsg::ChooseGame { key } => room.choose_game(&user_id, &key),
                             ClientMsg::Vote { key } => room.vote(&user_id, &key),
+                            ClientMsg::Feedback { rating, note } => {
+                                if entry.guest {Ok(())}else{
+                                    room.prepare_feedback(&user_id,rating,&note).map(|feedback|{
+                                        let key=(feedback.party_id.clone(),feedback.user_id.clone(),feedback.bout.number,!feedback.note.is_empty());
+                                        if pending_feedback.insert(key.clone()){
+                                            if let Some(sink)=server.feedback_sink(){
+                                                let sender=server.room(&match_id);
+                                                tokio::spawn(async move{let result=sink.submit(feedback.clone()).await;let _=sender.send(RoomCmd::FeedbackStored{conn,feedback,result});});
+                                            }else{
+                                                pending_feedback.remove(&key);
+                                                send_to(entry,&ServerMsg::FeedbackResult{number:feedback.bout.number,with_note:!feedback.note.is_empty(),saved:false,rewarded:false,message:Some("Your feedback wasn't saved. The feedback service is unavailable; please try again.".into())});
+                                            }
+                                        }
+                                    })
+                                }
+                            }
                             ClientMsg::ChooseSkill { level } => room.choose_skill(&user_id, &level),
+                            ClientMsg::ChooseMap { map } => room.choose_map(&user_id, map),
+                            ClientMsg::ChooseMode { party } => room.choose_mode(&user_id, party),
+                            ClientMsg::ChooseRounds { rounds } => room.choose_rounds(&user_id,rounds),
+                            ClientMsg::ChooseCity{police,jobs,host_police}=>room.choose_city(&user_id,police,jobs,host_police),
+                            ClientMsg::StartCity{watch}=>room.start_city(&user_id,watch),
+                            ClientMsg::CityAction{held,suction}=>room.city_action(&user_id,held,suction),
+                            ClientMsg::CityTool{tool}=>room.city_tool(&user_id,tool),
+                            ClientMsg::CityAutomate{on}=>room.city_automate(&user_id,on),
+                            ClientMsg::CityReady=>room.city_ready(&user_id),
+                            ClientMsg::CityVehicle=>room.city_vehicle(&user_id),
+                            ClientMsg::ChooseMature { on } => room.choose_mature(&user_id, on),
+                            ClientMsg::ChoosePairs { on } => room.choose_pairs(&user_id, on),
+                            ClientMsg::Ready => room.ready(&user_id),
                             ClientMsg::Pick { character } => room.pick(&user_id, &character),
                             ClientMsg::Start => room.start(&user_id),
                             ClientMsg::StartParty => room.start_party(&user_id),
-                            ClientMsg::UseItem { item, target } => room.use_item(&user_id, item, target),
+                            ClientMsg::UseItem {
+                                item,
+                                target,
+                                number,
+                            } => room.use_item(&user_id, item, target, number),
                             ClientMsg::PassItems => room.pass_items(&user_id),
                             ClientMsg::Roll => room.roll(&user_id),
+                            ClientMsg::Shop { item, upgrade } => room.shop(&user_id, item, upgrade),
+                            ClientMsg::FireCannon { power } => room.fire(&user_id, power),
+                            ClientMsg::Lob { yaw, pitch, power } => room.lob(&user_id, yaw, pitch, power),
+                            ClientMsg::Swing { yaw, stop } => room.swing(&user_id, yaw, stop),
+                            ClientMsg::Check { stop } => room.check(&user_id, stop),
+                            ClientMsg::Suck => room.suck(&user_id),
+                            ClientMsg::Vacuum { yaw, on, blow } => room.aim_vacuum(&user_id, yaw, on, blow),
+                            ClientMsg::StowVacuum => room.stow_vacuum(&user_id),
+                            ClientMsg::Brace { on } => room.brace(&user_id, on),
+                            ClientMsg::ThrowCrate => room.throw_crate(&user_id),
+                            ClientMsg::ThrowSnowball => room.throw_snowball(&user_id),
+                            ClientMsg::StartSandbox { costume } => {
+                                match room.check_start_sandbox(&user_id) {
+                                    Err(error) => Err(error),
+                                    Ok(()) => if let Some(costume) = costume {
+                                        let imported = costume.model_id.as_deref().is_some_and(|id| !crate::roster::cosmetics().iter().any(|item| item.slot == "model" && item.id == id));
+                                        let wardrobe = if imported && !entry.guest { server.wardrobe(&user_id).await } else { None };
+                                        room.start_sandbox_with_preview(&user_id, costume, wardrobe.as_ref())
+                                    } else { room.start_sandbox(&user_id) },
+                                }
+                            },
+                            ClientMsg::Dev { tool } => room.dev(&user_id, tool),
+                            ClientMsg::Bet { coins } => room.bet(&user_id, coins),
+                            ClientMsg::Taunt { taunt } => room.taunt(&user_id, taunt),
                             ClientMsg::ChooseBranch { node } => room.choose_branch(&user_id, node),
                             ClientMsg::EndTurn => room.end_turn(&user_id),
                             ClientMsg::AddBot => room.add_bot(&user_id),
@@ -429,6 +620,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
             }
             _ = interval.tick() => {
                 events.extend(room.step());
+                server.report_milestones(milestones.observe(&room));
 
                 // Anyone watching gets a seat as soon as the lobby has room.
                 if room.phase == Phase::Lobby && room.tick % TICK_HZ as u64 == 0 {
@@ -524,7 +716,7 @@ fn stop_recording(server: &PartyServer, match_id: &str, room: &mut Room) {
 
 /// The key passes are signed with. Set `PARTY_SECRET` so passes stay valid across a
 /// restart or a failover to another copy; without it each process makes its own.
-fn signing_secret(var: &str) -> [u8; 32] {
+pub fn signing_secret(var: &str) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     match std::env::var(var) {
         Ok(value) if !value.is_empty() => Sha256::digest(value.as_bytes()).into(),
@@ -533,5 +725,48 @@ fn signing_secret(var: &str) -> [u8; 32] {
             rand::rng().fill(&mut secret);
             secret
         }
+    }
+}
+
+/// Whether this is a dev stack, where the sandbox is open: `PARTY_DEV_TOOLS=1`.
+fn dev_tools() -> bool {
+    std::env::var("PARTY_DEV_TOOLS").is_ok_and(|v| v == "1")
+}
+
+#[cfg(test)]
+mod native_handoff_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tokio_tungstenite::{connect_async, tungstenite::Message as ClientMessage};
+
+    #[tokio::test]
+    async fn native_ticket_exchange_authenticates_the_same_player_and_consumes_once() {
+        let reserve = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = reserve.local_addr().unwrap().port(); drop(reserve);
+        let url = format!("ws://127.0.0.1:{port}/party/ws");
+        let server = PartyServer::start(PartyConfig { bind: format!("127.0.0.1:{port}").parse().unwrap(), public_url: url.clone() }).await.unwrap();
+        let source = server.issue_token("native-room", "native-player", "Player", "");
+        let client = reqwest::Client::new();
+        let endpoint = format!("http://127.0.0.1:{port}/party/native-pass");
+        let wrong = client.post(&endpoint).json(&json!({"token":source,"user_id":"different","match_id":"native-room"})).send().await.unwrap();
+        assert_eq!(wrong.status(), reqwest::StatusCode::UNAUTHORIZED);
+        let response = client.post(&endpoint).json(&json!({"token":source,"user_id":"native-player","match_id":"native-room"})).send().await.unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let ticket: Value = response.json().await.unwrap();
+        assert_eq!(ticket["user_id"], "native-player"); assert_eq!(ticket["match_id"], "native-room");
+        assert_ne!(ticket["token"], source);
+        let token = ticket["token"].as_str().unwrap();
+        let (mut first, _) = connect_async(&url).await.unwrap();
+        first.send(ClientMessage::Text(json!({"type":"hello","token":token}).to_string().into())).await.unwrap();
+        let message = tokio::time::timeout(Duration::from_secs(3), first.next()).await.unwrap().unwrap().unwrap();
+        let data: Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
+        assert_eq!(data["type"], "welcome"); assert_eq!(data["user_id"], "native-player");
+        let (mut second, _) = connect_async(&url).await.unwrap();
+        second.send(ClientMessage::Text(json!({"type":"hello","token":token}).to_string().into())).await.unwrap();
+        let message = tokio::time::timeout(Duration::from_secs(3), second.next()).await.unwrap().unwrap().unwrap();
+        let data: Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
+        assert_eq!(data["type"], "error"); assert_eq!(data["code"], "auth");
+        let _ = first.close(None).await;
     }
 }

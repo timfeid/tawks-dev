@@ -18,6 +18,16 @@ export type Hello = { protocol: typeof PROTOCOL; version: number; type: 'hello' 
 /** Posted by tawks to the frame, carrying the port all later messages use. */
 export type Welcome = { protocol: typeof PROTOCOL; version: number; type: 'welcome' };
 
+/** Whether the player's microphone is feeding the game pitch. */
+export type MicrophoneState = 'on' | 'off' | 'denied' | 'unavailable';
+
+/**
+ * What the player is singing, worked out by tawks: the game gets pitch and
+ * loudness, never the sound itself. `t` is Unix time in milliseconds; `hz` is
+ * null when nothing pitched is heard.
+ */
+export type PitchSample = { t: number; hz: number | null; level: number };
+
 export type HostMessage =
   | { type: 'init'; me: Me; lobby: Lobby | null; state: Json }
   /**
@@ -27,12 +37,23 @@ export type HostMessage =
    */
   | { type: 'push_to_talk'; binding: string | null }
   | { type: 'state'; state: Json }
+  | { type: 'microphone'; state: MicrophoneState }
+  /** Whether the game is full screen, including when the player leaves with Escape. */
+  | { type: 'fullscreen'; on: boolean }
+  | { type: 'pitch'; samples: PitchSample[] }
   | { type: 'result'; id: number; ok: true }
   | { type: 'result'; id: number; ok: false; error: string };
 
 export type GameMessage =
   | { type: 'send'; id: number; input: Json }
   | { type: 'push_to_talk'; down: boolean }
+  /** Asks tawks to start or stop sending pitch; tawks asks the player first. */
+  | { type: 'microphone'; on: boolean }
+  /**
+   * Asks tawks to put the game full screen, or to leave it. A frame cannot do
+   * this for itself, so tawks takes the panel around it full screen instead.
+   */
+  | { type: 'fullscreen'; on: boolean }
   | { type: 'call'; id: number; action: string; inputs: { [key: string]: Json } };
 
 /** Action ids a game may call: one of its own workflow's actions. */

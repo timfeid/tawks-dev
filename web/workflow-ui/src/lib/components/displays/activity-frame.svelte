@@ -10,7 +10,9 @@
     type GameMessage,
     type HostMessage,
     type Json,
+    type MicrophoneState,
   } from '@tawks/activity-sdk/protocol';
+  import { PitchTracker } from '@tawks/activity-sdk/pitch';
   import { getNestedValue } from '../../utils';
   import type { Props } from '../workflow-display.svelte';
   import { submitServerAction } from '../workflow';
@@ -31,6 +33,7 @@
   let activity = $state<ActivityInfo | null>(null);
   let problem = $state<string | null>(null);
   let frame = $state<HTMLIFrameElement>();
+  let box = $state<HTMLDivElement>();
   let port: MessagePort | null = null;
 
   type Client = { url: string };
@@ -124,6 +127,64 @@
     }
   }
 
+  // Singing games get pitch from the microphone, never the sound. The player
+  // agrees once per game, and can stop it from the pill at any time.
+  let askingMic = $state(false);
+  let micOn = $state(false);
+  let micAllowed = false;
+  let tracker: PitchTracker | null = null;
+  let micStarting = false;
+  let micRequest = 0;
+
+  function reportMic(state: MicrophoneState) {
+    post({ type: 'microphone', state });
+  }
+
+  async function startMic() {
+    askingMic = false;
+    micAllowed = true;
+    if (tracker) return reportMic('on');
+    if (micStarting) return;
+    if (!navigator.mediaDevices?.getUserMedia) return reportMic('unavailable');
+    const request = ++micRequest;
+    const next = new PitchTracker((samples) => post({ type: 'pitch', samples }));
+    micStarting = true;
+    try {
+      await next.start();
+    } catch {
+      next.stop();
+      if (request === micRequest) {
+        micStarting = false;
+        reportMic('denied');
+      }
+      return;
+    }
+    if (request !== micRequest) {
+      next.stop();
+      return;
+    }
+    micStarting = false;
+    tracker = next;
+    micOn = true;
+    reportMic('on');
+  }
+
+  function stopMic(state: MicrophoneState = 'off') {
+    micRequest += 1;
+    micStarting = false;
+    tracker?.stop();
+    tracker = null;
+    micOn = false;
+    askingMic = false;
+    reportMic(state);
+  }
+
+  function onMicrophone(on: boolean) {
+    if (!on) return stopMic();
+    if (micAllowed) return void startMic();
+    askingMic = true;
+  }
+
   function fail(id: number, error: string) {
     post({ type: 'result', id, ok: false, error });
   }
@@ -134,6 +195,14 @@
     if (message.type === 'push_to_talk') {
       // Presses inside the frame never reach tawks; the voice client listens for this.
       setTalking(message.down === true);
+      return;
+    }
+    if (message.type === 'microphone') {
+      onMicrophone(message.on === true);
+      return;
+    }
+    if (message.type === 'fullscreen') {
+      void onFullscreen(message.on === true);
       return;
     }
     if (message.type !== 'send' && message.type !== 'call') return;
@@ -200,15 +269,42 @@
     post({ type: 'push_to_talk', binding: currentBinding() });
   }
 
+  // A framed game may not go full screen itself, so it asks and the panel
+  // around it goes instead. The frame fills the panel, so it comes to the same
+  // thing for the player.
+  function fullscreenNow() {
+    return !!box && document.fullscreenElement === box;
+  }
+
+  async function onFullscreen(on: boolean) {
+    try {
+      if (on && box) await box.requestFullscreen();
+      else if (!on && fullscreenNow()) await document.exitFullscreen();
+    } catch {
+      // Report whatever the browser left us in.
+    }
+    post({ type: 'fullscreen', on: fullscreenNow() });
+  }
+
+  function onFullscreenChange() {
+    post({ type: 'fullscreen', on: fullscreenNow() });
+  }
+
   $effect(() => {
     window.addEventListener('message', onWindowMessage);
     window.addEventListener(PUSH_TO_TALK_BINDING_EVENT, onBindingChange);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => {
       window.removeEventListener('message', onWindowMessage);
       window.removeEventListener(PUSH_TO_TALK_BINDING_EVENT, onBindingChange);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
       port?.close();
       port = null;
       setTalking(false);
+      micRequest += 1;
+      micStarting = false;
+      tracker?.stop();
+      tracker = null;
     };
   });
 
@@ -218,7 +314,10 @@
   });
 </script>
 
-<div class="activity-frame relative h-full min-h-[70dvh] w-full overflow-hidden bg-black {display.class}">
+<div
+  bind:this={box}
+  class="activity-frame relative h-full min-h-[70dvh] w-full overflow-hidden bg-black"
+>
   {#if ready}
     <iframe
       bind:this={frame}
@@ -227,13 +326,40 @@
       class="absolute inset-0 h-full w-full border-0"
       sandbox="allow-scripts allow-pointer-lock"
       allow="fullscreen; gamepad; autoplay"
+      allowfullscreen
       referrerpolicy="no-referrer"
     ></iframe>
-    <div
-      class="pointer-events-none absolute top-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-zinc-300"
-    >
-      {activity?.name}
-    </div>
+    {#if askingMic}
+      <div class="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6">
+        <div class="max-w-sm rounded-xl border border-white/10 bg-zinc-950 p-5 text-sm text-zinc-300 shadow-2xl">
+          <p class="font-semibold text-white">{activity?.name ?? 'This game'} wants to hear you sing</p>
+          <p class="mt-2">
+            It only gets the pitch and how loud you are, worked out here. Your voice is never sent to the game or anyone
+            else.
+          </p>
+          <div class="mt-4 flex justify-end gap-2">
+            <button class="rounded-md px-3 py-1.5 text-zinc-400 hover:text-white" onclick={() => stopMic('denied')}>
+              Not now
+            </button>
+            <button
+              class="bg-primary text-primary-foreground rounded-md px-3 py-1.5 font-semibold"
+              onclick={() => void startMic()}
+            >
+              Allow
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+    {#if micOn}
+      <div
+        class="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1 text-xs text-zinc-300"
+      >
+        <span class="bg-primary size-1.5 rounded-full"></span>
+        Mic on for pitch
+        <button class="text-zinc-400 hover:text-white" onclick={() => stopMic()}>Stop</button>
+      </div>
+    {/if}
   {:else if problem}
     <div class="flex h-full items-center justify-center p-6 text-sm text-zinc-400">{problem}</div>
   {/if}

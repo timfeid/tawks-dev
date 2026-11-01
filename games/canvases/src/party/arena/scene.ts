@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { buildCharacter, type CharacterRig } from '../characters';
+import { headingOf, turnToward } from '../facing';
+import { place } from '../board/models';
 import type { ArenaSetup, ArenaSnap, CharacterDef, GameEvent, Member } from '../protocol';
+
+/** Red hauls toward -x, blue toward +x; the room HUD uses the same two. */
+const TEAM_COLORS = ['#f87171', '#60a5fa'];
 
 const TILE_COLORS: Record<string, string> = {
   solid: '#f1e3c0',
@@ -9,8 +14,26 @@ const TILE_COLORS: Record<string, string> = {
   gone: '#000000',
 };
 
-type Rider = { seat: number; characterId: string; rig: CharacterRig; tag: THREE.Sprite; props: THREE.Group };
+/** The round floors, as [pad, rim]. */
+const DISC_COLORS: Record<string, [string, string]> = {
+  hotpotato: ['#f0c987', '#e07a3f'],
+  sumo: ['#c8744a', '#f4e4c1'],
+  coins: ['#3f6b5f', '#ffd23f'],
+};
+
+type Rider = {
+  seat: number;
+  characterId: string;
+  rig: CharacterRig;
+  tag: THREE.Sprite;
+  props: THREE.Group;
+  purse?: THREE.Sprite;
+  purseAt?: number;
+};
 type Puff = { sprite: THREE.Sprite; life: number };
+/** A coin from the board's kit, with a ring on the floor marking where it lands. */
+type Coin = { slot: THREE.Group; marker: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>; gold: boolean };
+type Rope = { line: THREE.Mesh; knot: THREE.Mesh };
 
 function nameTexture(text: string, color: string) {
   const canvas = document.createElement('canvas');
@@ -47,9 +70,9 @@ function puffTexture() {
 }
 
 /**
- * The floor games: Crumble Run, Hot Potato Panic, Balloon Brawl and Ledge
- * Shuffle. They share characters, a camera and a floor, and nothing else: each
- * one brings its own props and its own rules from the server.
+ * The floor games: Crumble Run, Hot Potato Panic, Balloon Brawl, Sumo, Ledge
+ * Shuffle and Coin Scramble. They share characters, a camera and a floor, and nothing
+ * else: each one brings its own props and its own rules from the server.
  */
 export class PartyArena {
   readonly group = new THREE.Group();
@@ -57,8 +80,11 @@ export class PartyArena {
   private built = '';
   private riders = new Map<number, Rider>();
   private tiles = new Map<string, THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>>();
-  private ledges = new Map<string, THREE.Mesh<THREE.CylinderGeometry, THREE.MeshStandardMaterial>>();
+  private platform: THREE.Group | null = null;
   private bomb: THREE.Group | null = null;
+  private coins = new Map<number, Coin>();
+  private spare: Record<'gold' | 'bronze', Coin[]> = { gold: [], bronze: [] };
+  private rope: Rope | null = null;
   private puffs: Puff[] = [];
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
@@ -95,6 +121,10 @@ export class PartyArena {
       this.group.add(pad);
       return;
     }
+    if (setup.game === 'tug') {
+      this.buildDocks(setup.half, setup.half_z, setup.pit, setup.brink);
+      return;
+    }
     if (setup.game === 'balloon') {
       const floor = new THREE.Mesh(
         this.track(new THREE.BoxGeometry(setup.half * 2, 0.5, setup.half * 2)),
@@ -119,22 +149,27 @@ export class PartyArena {
       }
       return;
     }
-    // Hot Potato and Ledge Shuffle both play on a round floor.
+    // Ledge Shuffle brings its own floor of falling sections.
+    if (setup.game === 'ledge') return;
+    // Hot Potato, Sumo and Coin Scramble all play on a round floor, which
+    // Sumo then scales down as its platform shrinks.
     const radius = setup.radius;
+    const [pad, rim] = DISC_COLORS[setup.game] ?? DISC_COLORS.hotpotato;
     const disc = new THREE.Mesh(
       this.track(new THREE.CylinderGeometry(radius, radius - 0.6, 0.7, 56)),
-      this.material(new THREE.MeshStandardMaterial({ color: setup.game === 'ledge' ? '#3d4a63' : '#f0c987', roughness: 0.9 })),
+      this.material(new THREE.MeshStandardMaterial({ color: pad, roughness: 0.9 })),
     );
     disc.position.y = -0.35;
     disc.receiveShadow = true;
-    this.group.add(disc);
     const trim = new THREE.Mesh(
       this.track(new THREE.TorusGeometry(radius, 0.18, 8, 60)),
-      this.material(new THREE.MeshStandardMaterial({ color: setup.game === 'ledge' ? '#f97362' : '#e07a3f', roughness: 0.6 })),
+      this.material(new THREE.MeshStandardMaterial({ color: rim, roughness: 0.6 })),
     );
     trim.rotation.x = -Math.PI / 2;
     trim.position.y = 0.02;
-    this.group.add(trim);
+    this.platform = new THREE.Group();
+    this.platform.add(disc, trim);
+    this.group.add(this.platform);
   }
 
   private tileMesh(key: string) {
@@ -152,19 +187,45 @@ export class PartyArena {
     return mesh;
   }
 
-  private ledgeMesh(key: string) {
-    let mesh = this.ledges.get(key);
-    if (!mesh) {
-      mesh = new THREE.Mesh(
-        this.track(new THREE.CylinderGeometry(1.35, 1.5, 1.1, 20)),
-        this.material(new THREE.MeshStandardMaterial({ color: '#f1e3c0', roughness: 0.8 })),
+  /** Two docks facing each other, with the water left open between them. */
+  private buildDocks(half: number, halfZ: number, pit: number, brink: number) {
+    const planks = this.material(new THREE.MeshStandardMaterial({ color: '#b07f4e', roughness: 0.92 }));
+    const span = half - pit;
+    for (const side of [-1, 1]) {
+      const team = side < 0 ? 0 : 1;
+      const dock = new THREE.Mesh(this.track(new THREE.BoxGeometry(span, 0.6, halfZ * 2)), planks);
+      dock.position.set(side * (pit + span / 2), -0.3, 0);
+      dock.receiveShadow = true;
+      this.group.add(dock);
+      const edge = new THREE.Mesh(
+        this.track(new THREE.BoxGeometry(0.35, 0.5, halfZ * 2)),
+        this.material(new THREE.MeshStandardMaterial({ color: TEAM_COLORS[team], roughness: 0.6 })),
       );
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.group.add(mesh);
-      this.ledges.set(key, mesh);
+      edge.position.set(side * pit, 0.1, 0);
+      this.group.add(edge);
+      // The post each side has to haul the knot back to.
+      const post = new THREE.Mesh(
+        this.track(new THREE.CylinderGeometry(0.16, 0.2, 2.2, 10)),
+        this.material(new THREE.MeshStandardMaterial({ color: TEAM_COLORS[team], roughness: 0.5 })),
+      );
+      post.position.set(side * brink, 1.1, -halfZ + 0.6);
+      post.castShadow = true;
+      this.group.add(post);
     }
-    return mesh;
+    // Long enough that both ends stay on the planks at either end of its travel.
+    const line = new THREE.Mesh(
+      this.track(new THREE.CylinderGeometry(0.09, 0.09, (half - brink) * 2, 8)),
+      this.material(new THREE.MeshStandardMaterial({ color: '#e9d8a6', roughness: 0.95 })),
+    );
+    line.rotation.z = Math.PI / 2;
+    line.position.y = 1.05;
+    const knot = new THREE.Mesh(
+      this.track(new THREE.SphereGeometry(0.26, 14, 12)),
+      this.material(new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#c98a00', emissiveIntensity: 0.5 })),
+    );
+    knot.position.y = 1.05;
+    this.group.add(line, knot);
+    this.rope = { line, knot };
   }
 
   private buildBomb() {
@@ -189,6 +250,45 @@ export class PartyArena {
     return bomb;
   }
 
+  /**
+   * A coin, taken from the pool when one is free: the models come from the
+   * board's kit, so a coin only appears once its model has loaded.
+   */
+  private takeCoin(gold: boolean) {
+    const spare = this.spare[gold ? 'gold' : 'bronze'].pop();
+    if (spare) return spare;
+    const slot = new THREE.Group();
+    const marker = new THREE.Mesh(
+      this.track(new THREE.RingGeometry(0.5, 0.68, 18)),
+      this.material(
+        new THREE.MeshBasicMaterial({ color: gold ? '#ffd23f' : '#e2b887', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+      ),
+    );
+    marker.rotation.x = -Math.PI / 2;
+    slot.add(marker);
+    this.group.add(slot);
+    void place(slot, gold ? 'coin-gold' : 'coin-bronze', { x: 0, z: 0, scale: gold ? 2.6 : 1.7 });
+    return { slot, marker, gold };
+  }
+
+  /** What one player is carrying, over their name. */
+  private purseTag(rider: Rider, coins: number) {
+    if (rider.purse && rider.purseAt === coins) return rider.purse;
+    const texture = nameTexture(`${coins}`, '#ffd23f');
+    const image = texture.image as HTMLCanvasElement;
+    if (!rider.purse) {
+      rider.purse = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+      rider.purse.renderOrder = 31;
+      this.group.add(rider.purse);
+    } else {
+      rider.purse.material.map?.dispose();
+      rider.purse.material.map = texture;
+    }
+    rider.purseAt = coins;
+    rider.purse.scale.set((image.width / image.height) * 0.5, 0.5, 1);
+    return rider.purse;
+  }
+
   /** Balloons on a string, one per life left. */
   private balloonProps(rider: Rider, count: number, def: CharacterDef | undefined) {
     const have = rider.props.children.length;
@@ -209,6 +309,18 @@ export class PartyArena {
     }
   }
 
+  private clearRider(rider: Rider) {
+    rider.rig.dispose();
+    rider.tag.material.map?.dispose();
+    rider.tag.material.dispose();
+    rider.tag.removeFromParent();
+    this.textures = this.textures.filter((texture) => texture !== rider.tag.material.map);
+    rider.props.removeFromParent();
+    rider.purse?.material.map?.dispose();
+    rider.purse?.material.dispose();
+    rider.purse?.removeFromParent();
+  }
+
   sync(snap: ArenaSnap | null, setup: ArenaSetup | null, members: Member[], roster: Map<string, CharacterDef>) {
     this.roster = roster;
     if (setup && this.built !== setup.game) this.build(setup);
@@ -217,11 +329,7 @@ export class PartyArena {
     for (const [seat, rider] of this.riders) {
       const member = members.find((m) => m.seat === seat);
       if (!snap.players.some((p) => p.seat === seat) || !member || member.character !== rider.characterId) {
-        rider.rig.dispose();
-        rider.tag.material.map?.dispose();
-        rider.tag.material.dispose();
-        rider.tag.removeFromParent();
-        rider.props.removeFromParent();
+        this.clearRider(rider);
         this.riders.delete(seat);
       }
     }
@@ -251,14 +359,30 @@ export class PartyArena {
       mesh.rotation.z = tile.state === 'falling' ? 0.18 : 0;
     }
 
-    for (const [index, ledge] of (snap.ledges ?? []).entries()) {
-      const mesh = this.ledgeMesh(`${index}`);
-      mesh.position.set(ledge.x, -0.05, ledge.z);
-      mesh.visible = true;
-      mesh.material.color.set(ledge.taken === null ? '#f1e3c0' : '#8ef5a4');
+    const live = new Set<number>();
+    for (const coin of snap.coins ?? []) {
+      live.add(coin.id);
+      let held = this.coins.get(coin.id);
+      if (!held) {
+        held = this.takeCoin(coin.value > 1);
+        this.coins.set(coin.id, held);
+      }
+      held.slot.visible = true;
+      held.slot.position.set(coin.x, coin.y, coin.z);
+      held.marker.position.y = 0.04 - coin.y;
+      held.marker.visible = coin.y > 0.4;
     }
-    for (const [key, mesh] of this.ledges) {
-      if (Number(key) >= (snap.ledges?.length ?? 0)) mesh.visible = false;
+    for (const [id, held] of this.coins) {
+      if (live.has(id)) continue;
+      held.slot.visible = false;
+      this.spare[held.gold ? 'gold' : 'bronze'].push(held);
+      this.coins.delete(id);
+    }
+
+    if (snap.game === 'tug' && this.rope) {
+      const rope = snap.rope ?? 0;
+      this.rope.line.position.x = rope;
+      this.rope.knot.position.x = rope;
     }
 
     if (snap.game === 'hotpotato') {
@@ -293,9 +417,29 @@ export class PartyArena {
           this.puff(at.clone().setY(2.2).add(new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5)), colorOf(event.seat));
         }
       }
+    } else if (event.kind === 'spill') {
+      const at = this.riders.get(event.seat)?.rig.group.position;
+      if (at && event.coins > 0) {
+        for (let i = 0; i < 8; i++) {
+          this.puff(at.clone().setY(1.3).add(new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(2.2)), '#ffd23f');
+        }
+        this.shake = 0.26;
+      }
+    } else if (event.kind === 'gold') {
+      this.puff(new THREE.Vector3(event.x, 0.6, event.z), '#ffd23f');
+    } else if (event.kind === 'splash') {
+      for (let i = 0; i < 5; i++) {
+        this.puff(new THREE.Vector3(event.x + (Math.random() - 0.5) * 1.2, -2.3 + Math.random() * 0.8, event.z), '#bfe9ff');
+      }
     } else if (event.kind === 'drop' || event.kind === 'over') {
       const at = this.riders.get(event.seat)?.rig.group.position;
       if (at) this.puff(at.clone().setY(0.4), '#cbd5e1');
+    } else if (event.kind === 'bump') {
+      const dust = Math.round(2 + event.strength * 4);
+      for (let i = 0; i < dust; i++) {
+        this.puff(new THREE.Vector3(event.x, 0.5 + Math.random() * 0.6, event.z), '#fdf6e3');
+      }
+      this.shake = Math.max(this.shake, Math.min(0.3, event.strength * event.strength * 0.2));
     }
   }
 
@@ -311,14 +455,18 @@ export class PartyArena {
 
   update(snap: ArenaSnap | null, time: number, dt: number) {
     this.shake = Math.max(0, this.shake - dt * 1.6);
+    if (this.platform && snap?.radius && this.setup && 'radius' in this.setup) {
+      const closed = Math.max(0.1, snap.radius / this.setup.radius);
+      this.platform.scale.set(closed, 1, closed);
+    }
     for (const [seat, rider] of this.riders) {
       const player = snap?.players.find((p) => p.seat === seat);
       if (!player) continue;
       const height = player.y ?? 0;
       rider.rig.group.position.set(player.x, height, player.z);
       const speed = Math.hypot(player.vx ?? 0, player.vz ?? 0);
-      if (speed > 0.3) rider.rig.group.rotation.y = Math.atan2(player.vx ?? 0, player.vz ?? 0) + Math.PI;
-      const pose = player.out ? 'fall' : speed > 0.8 ? 'ride' : 'idle';
+      if (speed > 0.3) rider.rig.group.rotation.y = turnToward(rider.rig.group.rotation.y, headingOf(player.vx ?? 0, player.vz ?? 0), dt);
+      const pose = player.out || player.skidding ? 'fall' : speed > 0.8 ? 'ride' : 'idle';
       rider.rig.animate(pose, time + seat * 0.3, speed > 0.8 ? 7 : 0);
       rider.tag.position.set(player.x, height + 2.5, player.z);
       rider.tag.visible = !player.out;
@@ -331,6 +479,27 @@ export class PartyArena {
       if (snap?.game === 'hotpotato') {
         rider.rig.group.scale.setScalar(player.holding ? 1.06 : 0.95);
       }
+      if (snap?.game === 'ledge' && !player.out) {
+        rider.rig.group.rotation.y = (player.yaw ?? 0) + Math.PI;
+        rider.rig.group.scale.setScalar(player.winding ? 1.1 : 0.95);
+      }
+      if (snap?.game === 'tug') {
+        const away = (player.team ?? 0) === 0 ? -1 : 1;
+        const pull = player.pull ?? 0;
+        rider.rig.group.position.x = player.x + pull * away * 0.3;
+        rider.rig.group.rotation.y = -away * (Math.PI / 2);
+        rider.rig.animate(player.out ? 'fall' : 'ride', time + seat * 0.3, 2.5 + pull * 6);
+      }
+      if (snap?.game === 'coins') {
+        const purse = this.purseTag(rider, player.purse ?? 0);
+        purse.position.set(player.x, height + 3.15, player.z);
+        purse.visible = (player.purse ?? 0) > 0;
+        rider.rig.group.scale.setScalar(player.dashing ? 1.08 : 0.95);
+      }
+    }
+
+    for (const [id, coin] of this.coins) {
+      coin.slot.rotation.y = time * 2.2 + id;
     }
 
     if (this.bomb?.visible) {
@@ -361,15 +530,14 @@ export class PartyArena {
 
   /** Throw away everything built for the last game so the next starts clean. */
   reset() {
-    this.riders.forEach((rider) => {
-      rider.rig.dispose();
-      rider.tag.material.map?.dispose();
-      rider.tag.material.dispose();
-    });
+    this.riders.forEach((rider) => this.clearRider(rider));
     this.riders.clear();
     this.tiles.clear();
-    this.ledges.clear();
+    this.platform = null;
+    this.coins.clear();
+    this.spare = { gold: [], bronze: [] };
     this.bomb = null;
+    this.rope = null;
     this.puffs.forEach((puff) => puff.sprite.material.dispose());
     this.puffs = [];
     for (const child of [...this.group.children]) this.group.remove(child);
@@ -384,12 +552,10 @@ export class PartyArena {
   }
 
   dispose() {
-    this.riders.forEach((rider) => {
-      rider.rig.dispose();
-      rider.tag.material.map?.dispose();
-      rider.tag.material.dispose();
-    });
+    this.riders.forEach((rider) => this.clearRider(rider));
     this.riders.clear();
+    this.coins.clear();
+    this.spare = { gold: [], bronze: [] };
     this.puffs.forEach((puff) => puff.sprite.material.dispose());
     this.puffMap.dispose();
     this.textures.forEach((texture) => texture.dispose());

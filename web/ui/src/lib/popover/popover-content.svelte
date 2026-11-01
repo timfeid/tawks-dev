@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
 	import { cn } from '../utils.js';
 	import { Popover as PopoverPrimitive } from "bits-ui";
+	import { POPOVER_PORTAL } from './portal.js';
 
 	let {
 		ref = $bindable(null),
@@ -12,9 +14,11 @@
 	}: PopoverPrimitive.ContentProps & {
 		portalProps?: PopoverPrimitive.PortalProps;
 	} = $props();
+
+	const portal = getContext<HTMLElement | undefined>(POPOVER_PORTAL);
 </script>
 
-<PopoverPrimitive.Portal {...portalProps}>
+<PopoverPrimitive.Portal to={portal} {...portalProps}>
 	<PopoverPrimitive.Content
 		bind:ref
 		data-slot="popover-content"

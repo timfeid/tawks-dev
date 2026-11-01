@@ -1,0 +1,294 @@
+[
+  {
+    "id": "model-robot",
+    "slot": "model",
+    "name": "Robot",
+    "price": 8,
+    "icon": "bot",
+    "file": "robot.glb",
+    "sourceUrl": "https://opengameart.org/node/89467",
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "report": {
+      "bytes": 466092,
+      "vertices": 7072,
+      "triangles": 3238,
+      "meshes": 14,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Idle",
+          "duration": 3.3333332538604736
+        },
+        {
+          "name": "Run",
+          "duration": 0.9583333134651184
+        },
+        {
+          "name": "Victory",
+          "duration": 3.3333332538604736
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": "Victory",
+        "sad": null,
+        "fall": null
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "id": "model-ninja",
+    "slot": "model",
+    "name": "Ninja",
+    "price": 8,
+    "icon": "bot",
+    "file": "ninja.glb",
+    "sourceUrl": "https://opengameart.org/content/animated-characters-pack",
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "report": {
+      "bytes": 404732,
+      "vertices": 5256,
+      "triangles": 2720,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Defeat",
+          "duration": 2.5
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Victory",
+          "duration": 1.875
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": "Victory",
+        "sad": "Defeat",
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "id": "model-cowboy",
+    "slot": "model",
+    "name": "Cowboy",
+    "price": 8,
+    "icon": "bot",
+    "file": "cowboy.glb",
+    "sourceUrl": "https://opengameart.org/content/animated-characters-pack",
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "report": {
+      "bytes": 399116,
+      "vertices": 4970,
+      "triangles": 3176,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Defeat",
+          "duration": 2.5
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Victory",
+          "duration": 1.875
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": "Victory",
+        "sad": "Defeat",
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "id": "model-goblin",
+    "slot": "model",
+    "name": "Goblin",
+    "price": 8,
+    "icon": "bot",
+    "file": "goblin.glb",
+    "sourceUrl": "https://opengameart.org/content/animated-characters-pack",
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "report": {
+      "bytes": 364784,
+      "vertices": 4411,
+      "triangles": 2462,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Defeat",
+          "duration": 2.5
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Victory",
+          "duration": 1.875
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": "Victory",
+        "sad": "Defeat",
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "id": "model-knight",
+    "slot": "model",
+    "name": "Knight",
+    "price": 8,
+    "icon": "bot",
+    "file": "knight.glb",
+    "sourceUrl": "https://opengameart.org/content/animated-characters-pack",
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "report": {
+      "bytes": 438024,
+      "vertices": 5978,
+      "triangles": 2992,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Defeat",
+          "duration": 2.5
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Victory",
+          "duration": 1.875
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": "Victory",
+        "sad": "Defeat",
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "id": "model-pirate",
+    "slot": "model",
+    "name": "Pirate",
+    "price": 8,
+    "icon": "bot",
+    "file": "pirate.glb",
+    "sourceUrl": "https://opengameart.org/content/animated-characters-pack",
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "report": {
+      "bytes": 395752,
+      "vertices": 4980,
+      "triangles": 2724,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Defeat",
+          "duration": 2.5
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Victory",
+          "duration": 1.875
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": "Victory",
+        "sad": "Defeat",
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  }
+]

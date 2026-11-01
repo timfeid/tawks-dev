@@ -1,0 +1,74 @@
+[
+  {
+    "id": "sunny",
+    "name": "Yellow",
+    "body": "#ffd23f",
+    "accent": "#ff7b29",
+    "belly": "#fff3c4",
+    "feature": "none"
+  },
+  {
+    "id": "clover",
+    "name": "Green",
+    "body": "#62c370",
+    "accent": "#2d7f45",
+    "belly": "#dff5d8",
+    "feature": "none"
+  },
+  {
+    "id": "blip",
+    "name": "Blue",
+    "body": "#4d96ff",
+    "accent": "#1d4ea3",
+    "belly": "#d6e6ff",
+    "feature": "none"
+  },
+  {
+    "id": "rosie",
+    "name": "Pink",
+    "body": "#ff6f9f",
+    "accent": "#c2185b",
+    "belly": "#ffe0ea",
+    "feature": "none"
+  },
+  {
+    "id": "bruno",
+    "name": "Brown",
+    "body": "#b07a4f",
+    "accent": "#6b4226",
+    "belly": "#f1dcc3",
+    "feature": "none"
+  },
+  {
+    "id": "vex",
+    "name": "Purple",
+    "body": "#9b5de5",
+    "accent": "#4f1d8a",
+    "belly": "#eadcff",
+    "feature": "none"
+  },
+  {
+    "id": "frost",
+    "name": "White",
+    "body": "#e9f3fa",
+    "accent": "#3f9bd8",
+    "belly": "#ffffff",
+    "feature": "none"
+  },
+  {
+    "id": "bolt",
+    "name": "Red",
+    "body": "#ff5e5b",
+    "accent": "#2b2d42",
+    "belly": "#ffe1d6",
+    "feature": "none"
+  },
+  {
+    "id": "onyx",
+    "name": "Black",
+    "body": "#2b2b35",
+    "accent": "#9aa3b5",
+    "belly": "#4b4b58",
+    "feature": "none"
+  }
+]

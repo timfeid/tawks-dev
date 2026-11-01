@@ -6,6 +6,4 @@ edition = "2021"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 specta = { workspace = true, features = ["derive"] }
-
-[dev-dependencies]
 serde_json = { workspace = true }

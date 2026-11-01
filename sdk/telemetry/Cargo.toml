@@ -1,0 +1,21 @@
+[package]
+name = "tawks-telemetry"
+version = "0.1.0"
+edition = "2021"
+description = "Errors and logs to a Sentry-protocol server (GlitchTip) for Tawks processes, off unless GLITCHTIP_DSN is set"
+
+[features]
+default = []
+tracing = ["sentry/tracing", "dep:tracing-core", "dep:tracing-subscriber"]
+log = ["sentry/log"]
+
+[dependencies]
+log = "0.4"
+regex = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+sentry = { version = "0.49.3", default-features = false, features = ["backtrace", "contexts", "logs", "panic", "reqwest", "rustls"] }
+tracing-core = { version = "0.1", optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[dev-dependencies]
+tracing = { workspace = true }

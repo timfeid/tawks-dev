@@ -21,11 +21,10 @@ pub fn definition(actions: &TracklinesActionIds) -> CreateWorkflowDefinition {
         .target(&actions.view)
         .build();
     let node = WorkflowNodeBuilder::new("Tracklines")
-        .layout("min-h-screen w-full bg-slate-950 text-slate-100 relative")
         .condition(Cond::response_exists("lobby_id"))
         .visual(
             WorkflowVisualBuilder::new("board")
-                .tile(vec![WorkflowDisplayBuilder::new("w-full h-full absolute inset-0")
+                .tile(vec![WorkflowDisplayBuilder::new()
                     .tracklines_canvas()
                     .build()])
                 .build(),

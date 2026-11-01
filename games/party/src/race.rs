@@ -42,6 +42,11 @@ struct BotBrain {
 pub struct RockerRally {
     pub racers: Vec<Racer>,
     pub time: f32,
+    /// How much wider than the track for four, for the size of the field.
+    size: f32,
+    /// The boost pads and mud, spread across the track as wide as it is.
+    boosts: Vec<(f32, f32)>,
+    mud: Vec<(f32, f32, f32)>,
     brains: HashMap<u8, BotBrain>,
     rng: StdRng,
     skills: HashMap<u8, Skill>,
@@ -54,12 +59,17 @@ const MUD: &[(f32, f32, f32)] = &[(0.0, -9.0, 3.0), (-5.0, 7.0, 2.6), (5.0, 23.0
 impl RockerRally {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let count = contestants.len().max(1);
+        // A bigger field races on a wider track, with the pads and mud moved
+        // out to match. Only the width grows; the course is as long as ever.
+        let size = crate::bout::crowd_scale(contestants.len());
+        let boosts = BOOSTS.iter().map(|&(x, z)| (x * size, z)).collect();
+        let mud = MUD.iter().map(|&(x, z, radius)| (x * size, z, radius * size)).collect();
         let racers = contestants
             .iter()
             .enumerate()
             .map(|(index, contestant)| Racer {
                 seat: contestant.seat,
-                x: ((index as f32 + 0.5) / count as f32 - 0.5) * 14.0,
+                x: ((index as f32 + 0.5) / count as f32 - 0.5) * 14.0 * size,
                 z: START_Z,
                 speed: 0.0,
                 bounce: 0.0,
@@ -86,6 +96,9 @@ impl RockerRally {
         RockerRally {
             racers,
             time: 0.0,
+            size,
+            boosts,
+            mud,
             brains,
             rng: StdRng::seed_from_u64(seed),
             skills: contestants
@@ -94,6 +107,11 @@ impl RockerRally {
                 .collect(),
             placements: None,
         }
+    }
+
+    /// How far either side of the middle the track runs.
+    pub fn half(&self) -> f32 {
+        TRACK_HALF * self.size
     }
 
     fn input<'a>(inputs: &'a [(u8, Input)], seat: u8) -> Input {
@@ -130,7 +148,7 @@ impl Bout for RockerRally {
     }
 
     fn setup(&self) -> Value {
-        json!({ "game": "race", "half": TRACK_HALF, "start": START_Z, "finish": FINISH_Z, "boosts": BOOSTS, "mud": MUD })
+        json!({ "game": "race", "half": self.half(), "start": START_Z, "finish": FINISH_Z, "boosts": self.boosts, "mud": self.mud })
     }
 
     fn step(&mut self, inputs: &[(u8, Input)], dt: f32, events: &mut Vec<Value>) {
@@ -143,14 +161,17 @@ impl Bout for RockerRally {
             .iter()
             .filter(|r| r.finished_at.is_some())
             .count();
+        let half = self.half();
         for racer in &mut self.racers {
             if racer.finished_at.is_some() {
                 continue;
             }
             let input = Self::input(inputs, racer.seat);
-            let side = if input.stick.x > 0.45 {
+            // Up and down, alternated, pump the racer; left and right steer it,
+            // the same way round as on screen.
+            let side = if input.stick.z > 0.45 {
                 1
-            } else if input.stick.x < -0.45 {
+            } else if input.stick.z < -0.45 {
                 -1
             } else {
                 0
@@ -176,9 +197,9 @@ impl Bout for RockerRally {
             if side != 0 {
                 racer.pump_side = side;
             }
-            racer.x = (racer.x + input.stick.z.clamp(-1.0, 1.0) * STEER_SPEED * dt)
-                .clamp(-TRACK_HALF + 0.7, TRACK_HALF - 0.7);
-            for (index, &(x, z)) in BOOSTS.iter().enumerate() {
+            racer.x = (racer.x + input.stick.x.clamp(-1.0, 1.0) * STEER_SPEED * dt)
+                .clamp(-half + 0.7, half - 0.7);
+            for (index, &(x, z)) in self.boosts.iter().enumerate() {
                 if racer.boost_mask & (1 << index) == 0
                     && (racer.z - z).abs() < 0.75
                     && (racer.x - x).abs() < 2.0
@@ -188,7 +209,7 @@ impl Bout for RockerRally {
                     events.push(json!({ "kind": "boost", "seat": racer.seat, "x": x, "z": z }));
                 }
             }
-            let muddy = MUD.iter().any(|&(x, z, radius)| {
+            let muddy = self.mud.iter().any(|&(x, z, radius)| {
                 (racer.x - x).powi(2) + (racer.z - z).powi(2) < radius.powi(2)
             });
             racer.speed *= (-(COAST_DRAG + if muddy { 3.2 } else { 0.0 }) * dt).exp();
@@ -215,7 +236,8 @@ impl Bout for RockerRally {
         let racer = self.racers.iter().find(|r| r.seat == seat);
         if let Some(racer) = racer {
             if self.rng.random_bool((dt * 0.9).min(0.15) as f64) {
-                brain.lane = BOOSTS
+                brain.lane = self
+                    .boosts
                     .iter()
                     .min_by(|a, b| {
                         (a.1 - racer.z)
@@ -228,8 +250,8 @@ impl Bout for RockerRally {
             }
             Input {
                 stick: crate::bout::Stick {
-                    x: brain.side as f32,
-                    z: ((brain.lane - racer.x) / 4.0).clamp(-1.0, 1.0),
+                    x: ((brain.lane - racer.x) / 4.0).clamp(-1.0, 1.0),
+                    z: brain.side as f32,
                 },
                 ..Default::default()
             }
@@ -244,5 +266,36 @@ impl Bout for RockerRally {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field(n: u8) -> Vec<Contestant> {
+        (0..n)
+            .map(|seat| Contestant {
+                seat,
+                is_bot: true,
+                skill: crate::bout::DEFAULT_SKILL,
+                team: seat % 2,
+                ally: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_bigger_field_races_on_a_wider_track() {
+        let four = RockerRally::new(&field(4), 1);
+        assert_eq!(four.half(), TRACK_HALF, "four race it as built");
+        assert_eq!(four.boosts, BOOSTS.to_vec());
+        let eight = RockerRally::new(&field(8), 1);
+        assert!((eight.half() / TRACK_HALF - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert!((eight.boosts[0].0 / BOOSTS[0].0 - 2f32.sqrt()).abs() < 1e-4, "the pads move out with it");
+        assert_eq!(eight.boosts[0].1, BOOSTS[0].1, "but the course is no longer");
+        let setup = eight.setup();
+        assert_eq!(setup["half"], json!(eight.half()), "and the client is told");
+        assert_eq!(setup["boosts"], json!(eight.boosts));
     }
 }

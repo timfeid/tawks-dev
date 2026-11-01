@@ -87,7 +87,6 @@ pub struct WorkflowResource {
     pub status: WorkflowRuntimeStatus,
     pub complete_message: Option<String>,
     pub visuals: Vec<WorkflowVisual>,
-    pub layout: Option<String>,
     pub user_id: String,
     pub current_node_id: String,
     pub waiting: bool,

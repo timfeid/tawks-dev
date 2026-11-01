@@ -4,30 +4,51 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use serde_json::json;
 use tawks_bot::types::UserResource;
+use tawks_bot::web_client::WebClient;
 use tawks_bot::{ServerActionHandler, TawksBot, full_avatar_url};
 use workflow::server_action::ServerActionResult;
 
 use crate::server::PartyServer;
-use crate::workflows::{self, COVEN_JOIN_ACTION, JOIN_ACTION, LANDLORD_JOIN_ACTION};
+use crate::workflows::{self, COVEN_JOIN_ACTION, JOIN_ACTION, LANDLORD_JOIN_ACTION, SPEEDBALL_JOIN_ACTION};
 
 /// Registers the join actions and the party and Coven workflows. Each action
 /// hands a player the socket address and a signed pass for their lobby's room;
-/// the Coven pass also names the game the room should be set to.
+/// the Coven pass also names the game the room should be set to, and the
+/// lobby owner's pass says so, which makes them the room's host.
 pub async fn register(bot: &TawksBot, server: &PartyServer) -> Result<()> {
-    let join_id = bot.register_server_action(JOIN_ACTION, join_handler(server, None)).await?;
+    let web = bot.sdk.web_client.clone();
+    server.set_wardrobe_client(web.clone());
+    server.set_milestone_client(web.clone());
+    server.set_feedback(crate::feedback::FeedbackLog::new(web.clone(), crate::feedback::LinearConfig::from_env()));
+    let join_id = bot.register_server_action(JOIN_ACTION, join_handler(server, &web, None)).await?;
     let coven_id = bot
-        .register_server_action(COVEN_JOIN_ACTION, join_handler(server, Some(crate::coven::KEY)))
+        .register_server_action(COVEN_JOIN_ACTION, join_handler(server, &web, Some(crate::coven::KEY)))
         .await?;
     let landlord_id = bot
-        .register_server_action(LANDLORD_JOIN_ACTION, join_handler(server, Some(crate::landlord::KEY)))
+        .register_server_action(LANDLORD_JOIN_ACTION, join_handler(server, &web, Some(crate::landlord::KEY)))
         .await?;
-    workflows::register(bot, &join_id, &coven_id, &landlord_id).await
+    let speedball_id = bot
+        .register_server_action(SPEEDBALL_JOIN_ACTION, join_handler(server, &web, Some(crate::speedball::KEY)))
+        .await?;
+    workflows::register(bot, &join_id, &coven_id, &landlord_id, &speedball_id).await
 }
 
-fn join_handler(server: &PartyServer, game: Option<&'static str>) -> ServerActionHandler {
+/// Whether `user_id` owns the lobby. A lobby that cannot be found, or the
+/// API being away, leaves nobody marked as owner.
+async fn owns_lobby(web: &WebClient, lobby_id: &str, user_id: &str) -> bool {
+    web.query::<_, serde_json::Value>("lobby_find", &lobby_id)
+        .await
+        .ok()
+        .and_then(|lobby| lobby.get("owner_user_id")?.as_str().map(|owner| owner == user_id))
+        .unwrap_or(false)
+}
+
+fn join_handler(server: &PartyServer, web: &Arc<WebClient>, game: Option<&'static str>) -> ServerActionHandler {
     let server = server.clone();
+    let web = web.clone();
     Arc::new(Box::new(move |ctx| {
         let server = server.clone();
+        let web = web.clone();
         Box::pin(async move {
                 let user: UserResource = ctx
                     .ctx_required_as("$user")
@@ -40,6 +61,7 @@ fn join_handler(server: &PartyServer, game: Option<&'static str>) -> ServerActio
                 } else {
                     user.display_name.clone()
                 };
+                let owner = owns_lobby(&web, &lobby_id, &ctx.workflow.user_id).await;
                 let token = server.issue_token_for(
                     &lobby_id,
                     &ctx.workflow.user_id,
@@ -47,6 +69,7 @@ fn join_handler(server: &PartyServer, game: Option<&'static str>) -> ServerActio
                     &full_avatar_url(&user),
                     game,
                     ctx.ctx_required_as::<bool>("$anonymous").unwrap_or(false),
+                    owner,
                 );
                 let mut responses = HashMap::new();
                 responses.insert(

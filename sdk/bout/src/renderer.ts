@@ -46,7 +46,8 @@ export type Sounds = {
 /** What a renderer may send back to the room besides the stick. */
 export type BoutMessage =
   | { type: 'input'; x: number; z: number; yaw?: number; pitch?: number; jump?: boolean; crouch?: boolean }
-  | { type: 'fire'; yaw: number; pitch: number };
+  | { type: 'fire'; yaw: number; pitch: number }
+  | { type: 'press'; hand: 'left' | 'right' | 'both' };
 
 export type BoutHost = {
   scene: THREE.Scene;
@@ -107,6 +108,8 @@ export type CombatHud = {
   hitsLabel: string;
   outTitle: string;
   team?: number;
+  /** The line under a `score` meter. */
+  scoreHint?: string;
 };
 
 export type BoutHud = {
@@ -123,8 +126,8 @@ export type BoutHud = {
   meter?: { label: string; progress: number; text: string } | null;
   award?: { id: number; points: number; caption: string } | null;
   hitMarker?: boolean;
-  /** Touch players get a joystick unless the bout asks for pump buttons. */
-  touch?: 'stick' | 'pump';
+  /** Touch players get a joystick unless the bout asks for pump buttons, or for nothing when it draws its own. */
+  touch?: 'stick' | 'pump' | 'none';
   /** First-person bouts: the fire button's name, and whether there is a crouch button. */
   action?: string;
   crouch?: boolean;

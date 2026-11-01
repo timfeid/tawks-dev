@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { BoutFrame, BoutHost, BoutHud, BoutRenderer, Character, Pose, Rider, Seat, Shot } from '@tawks/bout-sdk';
-import type { BallSnap, BumperEvent, BumperSnap } from './snapshot';
+import type { BallSnap, BumperEvent, BumperSetup, BumperSnap } from './snapshot';
 
 const ARENA_RADIUS = 9;
 const RIDER_SCALE = 0.95;
@@ -126,9 +126,12 @@ function dropTexture() {
   });
 }
 
-type View = BoutFrame<BumperSnap, null>;
+type View = BoutFrame<BumperSnap, BumperSetup | null>;
 
-export class BumperArena implements BoutRenderer<BumperSnap, null, BumperEvent> {
+/** The platform at full size: wider than built when the field is bigger. */
+const fullRadius = (view: View) => view.setup?.radius ?? ARENA_RADIUS;
+
+export class BumperArena implements BoutRenderer<BumperSnap, BumperSetup | null, BumperEvent> {
   private group = new THREE.Group();
   private quake = 0;
   private platform: THREE.Group;
@@ -191,8 +194,10 @@ export class BumperArena implements BoutRenderer<BumperSnap, null, BumperEvent> 
     this.animate(view);
   }
 
-  shot(): Shot {
-    return { kind: 'frame', half: [11.5, 9.5], pitch: 38, portraitPitch: 52 };
+  shot(view: View): Shot {
+    // Framed for the platform built for four, and widened with it.
+    const size = fullRadius(view) / ARENA_RADIUS;
+    return { kind: 'frame', half: [11.5 * size, 9.5 * size], pitch: 38, portraitPitch: 52 };
   }
 
   shake() {
@@ -200,7 +205,7 @@ export class BumperArena implements BoutRenderer<BumperSnap, null, BumperEvent> 
   }
 
   hud(view: View): BoutHud {
-    const closing = view.phase === 'playing' && !!view.snapshot && view.snapshot.radius < ARENA_RADIUS - 0.02;
+    const closing = view.phase === 'playing' && !!view.snapshot && view.snapshot.radius < fullRadius(view) - 0.02;
     return {
       objective: 'Outlast the field',
       hint: 'Roll with WASD, the arrow keys or a gamepad. Knock everyone off.',

@@ -26,7 +26,7 @@ pub fn definition() -> CreateWorkflowDefinition {
                                 );
                                 responses
                             },
-                            id: ".player-{target_id}".into(),
+                            id: r#"[data-mark~="player-{target_id}"]"#.into(),
                             animation_type: "sus".into(),
                             trigger: Some("on_appear".into()),
                             delay_ms: None,

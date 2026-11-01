@@ -227,6 +227,7 @@ export class DodgeballCourt {
         player.tag.material.map?.dispose();
         player.tag.material.dispose();
         player.tag.removeFromParent();
+        this.textures = this.textures.filter((texture) => texture !== player.tag.material.map);
         this.players.delete(seat);
       }
     }

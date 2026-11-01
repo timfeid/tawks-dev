@@ -6,6 +6,7 @@ packages:
   - "examples/hello-js"
   - "games/canvases"
   - "games/cards/client"
+  - "games/encore/client"
 
 onlyBuiltDependencies:
   - esbuild

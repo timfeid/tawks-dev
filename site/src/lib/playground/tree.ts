@@ -15,7 +15,7 @@ export type TreeItem = {
 type Obj = { [key: string]: Json };
 
 const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
-const isDisplay = (v: unknown): v is Obj => isObj(v) && 'type' in v && 'class' in v;
+const isDisplay = (v: unknown): v is Obj => isObj(v) && 'type' in v && Object.keys(v).every((key) => ['type', 'mark', 'class'].includes(key));
 
 export function getAt(root: Json, path: Path): Json | undefined {
   let cur: Json | undefined = root;
@@ -41,7 +41,7 @@ function displayArrays(display: Obj, path: Path): { path: Path; items: Obj[] }[]
   const [variant, body] = Object.entries(type)[0] ?? [];
   if (!isObj(body)) return [];
   return Object.entries(body).flatMap(([field, value]) =>
-    Array.isArray(value) && value.length >= 0 && (value.length === 0 ? ['content', 'view_display', 'row'].includes(field) : value.every(isDisplay))
+    Array.isArray(value) && value.length >= 0 && (value.length === 0 ? ['content', 'view_display', 'row', 'actions', 'aside', 'lead', 'trail', 'media', 'caption', 'badge'].includes(field) : value.every(isDisplay))
       ? [{ path: [...path, 'type', variant, field], items: value as Obj[] }]
       : [],
   );

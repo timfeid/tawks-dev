@@ -16,8 +16,7 @@ export function exampleDefinition(example: DisplayExample, visualId = 'page'): C
       home: {
         title: 'Example',
         description: null,
-        visuals: [{ id: visualId, display: { Block: { class: 'flex flex-col gap-3 p-6', content: [example.display] } } }],
-        layout: null,
+        visuals: [{ id: visualId, display: { Block: { content: [example.display] } } }],
         condition: null,
         parent_id: null,
       },

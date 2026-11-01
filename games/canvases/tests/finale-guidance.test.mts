@@ -1,0 +1,10 @@
+import{test}from'node:test';import assert from'node:assert/strict';
+import{finaleGuidance}from'../src/party/board/finale-guidance.ts';import type{MapFinaleView,FinaleRacer}from'../src/party/protocol.ts';
+const view=()=>({checkpoints:[{x:0,z:0,radius:1},{x:10,z:10,radius:1,via:[[10,0],[10,10]]}]})as MapFinaleView;
+const racer=(x=2,z=0,waypoint=0)=>({seat:0,x,z,waypoint,next_checkpoint:1,finished:false,dnf:false})as FinaleRacer;
+test('arrows turn at authoritative corners instead of cutting across a block',()=>{const g=finaleGuidance(view(),racer())!;assert.ok(g.arrows.length>3);assert.ok(g.arrows.every(a=>Math.abs(a.z)<1e-9||Math.abs(a.x-10)<1e-9));assert.equal(g.distance,17);assert.deepEqual(g.next,[10,0]);});
+test('the authoritative waypoint removes the earlier leg and guides the next road segment',()=>{const g=finaleGuidance(view(),racer(10,3,1))!;assert.ok(g.arrows.every(a=>a.x===10&&a.z>3));assert.deepEqual(g.next,[10,10]);assert.equal(g.distance,6);});
+test('road arrows remain anchored while the runner moves between snapshots',()=>{const a=finaleGuidance(view(),racer(2))!,b=finaleGuidance(view(),racer(2.1))!;assert.deepEqual(a.arrows,b.arrows);assert.equal(a.progressBucket,b.progressBucket);assert.ok(b.distance<a.distance);});
+test('off-road approach distance includes rejoining the route rather than a diagonal shortcut',()=>{assert.equal(finaleGuidance(view(),racer(5,2))!.distance,16);});
+test('finished, absent and out-of-range racers produce no active-player arrows',()=>{assert.equal(finaleGuidance(view(),null),null);assert.equal(finaleGuidance(view(),{...racer(),finished:true}),null);assert.equal(finaleGuidance(view(),{...racer(),dnf:true}),null);assert.equal(finaleGuidance(view(),{...racer(),next_checkpoint:2}),null);});
+test('guidance is bounded, finite, does not mutate a room snapshot and names the finish',()=>{const v=view();v.checkpoints[1].via=[[10000,0],[10000,10000]];const original=JSON.stringify(v);const g=finaleGuidance(v,racer())!;assert.ok(g.arrows.length<=128);assert.ok(g.arrows.every(a=>[a.x,a.z,a.yaw].every(Number.isFinite)));assert.equal(JSON.stringify(v),original);assert.equal(g.finish,true);});

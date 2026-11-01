@@ -73,7 +73,6 @@
 {#if commands}
   <Command.Root
     bind:ref={rootRef}
-    class={display.class}
     onkeydown={handleKeydown}
   >
     {#if commands.allow_search}
@@ -97,9 +96,8 @@
                   <Icon
                     {workflow}
                     display={{
-                      class: 'h-4 w-4',
                       type: {
-                        Icon: { ...item.icon },
+                        Icon: { ...item.icon, size: 'Small' },
                       },
                     }}
                     {inputs}

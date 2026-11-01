@@ -7,14 +7,13 @@ use ulid::Ulid;
 
 use workflow::server_action::ServerActionResult;
 use workflow::service::WorkflowResourceWithContext;
-use workflow::{
-    CreateWorkflowDefinition, NodeCondition,
-};
-use workflow::{WorkflowVisual, builder::*};
+use workflow::{CreateWorkflowDefinition, NodeCondition, WorkflowDisplay};
+use workflow::{WorkflowVisual, builder::*, ui::*};
 
+use crate::MidnightPage;
 use crate::gamestate::{GameState, PlayerResource, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
-use crate::single_response;
+use crate::{ability_header, single_response};
 use game_framework::engine::GameEngine;
 
 // ----------------------------------------------------------------------------
@@ -37,136 +36,88 @@ pub const TANGLE_SABOTAGE_KEY: &str = "tangle";
 
 fn tangle_selection_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("tangle_selection")
-        .tile(vec![
-            // 1. Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center mb-6")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-2xl font-halloween text-green-500 tracking-widest uppercase opacity-90 drop-shadow-sm")
-                        .text("Entanglement")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xs font-mono text-green-400/50 uppercase tracking-widest")
-                        .text("Select two souls to swap")
-                        .build(),
-                ])
-                .build(),
-
-            // 2. Multi-Select Grid
-            WorkflowDisplayBuilder::new("w-full grid grid-cols-2 gap-2")
-                .input(
-                    "select_cards",
-                    WorkflowInputBuilder::new()
-                        .r#type(InputTypeBuilder::multi_select_from_list(
-                            "card_options", // items_key
-                            "player",       // as
-                            "{player.id}",  // value
-                            // The visual content of each item in the list
-                            vec![
-                                WorkflowDisplayBuilder::new("flex gap-3 items-center")
-                                    .div(vec![
-                                        // Avatar
-                                        WorkflowDisplayBuilder::new("size-8 rounded-full border border-white/20 bg-black/50 overflow-hidden")
-                                            .image("{player.avatar_url}", "{player.name}")
-                                            .build(),
-                                        // Name
-                                        WorkflowDisplayBuilder::new("text-sm font-halloween text-white/90 truncate")
-                                            .text("{player.name}")
-                                            .build()
-                                    ])
-                                    .build()
-                            ],
-                            "w-full ",
-                            Some(2), // min
-                            Some(2)  // max
-                        ))
-                        .required(true)
-                        .on_change_action(TANGLE_ANALYZE_ACTION, HashMap::new())
-                        .build()
-                )
-                .build(),
-
-            // 3. Conditional "Execute" Button
-            WorkflowDisplayBuilder::new("w-full mt-6")
-                .condition(
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                ability_header("Entanglement", Tone::Green, "Select two souls to swap"),
+                WorkflowDisplayBuilder::new()
+                    .input(
+                        "select_cards",
+                        WorkflowInputBuilder::new()
+                            .r#type(InputTypeBuilder::multi_select_from_list(
+                                "card_options",
+                                "player",
+                                "{player.id}",
+                                vec![
+                                    row(
+                                        Gap::Normal,
+                                        vec![
+                                            avatar(
+                                                "{player.avatar_url}",
+                                                "{player.name}",
+                                                Size::Small,
+                                            ),
+                                            body("{player.name}").themed(),
+                                        ],
+                                    )
+                                    .nowrap(),
+                                ],
+                                2,
+                                Some(2),
+                                Some(2),
+                            ))
+                            .required(true)
+                            .on_change_action(TANGLE_ANALYZE_ACTION, HashMap::new())
+                            .build(),
+                    )
+                    .build(),
+                when(
                     NodeCondition::ResponseEquals {
                         field: "show_tangle_action".into(),
                         value: json!(true),
                     },
-                    vec![
-                         WorkflowDisplayBuilder::new("w-full")
-                            .button(
-                                vec![
-                                    WorkflowDisplayBuilder::new("w-full text-center font-halloween text-green-400 uppercase tracking-widest")
-                                        .text("Execute Swap")
-                                        .build()
-                                ],
-                                None,
-                                TANGLE_EXECUTE_ACTION,
-                                "outline",
-                                "lg"
-                            )
-                            .build()
-                    ]
-                )
-                .build()
-        ])
+                    vec![primary_action("Execute Swap", act(TANGLE_EXECUTE_ACTION)).full_width()],
+                ),
+            ],
+        )
         .build()
+}
+
+fn swapped_player(var: &str) -> WorkflowDisplay {
+    panel(vec![person(
+        format!("{{{var}.avatar_url}}"),
+        format!("{{{var}.name}}"),
+    )])
 }
 
 fn tangle_success_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("tangle_success")
-        .tile(vec![
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center py-8 space-y-6")
-                // 1. Header Icon & Text
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-4xl animate-pulse mb-2 text-center")
-                        .text("🔀")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xl font-halloween text-center text-green-400")
-                        .text("Fates Entwined")
-                        .build(),
-                ])
-                .build(),
-
-            // 2. The Swapped Players Display
-            // We use a grid to show P1 -> Icon -> P2
-            WorkflowDisplayBuilder::new("w-full grid grid-cols-[1fr_auto_1fr] gap-2 items-center")
-                .div(vec![
-                    // --- Player 1 Card ---
-                    WorkflowDisplayBuilder::new("bg-neutral-900/80 border border-white/10 rounded-md p-3 flex flex-col items-center gap-2 text-center")
-                        .div(vec![
-                            WorkflowDisplayBuilder::new("size-10 rounded-full border border-green-500/30 bg-black/50 overflow-hidden shadow-[0_0_10px_rgba(34,197,94,0.2)]")
-                                .image("{swapped_p1.avatar_url}", "{swapped_p1.name}")
-                                .build(),
-                            WorkflowDisplayBuilder::new("text-xs font-halloween text-white/90 truncate w-full")
-                                .text("{swapped_p1.name}")
-                                .build()
-                        ])
-                        .build(),
-
-                    // --- Swap Icon (Center) ---
-                    WorkflowDisplayBuilder::new("text-green-500/50 text-xl font-bold")
-                        .text("⇄") // or generic arrows
-                        .build(),
-
-                    // --- Player 2 Card ---
-                    WorkflowDisplayBuilder::new("bg-neutral-900/80 border border-white/10 rounded-md p-3 flex flex-col items-center gap-2 text-center")
-                        .div(vec![
-                            WorkflowDisplayBuilder::new("size-10 rounded-full border border-green-500/30 bg-black/50 overflow-hidden shadow-[0_0_10px_rgba(34,197,94,0.2)]")
-                                .image("{swapped_p2.avatar_url}", "{swapped_p2.name}")
-                                .build(),
-                            WorkflowDisplayBuilder::new("text-xs font-halloween text-white/90 truncate w-full")
-                                .text("{swapped_p2.name}")
-                                .build()
-                        ])
-                        .build(),
-                ])
-                .build(),
-
-            // 3. Footer Text
-            WorkflowDisplayBuilder::new("text-sm font-mono text-center text-white/50 mx-auto mt-4")
-                .text("Their roles have been exchanged in the shadows.")
-                .build(),
-        ])
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                column(
+                    Gap::Tight,
+                    vec![
+                        icon("shuffle", IconSize::Large).tone(Tone::Green),
+                        title("Fates Entwined")
+                            .themed()
+                            .centered()
+                            .tone(Tone::Green),
+                    ],
+                )
+                .align(Align::Center),
+                row(
+                    Gap::Normal,
+                    vec![
+                        swapped_player("swapped_p1"),
+                        icon("arrow-right", IconSize::Medium).tone(Tone::Green),
+                        swapped_player("swapped_p2"),
+                    ],
+                )
+                .justify(Justify::Center),
+                fine("Their roles have been exchanged in the shadows.").centered(),
+            ],
+        )
         .build()
 }
 

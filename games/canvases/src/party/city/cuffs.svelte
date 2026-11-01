@@ -1,0 +1,2 @@
+<script lang="ts">let{size=24,class:className=''}:{size?:number;class?:string}=$props();</script>
+<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class={className} aria-hidden="true"><circle cx="5.5" cy="15.5" r="4.5"/><circle cx="18.5" cy="15.5" r="4.5"/><path d="M5.5 11V8a3.5 3.5 0 0 1 7 0v2m6 1V8a3.5 3.5 0 0 0-7 0v2M9.5 13l5-1M4 15.5h1m12 0h1"/></svg>

@@ -1,6 +1,6 @@
 use crate::{
     ActionType, ButtonType, CardLayout, ChartType, CreateWorkflowDefinition, DisplayType,
-    DisplayVisual, IconLibrary, NodeCondition, NodesMap, NotificationVariant, StickyPosition,
+    DisplayVisual, IconLibrary, IconSize, LinkStyle, PageWidth, NodeCondition, NodesMap, NotificationVariant, StickyPosition,
     SubmitWhen, TableHeader, TimeDisplayOpts, TransformOp, WorkflowAction, WorkflowDisplay,
     WorkflowInput, WorkflowNode, WorkflowVisual, service::InjectWorkflowPlace,
 };
@@ -105,7 +105,6 @@ pub struct WorkflowNodeBuilder {
     title: String,
     description: Option<String>,
     visuals: Vec<WorkflowVisual>,
-    layout: Option<String>,
     condition: Option<NodeCondition>,
     parent_id: Option<String>,
 }
@@ -138,11 +137,6 @@ impl WorkflowNodeBuilder {
         self
     }
 
-    pub fn layout(mut self, layout: impl Into<String>) -> Self {
-        self.layout = Some(layout.into());
-        self
-    }
-
     pub fn parent_id(mut self, parent: impl Into<String>) -> Self {
         self.parent_id = Some(parent.into());
         self
@@ -153,7 +147,6 @@ impl WorkflowNodeBuilder {
             title: self.title,
             description: self.description,
             visuals: self.visuals,
-            layout: self.layout,
             condition: self.condition,
             parent_id: self.parent_id,
         }
@@ -235,11 +228,43 @@ impl WorkflowVisualBuilder {
         self
     }
 
-    pub fn block(mut self, class: impl Into<String>, content: Vec<WorkflowDisplay>) -> Self {
-        self.display = Some(DisplayVisual::Block {
-            class: class.into(),
+    /// The standard page column; see `crate::ui` for what goes in it.
+    pub fn page(mut self, width: PageWidth, content: Vec<WorkflowDisplay>) -> Self {
+        self.display = Some(DisplayVisual::Page {
+            width,
             content,
+            center: false,
+            backdrop: crate::Backdrop::Default,
+            typeface: crate::Typeface::Default,
         });
+        self
+    }
+
+    /// Centres a page's content up and down, for a page that is mostly one thing.
+    pub fn centered(mut self) -> Self {
+        if let Some(DisplayVisual::Page { center, .. }) = &mut self.display {
+            *center = true;
+        }
+        self
+    }
+
+    pub fn backdrop(mut self, value: crate::Backdrop) -> Self {
+        if let Some(DisplayVisual::Page { backdrop, .. }) = &mut self.display {
+            *backdrop = value;
+        }
+        self
+    }
+
+    /// The typeface `themed` text on the page uses.
+    pub fn typeface(mut self, value: crate::Typeface) -> Self {
+        if let Some(DisplayVisual::Page { typeface, .. }) = &mut self.display {
+            *typeface = value;
+        }
+        self
+    }
+
+    pub fn block(mut self, content: Vec<WorkflowDisplay>) -> Self {
+        self.display = Some(DisplayVisual::Block { content });
         self
     }
 
@@ -269,8 +294,8 @@ impl WorkflowVisualBuilder {
 // ────────────────────────────── DISPLAY BUILDERS ────────────────────────────
 //
 
+#[derive(Default)]
 pub struct WorkflowDisplayBuilder {
-    class: String,
     kind: Option<DisplayType>,
 }
 
@@ -285,17 +310,8 @@ impl WorkflowDisplayBuilder {
         self
     }
 
-    pub fn section_title(title: impl Into<String>) -> WorkflowDisplay {
-        WorkflowDisplayBuilder::new("text-lg font-semibold px-4")
-            .text(title)
-            .build()
-    }
-
-    pub fn new(class: impl Into<String>) -> Self {
-        Self {
-            class: class.into(),
-            kind: None,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn loader(mut self) -> Self {
@@ -309,7 +325,6 @@ impl WorkflowDisplayBuilder {
         closed_server_action_id: Option<&str>,
         trigger: Vec<WorkflowDisplay>,
         content: Vec<WorkflowVisual>,
-        content_class: impl Into<String>,
     ) -> Self {
         self.kind = Some(DisplayType::Popover {
             trigger,
@@ -318,7 +333,7 @@ impl WorkflowDisplayBuilder {
             closed_server_action_id: closed_server_action_id
                 .map(|closed_server_action_id| closed_server_action_id.into()),
             content,
-            content_class: content_class.into(),
+            width: crate::Size::Medium,
         });
         self
     }
@@ -402,8 +417,8 @@ impl WorkflowDisplayBuilder {
 
     pub fn build(self) -> WorkflowDisplay {
         WorkflowDisplay {
-            class: self.class,
             r#type: self.kind.unwrap_or(DisplayType::Div { content: vec![] }),
+            mark: None,
         }
     }
 
@@ -421,6 +436,8 @@ impl WorkflowDisplayBuilder {
             r#as: r#as.into(),
             text: text.into(),
             shake_under_ms_left,
+            role: crate::TextRole::Body,
+            tone: String::new(),
         });
         self
     }
@@ -455,11 +472,9 @@ impl WorkflowDisplayBuilder {
     pub fn tooltip(
         mut self,
         tooltip_html: impl Into<String>,
-        class: impl Into<String>,
         view_display: Vec<WorkflowDisplay>,
     ) -> Self {
         self.kind = Some(DisplayType::Tooltip {
-            class: class.into(),
             tooltip_html: tooltip_html.into(),
             view_display,
         });
@@ -522,14 +537,10 @@ impl WorkflowDisplayBuilder {
         self
     }
 
-    pub fn progress(
-        mut self,
-        progress_percentage_key: impl Into<String>,
-        percentage_class: impl Into<String>,
-    ) -> Self {
+    pub fn progress(mut self, progress_percentage_key: impl Into<String>) -> Self {
         self.kind = Some(DisplayType::Progress {
             progress_percentage_key: progress_percentage_key.into(),
-            percentage_class: percentage_class.into(),
+            tone: String::new(),
         });
         self
     }
@@ -538,6 +549,8 @@ impl WorkflowDisplayBuilder {
         self.kind = Some(DisplayType::Badge {
             variant: variant.into(),
             text: text.into(),
+            tone: String::new(),
+            icon: None,
         });
         self
     }
@@ -556,29 +569,17 @@ impl WorkflowDisplayBuilder {
         self.kind = Some(DisplayType::Time {
             key: key.into(),
             opts,
+            role: crate::TextRole::Body,
+            tone: String::new(),
         });
         self
     }
 
-    pub fn score_ticker(
-        mut self,
-        value_key: impl Into<String>,
-        lucide_icon: impl Into<String>,
-        icon_class: impl Into<String>,
-        container_class: Option<impl Into<String>>,
-        pop_text_class: Option<impl Into<String>>,
-        pop_container_class: Option<impl Into<String>>,
-    ) -> Self {
+    /// A running total that pops up as it grows, with `icon` beside it.
+    pub fn score_ticker(mut self, value_key: impl Into<String>, icon: WorkflowDisplay) -> Self {
         self.kind = Some(DisplayType::ScoreTicker {
             value_key: value_key.into(),
-            icon: Box::new(
-                WorkflowDisplayBuilder::new(icon_class.into())
-                    .lucide_icon(lucide_icon, None)
-                    .build(),
-            ),
-            container_class: container_class.map(|c| c.into()),
-            pop_text_class: pop_text_class.map(|c| c.into()),
-            pop_container_class: pop_container_class.map(|c| c.into()),
+            icon: Box::new(icon),
         });
         self
     }
@@ -636,23 +637,8 @@ impl WorkflowDisplayBuilder {
         self
     }
 
-    /// Render an FPS WebTransport client. The four `*_key` arguments name
-    /// keys in `workflow.responses` from which the client reads its server
-    /// URL, the match id, its per-player token, and the self-signed cert
-    /// hash (hex-encoded SHA-256 of the cert DER).
-    pub fn fps_canvas(
-        mut self,
-        server_url_key: impl Into<String>,
-        match_id_key: impl Into<String>,
-        token_key: impl Into<String>,
-        cert_hash_key: impl Into<String>,
-    ) -> Self {
-        self.kind = Some(DisplayType::FpsCanvas {
-            server_url_key: server_url_key.into(),
-            match_id_key: match_id_key.into(),
-            token_key: token_key.into(),
-            cert_hash_key: cert_hash_key.into(),
-        });
+    pub fn game_invite(mut self) -> Self {
+        self.kind = Some(DisplayType::GameInvite);
         self
     }
 
@@ -660,6 +646,8 @@ impl WorkflowDisplayBuilder {
         self.kind = Some(DisplayType::Link {
             href: href.into(),
             content,
+            style: LinkStyle::Plain,
+            thumb: None,
         });
         self
     }
@@ -688,6 +676,8 @@ impl WorkflowDisplayBuilder {
             name: name.into(),
             aria_label,
             url,
+            size: IconSize::Inherit,
+            tone: String::new(),
         });
         self
     }
@@ -747,6 +737,17 @@ impl WorkflowDisplayBuilder {
         self.kind = Some(DisplayType::ShareResult {
             value: value.into(),
             label: label.into(),
+            celebrate: false,
+        });
+        self
+    }
+
+    /// A share button whose result appears only when a game finishes, which the app celebrates.
+    pub fn finished_result(mut self, value: impl Into<String>, label: impl Into<String>) -> Self {
+        self.kind = Some(DisplayType::ShareResult {
+            value: value.into(),
+            label: label.into(),
+            celebrate: true,
         });
         self
     }
@@ -800,6 +801,7 @@ impl WorkflowDisplayBuilder {
             on_select_action: None,
             input_map: None,
             active_key: None,
+            item_size: crate::Size::Medium,
         });
         self
     }
@@ -821,6 +823,7 @@ impl WorkflowDisplayBuilder {
             on_select_action: Some(action_id.into()),
             input_map,
             active_key: Some(active_key.into()),
+            item_size: crate::Size::Medium,
         });
         self
     }
@@ -837,6 +840,7 @@ impl WorkflowDisplayBuilder {
             r#as: r#as.into(),
             headers,
             row,
+            row_state: None,
         });
         self
     }
@@ -926,7 +930,6 @@ impl InputTypeBuilder {
         content: Vec<WorkflowDisplay>,
         selected_content: Option<Vec<WorkflowDisplay>>,
         unselected_content: Option<Vec<WorkflowDisplay>>,
-        class: impl Into<String>,
     ) -> crate::InputType {
         crate::InputType::Select {
             filter,
@@ -936,7 +939,6 @@ impl InputTypeBuilder {
             content,
             selected_content,
             unselected_content,
-            class: class.into(),
         }
     }
 
@@ -987,7 +989,7 @@ impl InputTypeBuilder {
         r#as: impl Into<String>,
         value: impl Into<String>,
         content: Vec<WorkflowDisplay>,
-        class: impl Into<String>,
+        columns: u8,
         min: Option<u32>,
         max: Option<u32>,
     ) -> crate::InputType {
@@ -996,7 +998,7 @@ impl InputTypeBuilder {
             r#as: r#as.into(),
             value: value.into(),
             content,
-            class: class.into(),
+            columns,
             min,
             max,
         }
@@ -1006,17 +1008,15 @@ impl InputTypeBuilder {
         items_key: impl Into<String>,
         r#as: impl Into<String>,
         value: impl Into<String>,
-        class: impl Into<String>,
-        selected_class: impl Into<String>,
         content: Vec<WorkflowDisplay>,
+        columns: u8,
     ) -> crate::InputType {
         crate::InputType::SelectFromList {
             items_key: items_key.into(),
             r#as: r#as.into(),
             value: value.into(),
-            class: class.into(),
-            selected_class: selected_class.into(),
             content,
+            columns,
         }
     }
 }
@@ -1214,6 +1214,15 @@ impl Cond {
     pub fn response_list_not_empty(field: impl Into<String>) -> NodeCondition {
         NodeCondition::Not(Box::new(NodeCondition::ResponseListEmpty(field.into())))
     }
+    /// Where the page is shown, checked by the viewer's app: `desktop` (true
+    /// in the Tawks desktop app) or `os` (`windows`, `macos`, `linux`,
+    /// `android`, `ios`, `other`).
+    pub fn client_equals(field: &str, value: serde_json::Value) -> NodeCondition {
+        Self::response_equals(format!("$client.{field}"), value)
+    }
+    pub fn in_desktop_app() -> NodeCondition {
+        Self::client_equals("desktop", serde_json::Value::Bool(true))
+    }
 }
 
 //
@@ -1231,6 +1240,8 @@ pub fn table_header(
         key: key.into(),
         width,
         align,
+        numeric: false,
+        wide_only: false,
     }
 }
 
@@ -1285,22 +1296,13 @@ impl IconBuilder {
             name: self.name,
             aria_label: self.aria_label,
             url: self.url,
+            size: IconSize::Inherit,
+            tone: String::new(),
         }
     }
 
     pub fn into_workflow_display(self) -> WorkflowDisplay {
-        WorkflowDisplay {
-            class: String::new(), // keep wrapper class empty by default
-            r#type: self.into_display_type(),
-        }
-    }
-
-    /// If you want to set a wrapper class on the WorkflowDisplay directly
-    pub fn into_workflow_display_with_class(self, class: impl Into<String>) -> WorkflowDisplay {
-        WorkflowDisplay {
-            class: class.into(),
-            r#type: self.into_display_type(),
-        }
+        WorkflowDisplay { r#type: self.into_display_type(), mark: None }
     }
 }
 

@@ -92,6 +92,20 @@ export function setNestedValue(obj: any, path: string, value: JsonValue): void {
   curr[keys[keys.length - 1]] = value;
 }
 
+export function withNestedValue<T extends Record<string, unknown>>(obj: T, path: string, value: JsonValue): T {
+  const keys = pathSegments(path);
+  if (keys.length === 0 || isUnsafePath(keys)) return obj;
+  const root: any = { ...obj };
+  let curr = root;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const child = curr[keys[i]];
+    curr[keys[i]] = child == null || typeof child !== 'object' ? {} : Array.isArray(child) ? [...child] : { ...child };
+    curr = curr[keys[i]];
+  }
+  curr[keys[keys.length - 1]] = value;
+  return root;
+}
+
 export function deepEqual(a: any, b: any): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b) return false;
@@ -252,4 +266,22 @@ export function formatDate(
   const ageMs = Date.now() - d.getTime();
   const oneDayMs = 24 * 60 * 60 * 1000;
   return ageMs < oneDayMs ? timeAgo(d) : shortDateWithHour(d);
+}
+
+/** Bots may link out over http(s) or to an in-app path; nothing else. */
+export function safeHref(href: string | null | undefined): string | null {
+  if (!href || /\{[^{}]+\}/.test(href)) return null;
+  const trimmed = href.trim();
+  if (/^https?:\/\/[^\s]+$/i.test(trimmed)) return trimmed;
+  if (/^\/(?![\/\\])/.test(trimmed) || trimmed === '#top') return trimmed;
+  return null;
+}
+
+/** An avatar or picture URL a bot sent: absolute and in-app paths as they are, stock avatars from the CDN. */
+export function pictureUrl(src: string | null | undefined): string | null {
+  const value = src?.trim();
+  if (!value || /\{[^{}]+\}/.test(value)) return null;
+  if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value;
+  if (value.startsWith('default/')) return `https://cdn.tawks.app/avatars/${value}`;
+  return null;
 }

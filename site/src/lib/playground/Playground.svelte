@@ -69,7 +69,6 @@
       status: runtime.status,
       complete_message: runtime.message,
       visuals: node?.visuals ?? [],
-      layout: node?.layout ?? null,
       user_id: user.id,
       current_node_id: runtime.nodeId ?? '',
       waiting: false,
@@ -276,10 +275,9 @@
     const node: WorkflowNode = {
       title: `Node ${n}`,
       description: null,
-      layout: null,
       condition: null,
       parent_id: parent,
-      visuals: [{ id: 'page', display: { Block: { class: 'mx-auto flex max-w-md flex-col gap-4 p-8', content: [] } } }],
+      visuals: [{ id: 'page', display: { Page: { width: 'Narrow', content: [], center: false, backdrop: 'Default', typeface: 'Default' } } }],
     };
     definition = { ...definition, nodes: { ...definition.nodes, [id]: node } };
     selected = ['nodes', id];

@@ -10,6 +10,7 @@ use rand_chacha::ChaCha12Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{info, instrument, trace, warn};
+use workflow::State;
 use workflow::server_action::ServerActionResult;
 use workflow::service::{InjectWorkflowPlace, StartWorkflowFromInstanceArgs};
 
@@ -76,14 +77,15 @@ pub struct PlayerResource {
     pub role: Option<Arc<RoleCard>>,
     pub accusations: Vec<PlayerResourceVote>,
     pub votes: Vec<PlayerResource>,
-    pub class: String,
+    /// How the player's row stands: voted out, on the winning side, about to die.
+    pub state: String,
 }
 
 impl PlayerResource {
     pub fn new_from_hidden(index: usize) -> PlayerResource {
         PlayerResource {
             role: None,
-            class: "".into(),
+            state: String::new(),
             vote_locked: false,
             id: format!("hidden{index}"),
             name: format!("Hidden {}", index + 1),
@@ -144,7 +146,7 @@ impl Into<PlayerResource> for &Player {
             role: None,
             accusations: vec![],
             votes: vec![],
-            class: "".into(),
+            state: String::new(),
         }
     }
 }
@@ -564,17 +566,18 @@ impl GameLogic for GameState {
             .map(|p| {
                 let show_role = (p.id == viewer_id && is_live) || self.stage == GameStage::Results;
 
-                let mut classes = vec![];
-                if self.stage == GameStage::Voting && dying_ids.contains(&p.id) {
-                    classes.push("dying".to_string());
-                }
-                if let Some(w) = &self.winner {
-                    if p.effective_role_card(None).alliance == *w {
-                        classes.push("winner".to_string());
-                    } else {
-                        classes.push("loser".to_string());
-                    }
-                }
+                let dying = self.stage == GameStage::Voting && dying_ids.contains(&p.id);
+                let won = self
+                    .winner
+                    .as_ref()
+                    .map(|w| p.effective_role_card(None).alliance == *w);
+                let executed = self.stage == GameStage::Results && !p.is_alive;
+                let state = match (won, executed || dying) {
+                    (Some(true), _) => State::Success,
+                    (_, true) => State::Danger,
+                    (Some(false), false) => State::Muted,
+                    (None, false) => State::Default,
+                };
 
                 let incoming: Vec<PlayerResourceVote> = self
                     .players
@@ -603,10 +606,6 @@ impl GameLogic for GameState {
                     .map(|voter| self.dumb_resource(voter))
                     .collect();
 
-                if self.stage == GameStage::Results && !p.is_alive {
-                    classes.push("executed".to_string());
-                }
-
                 PlayerResource {
                     id: p.id.clone(),
                     name: p.name.clone(),
@@ -615,7 +614,7 @@ impl GameLogic for GameState {
                     is_open_slot: false,
                     hidden: None,
                     is_alive: p.is_alive,
-                    is_winner: classes.contains(&"winner".to_string()),
+                    is_winner: won == Some(true),
                     executed: !p.is_alive,
                     is_sus: p.is_sus,
                     vote_locked: p.vote_locked,
@@ -626,7 +625,7 @@ impl GameLogic for GameState {
                     },
                     accusations: incoming,
                     votes,
-                    class: classes.join(" "),
+                    state: state.as_str().into(),
                 }
             })
             .collect();
@@ -953,14 +952,21 @@ impl GameState {
         // As in the classic game, nobody dies unless someone draws more than one vote.
         let max_votes = vote_counts.values().max().cloned().unwrap_or(0);
         let executed_ids: Vec<String> = if max_votes > 1 {
-            vote_counts.iter().filter(|(_, c)| **c == max_votes).map(|(id, _)| id.clone()).collect()
+            vote_counts
+                .iter()
+                .filter(|(_, c)| **c == max_votes)
+                .map(|(id, _)| id.clone())
+                .collect()
         } else {
             vec![]
         };
 
-        let is_hollow = |p: &Player| p.effective_role_card(None).role_id == roles::hollow::HOLLOW_ROLE_ID;
+        let is_hollow =
+            |p: &Player| p.effective_role_card(None).role_id == roles::hollow::HOLLOW_ROLE_ID;
         let hollows_in_play = self.players.values().any(|p| p.is_alive && is_hollow(p));
-        let hollow_executed = executed_ids.iter().any(|id| self.players.get(id).is_some_and(is_hollow));
+        let hollow_executed = executed_ids
+            .iter()
+            .any(|id| self.players.get(id).is_some_and(is_hollow));
 
         for id in &executed_ids {
             if let Some(p) = self.players.get_mut(id) {
@@ -971,11 +977,13 @@ impl GameState {
         // The village wins by taking out a Hollow. With no Hollow among the
         // players, it wins only by sparing everyone; an innocent dying hands
         // the night to the Hollows' side, the Follower.
-        self.winner = Some(if hollow_executed || (!hollows_in_play && executed_ids.is_empty()) {
-            Alliance::Unmarked
-        } else {
-            Alliance::Hollow
-        });
+        self.winner = Some(
+            if hollow_executed || (!hollows_in_play && executed_ids.is_empty()) {
+                Alliance::Unmarked
+            } else {
+                Alliance::Hollow
+            },
+        );
 
         self.stage = GameStage::Results;
         self.timer_expires_at = None;
@@ -1295,4 +1303,3 @@ impl GameState {
             .clone())
     }
 }
-

@@ -3,6 +3,11 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+pub mod daily_finish;
+pub mod pucklab_hut;
+pub mod pucklab_jersey;
+pub mod pucklab_leaders;
+
 pub const LAUNCH_PROTOCOL: u32 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -42,13 +47,17 @@ pub struct GameInvitePerson {
 pub struct CreateGameInvite {
     pub game_id: String,
     pub mode_id: String,
+    #[serde(default)]
     pub user_ids: Vec<String>,
+    #[serde(default)]
+    pub chat_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum GameInviteStatus {
     Pending,
+    Challenged,
     Accepted,
     Declined,
     Cancelled,
@@ -62,6 +71,10 @@ pub struct GameParticipant {
     pub display_name: Option<String>,
     pub status: GameInviteStatus,
     pub invite_id: Option<String>,
+    /// PuckLab HUT only: whether this person has a HUT club. None means not a
+    /// HUT game or not checked yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hut_club_ready: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -77,6 +90,89 @@ pub struct GameSession {
     pub cancelled: bool,
     pub expired: bool,
     pub expires_at: String,
+    pub chat_id: Option<String>,
+    pub message_id: Option<String>,
+    pub is_open: bool,
+    #[specta(type = f64)]
+    pub revision: i64,
+    pub started_at: Option<String>,
+    pub live: Option<GameLiveState>,
+    pub live_updated_at: Option<String>,
+    /// PuckLab HUT only: PuckLab's code for why it ended this match.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_reason: Option<String>,
+    /// PuckLab HUT only: `disputed` or `final` once PuckLab reports it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_state: Option<String>,
+}
+
+/// Display telemetry only. Results and leaderboard awards still come from the
+/// authoritative final report, never from this optional live feed.
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+pub struct GameLiveTeam {
+    pub code: String,
+    pub score: u16,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+pub struct GameLivePosition {
+    pub x: f32,
+    pub z: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+pub struct GameLivePlayer {
+    pub id: u16,
+    pub team: u8,
+    pub goalie: bool,
+    pub position: GameLivePosition,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+pub struct GameLiveState {
+    #[specta(type = f64)]
+    pub sequence: i64,
+    pub home: GameLiveTeam,
+    pub away: GameLiveTeam,
+    pub clock: String,
+    pub period: String,
+    pub phase: String,
+    #[serde(default)]
+    pub players: Vec<GameLivePlayer>,
+    pub puck: Option<GameLivePosition>,
+}
+
+impl GameLiveState {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let mut ids = std::collections::HashSet::new();
+        let position = |p: &GameLivePosition| {
+            p.x.is_finite() && p.z.is_finite() && p.x.abs() <= 100. && p.z.abs() <= 100.
+        };
+        if !(0..=9_007_199_254_740_991).contains(&self.sequence)
+            || self.home.score > 100
+            || self.away.score > 100
+            || self.clock.len() > 16
+            || self.period.len() > 32
+            || !["playing", "intermission", "final"].contains(&self.phase.as_str())
+            || [&self.home, &self.away].iter().any(|t| {
+                t.code.is_empty()
+                    || t.code.len() > 8
+                    || !t
+                        .code
+                        .bytes()
+                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            })
+            || self.players.len() > 12
+            || self
+                .players
+                .iter()
+                .any(|p| p.team > 1 || !position(&p.position) || !ids.insert((p.team, p.id)))
+            || self.puck.as_ref().is_some_and(|p| !position(p))
+        {
+            return Err("Invalid live game state");
+        }
+        Ok(())
+    }
 }
 
 /// Returned only to a participating person, after their own launch request.
@@ -151,6 +247,53 @@ impl RegisterGame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_display_rejects_unbounded_or_invalid_telemetry() {
+        let valid = GameLiveState {
+            sequence: 1,
+            home: GameLiveTeam {
+                code: "NJD".into(),
+                score: 2,
+            },
+            away: GameLiveTeam {
+                code: "UTA".into(),
+                score: 1,
+            },
+            clock: "12:34".into(),
+            period: "2nd".into(),
+            phase: "playing".into(),
+            players: vec![GameLivePlayer {
+                id: 1,
+                team: 0,
+                goalie: false,
+                position: GameLivePosition { x: 2., z: 3. },
+            }],
+            puck: None,
+        };
+        assert!(valid.validate().is_ok());
+        let mut invalid = valid.clone();
+        invalid.players[0].position.x = f32::NAN;
+        assert!(invalid.validate().is_err());
+        let mut invalid = valid.clone();
+        invalid.sequence = 9_007_199_254_740_992;
+        assert!(invalid.validate().is_err());
+        let mut invalid = valid.clone();
+        invalid.home.code = "<svg>".into();
+        assert!(invalid.validate().is_err());
+        let mut invalid = valid.clone();
+        invalid.phase = "awarded".into();
+        assert!(invalid.validate().is_err());
+        let mut invalid = valid.clone();
+        invalid.players = vec![invalid.players[0].clone(); 13];
+        assert!(invalid.validate().is_err());
+        let mut invalid = valid;
+        invalid.puck = Some(GameLivePosition {
+            x: f32::INFINITY,
+            z: 0.,
+        });
+        assert!(invalid.validate().is_err());
+    }
 
     fn game() -> RegisterGame {
         RegisterGame {

@@ -32,10 +32,14 @@ impl Carrier {
 }
 
 pub struct HotPotato {
+    /// Partners, when played in pairs, who leave each other alone.
+    allies: std::collections::HashMap<u8, u8>,
     pub players: Vec<Carrier>,
     pub holder: Option<u8>,
     pub fuse: f32,
     pub time: f32,
+    /// How far the arena reaches, wider for a bigger field.
+    pub radius: f32,
     lock: f32,
     relight: f32,
     rng: StdRng,
@@ -45,7 +49,8 @@ pub struct HotPotato {
 
 impl HotPotato {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
-        let spread = ground::ring(contestants.len().max(1), ARENA_RADIUS * 0.6, 0.2);
+        let radius = ARENA_RADIUS * crate::bout::crowd_scale(contestants.len());
+        let spread = ground::ring(contestants.len().max(1), radius * 0.6, 0.2);
         let players: Vec<Carrier> = contestants
             .iter()
             .enumerate()
@@ -61,10 +66,12 @@ impl HotPotato {
             .map(|p| p.seat);
         let fuse = rng.random_range(FUSE_MIN..FUSE_MAX);
         HotPotato {
+            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
             players,
             holder,
             fuse,
             time: 0.0,
+            radius,
             lock: PASS_LOCK,
             relight: 0.0,
             rng,
@@ -109,6 +116,8 @@ impl HotPotato {
             .players
             .iter()
             .filter(|p| p.playing() && p.seat != holder)
+            // Never on to your partner.
+            .filter(|p| !crate::bout::allied(self.allies.get(&holder).copied(), self.allies.get(&p.seat).copied()))
             .map(|p| (p.seat, carrier.run.distance_to(p.run.x, p.run.z)))
             .filter(|(_, away)| *away <= PASS_RANGE + ground::RUNNER_RADIUS)
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -185,7 +194,7 @@ impl Bout for HotPotato {
         json!({
             "game": "hotpotato",
             "rule": "Touch someone to pass the bomb. Holding it when the fuse ends puts you out.",
-            "radius": ARENA_RADIUS,
+            "radius": self.radius,
         })
     }
 
@@ -210,14 +219,14 @@ impl Bout for HotPotato {
             }
             let speed = ground::RUN_SPEED * if carrying { CARRIER_SPEED } else { 1.0 };
             ground::step_runner(&mut player.run, stick, dt, speed);
-            ground::hold_inside(&mut player.run, ARENA_RADIUS);
+            ground::hold_inside(&mut player.run, self.radius);
         }
         let mut runners: Vec<Runner> = self.players.iter().map(|p| p.run).collect();
         ground::separate(&mut runners);
         for (player, run) in self.players.iter_mut().zip(runners) {
             if player.playing() {
                 player.run = run;
-                ground::hold_inside(&mut player.run, ARENA_RADIUS);
+                ground::hold_inside(&mut player.run, self.radius);
             }
         }
 
@@ -266,7 +275,7 @@ impl Bout for HotPotato {
             // inside the arena rather than hugging the wall.
             let away = ground::steer((holder.run.x, holder.run.z), here);
             let pull_in = ground::steer(here, (0.0, 0.0));
-            let weight = (me.run.distance_to(0.0, 0.0) / ARENA_RADIUS)
+            let weight = (me.run.distance_to(0.0, 0.0) / self.radius)
                 .clamp(0.0, 1.0)
                 .powi(2);
             Stick {
@@ -309,5 +318,28 @@ impl Bout for HotPotato {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bout::Contestant;
+
+    fn field(count: u8) -> Vec<Contestant> {
+        (0..count).map(|seat| Contestant::bot(seat, 0.5)).collect()
+    }
+
+    #[test]
+    fn a_bigger_field_gets_a_wider_arena() {
+        let four = HotPotato::new(&field(4), 1);
+        assert_eq!(four.radius, ARENA_RADIUS, "four play it as built");
+        let eight = HotPotato::new(&field(8), 1);
+        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert!(
+            eight.players.iter().all(|p| p.run.distance_to(0.0, 0.0) > ARENA_RADIUS * 0.6 + 1.0),
+            "and start further apart"
+        );
+        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
     }
 }

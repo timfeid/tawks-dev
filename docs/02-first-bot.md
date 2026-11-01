@@ -2,16 +2,16 @@
 
 This page takes you from nothing to a bot that serves a page in a channel you own. The page greets whoever opens it and counts clicks on a "Wave" button. You write and run the bot in your own repository, against the hosted tawks at https://tawks.app.
 
-Read [What you can build on tawks](01-overview.md) first if words like niche, workflow or server action are new to you.
+Read [What you can build on tawks](01-overview.md) first if words like hub, workflow or server action are new to you.
 
 ## 1. Get a bot account and a token
 
-Making bots is by invitation. A niche's admins can give your role the **Create Bots** permission; once you have it, open **Settings**, then **Bots**:
+Making bots is by invitation. A hub's admins can give your role the **Create Bots** permission; once you have it, open **Settings**, then **Bots**:
 
-1. Pick the niche the bot will live in, choose a username and a display name, and create it. The username becomes the bot's **user id**, and every workflow your bot registers is named after it, as `wf-<workflow name>-<bot user id>`.
+1. Pick the hub the bot will live in, choose a username and a display name, and create it. The username becomes the bot's **user id**, and every workflow your bot registers is named after it, as `wf-<workflow name>-<bot user id>`.
 2. Press **New token** and copy the token. It starts with `tbot_` and is shown only once; tawks keeps just a fingerprint of it. Treat it like a password and keep it out of your repository and out of chat. You can revoke a token there at any time, and it stops working at once.
 
-Each person can own one bot at a time unless the tawks team raises the limit. If no niche has given you the permission yet, ask in the `dev-chat` channel of the Tawks Dev niche. You can also build and play your game locally with no account at all; see [Game activities](07-tables.md).
+Each person can own one bot at a time unless the tawks team raises the limit. If no hub has given you the permission yet, ask in the `dev-chat` channel of the Tawks Dev hub. You can also build and play your game locally with no account at all; see [Game activities](07-tables.md).
 
 Check the token with one request:
 
@@ -28,15 +28,15 @@ A working token returns your bot's user, with `"is_bot":true`:
 
 The header must start with `Bot`. The same token sent as `Bearer <token>` comes back as `Unauthorized`.
 
-## 2. Get a niche to test in
+## 2. Get a hub to test in
 
-You need a niche you control, so you can attach your bot's page to a channel without affecting anyone else. Niches and channels cannot be created from the app yet, so ask for one in `dev-chat` at the same time as your bot account. Ask for:
+You need a hub you control, so you can attach your bot's page to a channel without affecting anyone else. Hubs and channels cannot be created from the app yet, so ask for one in `dev-chat` at the same time as your bot account. Ask for:
 
-- a niche, with your own account as its owner.
+- a hub, with your own account as its owner.
 - at least one channel for your bot's page, ideally of type `tiles`. Keep your `chat` channel for chat.
-- your bot added as a member, if you plan to have it post in the niche's chat.
+- your bot added as a member, if you plan to have it post in the hub's chat.
 
-Once you own the niche, you manage it yourself from its settings: roles, channel names and permissions, which workflow each channel shows, and invites for people who want to try your bot.
+Once you own the hub, you manage it yourself from its settings: roles, channel names and permissions, which workflow each channel shows, and invites for people who want to try your bot.
 
 ## 3. Add the SDK
 
@@ -102,11 +102,11 @@ use serde_json::{Value, json};
 use tawks_bot::types::{BotOptions, Event, UserResource};
 use tawks_bot::workflow::CreateWorkflowDefinition;
 use tawks_bot::workflow::builder::{
-    WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,
-    WorkflowNodeBuilder, WorkflowVisualBuilder,
+    WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,
 };
 use tawks_bot::workflow::server_action::ServerActionResult;
 use tawks_bot::workflow::service::WorkflowResourceWithContext;
+use tawks_bot::workflow::ui::{PageWidth, act, body, primary_action, title};
 use tawks_bot::{ServerActionHandler, TawksBot, shutdown_token, with_jitter};
 use tokio::{select, time::sleep};
 use tracing::{error, info, warn};
@@ -157,21 +157,15 @@ async fn register_actions(bot: &TawksBot) -> Result<Actions> {
 }
 
 fn hello_workflow(actions: &Actions) -> CreateWorkflowDefinition {
-    let text = |class: &str, s: &str| WorkflowDisplayBuilder::new(class).text(s).build();
-    let wave_button = WorkflowDisplayBuilder::new("")
-        .button(vec![text("", "Wave")], None, "wave", "default", "sm")
-        .build();
-
     let main = WorkflowNodeBuilder::new("Hello")
-        .layout("w-full")
         .visual(
             WorkflowVisualBuilder::new("hello_root")
-                .block(
-                    "mx-auto flex w-full max-w-xl flex-col gap-3 p-4",
+                .page(
+                    PageWidth::Narrow,
                     vec![
-                        text("text-2xl font-bold", "{greeting}"),
-                        text("text-sm text-zinc-400", "{wave_label}"),
-                        wave_button,
+                        title("{greeting}"),
+                        body("{wave_label}"),
+                        primary_action("Wave", act("wave")),
                     ],
                 )
                 .build(),
@@ -254,6 +248,7 @@ What each part does:
 - `load` is the workflow's **starting server action**. Tawks calls it when someone opens the page, and it reads the viewer from the `$user` context key to fill in the `greeting` response.
 - `wave` runs when the "Wave" button is clicked. It reads the current count from the instance's responses and returns the new count. Each viewer has their own instance, so each person has their own count.
 - `{greeting}` and `{wave_label}` in the text displays are templates. The page shows the current value of each response and redraws when it changes.
+- The page is made of building blocks from `tawks_bot::workflow::ui`: a title, a line of body text and a primary button that runs the `wave` action. tawks decides how each one looks, so the page matches the rest of the app.
 - The `loop` matters. `start` returns whenever the connection drops or tawks asks the bot to register again, and a fresh session registers everything before it reconnects. Keep registration inside the loop in every bot you write.
 
 [Writing a bot](03-bots.md) covers each of these in depth, and [Workflows](04-workflows.md) explains nodes, actions and templates.
@@ -275,15 +270,15 @@ Leave it running. Your page is only available while the bot is connected.
 
 ## 7. Attach the workflow to a channel
 
-1. Open your niche at `https://tawks.app/niche/<your niche slug>`.
-2. Click the info icon next to the niche name at the top of the channel sidebar to open the niche settings.
+1. Open your hub at `https://tawks.app/niche/<your niche slug>`.
+2. Click the info icon next to the hub name at the top of the channel sidebar to open the hub settings.
 3. Under **Settings**, choose **Channels**, then select the channel you want your page in.
 4. On the **Details** tab, open the **Workflow** list and pick **Hello (wf-hello-&lt;bot user id&gt;)**. The list shows every registered workflow, so look for the id your bot logged.
 5. Click **Save**.
 
-Editing a channel's details needs the Manage Channels permission. As the niche owner you have it.
+Editing a channel's details needs the Manage Channels permission. As the hub owner you have it.
 
-To put a game in lobbies, build it as a [game activity](07-tables.md): a niche turns it on and it appears in the lobby's game menu. Leave the channel's **Lobby workflow** setting on Default; it controls how lobbies are created, not what plays in them. [Building games](06-games.md) covers the rest.
+To put a game in lobbies, build it as a [game activity](07-tables.md): a hub turns it on and it appears in the lobby's game menu. Leave the channel's **Lobby workflow** setting on Default; it controls how lobbies are created, not what plays in them. [Building games](06-games.md) covers the rest.
 
 ## 8. See it working
 
@@ -308,4 +303,4 @@ If something is off:
 - [Display reference](05-displays.md): every display your pages can use.
 - [Building games](06-games.md) and [Game activities](07-tables.md): games that run in lobbies.
 
-Questions, bugs in these docs and requests for features go to `dev-chat` in the Tawks Dev niche.
+Questions, bugs in these docs and requests for features go to `dev-chat` in the Tawks Dev hub.

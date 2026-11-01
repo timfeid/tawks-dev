@@ -13,5 +13,5 @@
 </script>
 
 {#if text}
-  <div class={display.class}>{text}</div>
+  <div>{text}</div>
 {/if}

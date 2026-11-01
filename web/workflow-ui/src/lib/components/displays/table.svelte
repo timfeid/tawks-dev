@@ -5,6 +5,7 @@
 
   import { getNestedValue, interpolate, resolveInputValue } from '../../utils';
   import type { Props } from '../workflow-display.svelte';
+  import * as look from '../../look';
   import WorkflowDisplay from '../workflow-display.svelte';
 
   let { workflow, display, inputs }: Props = $props();
@@ -33,12 +34,21 @@
 </script>
 
 {#if 'Table' in display.type}
-  <div class="w-full overflow-auto {display.class}">
+  {@const table = display.type.Table}
+  <div class="@container w-full overflow-auto rounded-2xl border border-foreground/10">
     <table class="w-full text-left">
       <thead>
-        <tr>
+        <tr class="border-b border-foreground/10 bg-foreground/[0.03]">
           {#each headers as header}
-            <th class="truncate px-4 py-2" style={`width: ${columnWidth(header.width)}`}>
+            <th
+              class={[
+                'truncate',
+                'px-3 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase',
+                header.numeric && 'text-right',
+                header.wide_only && 'hidden @xl:table-cell',
+              ]}
+              style={`width: ${columnWidth(header.width)}`}
+            >
               {header.label}
             </th>
           {/each}
@@ -47,14 +57,13 @@
 
       <tbody>
         {#each items as item}
-          <tr class="border-b last:border-b-0">
-            {#each display.type.Table.row as displayItem}
-              <td class="px-4 py-2">
-                <WorkflowDisplay
-                  inputs={{ ...inputs, [display.type.Table.as]: item }}
-                  {workflow}
-                  display={displayItem}
-                />
+          {@const scope = { ...inputs, [table.as]: item }}
+          {@const state = look.stateOf(table.row_state, scope)}
+          <tr class={['border-b border-foreground/10 last:border-b-0', state !== 'Default' && look.rowState[state]]}>
+            {#each table.row as displayItem, index}
+              {@const header = headers[index]}
+              <td class={['px-3 py-2 text-sm', header?.numeric && 'text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}>
+                <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
               </td>
             {/each}
           </tr>

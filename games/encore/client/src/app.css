@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+@import '../../../../web/ui/src/theme.css';
+@source "./";
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  overflow: hidden;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}

@@ -18,14 +18,14 @@
 <body>
 <main>
   <h1>tawks sandbox</h1>
-  <p>A hosted stand-in for tawks, for trying games before they go into a niche. Nothing here touches real tawks:
+  <p>A hosted stand-in for tawks, for trying games before they go into a hub. Nothing here touches real tawks:
     lobbies live in memory and close after half an hour without use.</p>
-  <p><a href="https://tawks-dev.vercel.app/play">Play the games</a> connected to the sandbox, or
+  <p><a href="https://docs.tawks.app/play">Play the games</a> connected to the sandbox, or
     <a href="/sandbox/token">make a sandbox bot</a> to connect your own. Then run your bot with:</p>
   <pre>RSPC_URL=https://<span id="host"></span>/rspc
 EVENTS_WS_URL=wss://<span id="host2"></span>/events
 BOT_TOKEN=&lt;your sandbox token&gt;</pre>
-  <p>The <a href="https://tawks-dev.vercel.app/docs/tables">Game activities</a> docs explain the rest.</p>
+  <p>The <a href="https://docs.tawks.app/docs/tables">Game activities</a> docs explain the rest.</p>
 </main>
 <script>
   document.getElementById('host').textContent = location.host;

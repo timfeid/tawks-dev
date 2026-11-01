@@ -49,6 +49,20 @@ pub struct Input {
     pub fire: bool,
     pub jump: bool,
     pub crouch: bool,
+    /// One tap made since the last tick, for bouts that count presses rather
+    /// than read held keys. The room queues taps and hands them out one a
+    /// tick in the order they came, so none are lost between ticks.
+    #[serde(default)]
+    pub press: Option<Press>,
+}
+
+/// Which hand a tap came from. Both is a single button, such as the action key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Press {
+    Left,
+    Right,
+    Both,
 }
 
 impl Input {
@@ -66,14 +80,33 @@ pub struct Contestant {
     pub is_bot: bool,
     /// How sharp this bot plays, from 0 (clumsy) to 1 (ruthless).
     pub skill: f32,
+    /// Which side they are on in a bout with `Format::Teams`. Free-for-all
+    /// bouts ignore it.
+    pub team: u8,
+    /// Played in pairs: contestants with the same ally are partners in a
+    /// free-for-all bout too, and a bout that lets players hurt each other
+    /// skips their partner. None plays alone.
+    pub ally: Option<u8>,
+}
+
+/// Whether two contestants are partners, by their allies.
+pub fn allied(a: Option<u8>, b: Option<u8>) -> bool {
+    a.is_some() && a == b
 }
 
 impl Contestant {
+    /// The same contestant on a given side.
+    pub fn on_team(self, team: u8) -> Self {
+        Contestant { team, ..self }
+    }
+
     pub fn person(seat: u8) -> Self {
         Contestant {
             seat,
             is_bot: false,
             skill: 1.0,
+            team: 0,
+            ally: None,
         }
     }
 
@@ -82,6 +115,8 @@ impl Contestant {
             seat,
             is_bot: true,
             skill: skill.clamp(0.0, 1.0),
+            team: 0,
+            ally: None,
         }
     }
 }
@@ -180,6 +215,20 @@ pub enum Controls {
     /// Mouse look, the stick to walk, fire, jump and crouch.
     FirstPerson,
 }
+
+/// How much wider an arena laid out for four should be for `players`, so each
+/// player keeps about the same room: the area grows with the head count, the
+/// width with its square root. Four or fewer play the arena as built.
+pub fn crowd_scale(players: usize) -> f32 {
+    (players.max(4) as f32 / 4.0).sqrt()
+}
+
+/// How many of something laid out for four there should be for `players`:
+/// pickups, hazards, coins. Never fewer than built.
+pub fn crowd_count(base: usize, players: usize) -> usize {
+    (base * players.max(4)).div_ceil(4)
+}
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -65,6 +65,7 @@
     return () => {
       clearInterval(checkInterval);
       clearTimeout(stop);
+      utils.releaseCardTexture(texture);
     };
   });
 </script>

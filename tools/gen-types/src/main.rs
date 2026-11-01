@@ -33,7 +33,9 @@ fn main() {
         .register::<WorkflowResource>()
         .register::<WorkflowResourceWithContext>()
         .register::<ServerActionResult>()
-        .register::<UserResource>();
+        .register::<UserResource>()
+        .register::<workflow_model::Tone>()
+        .register::<workflow_model::State>();
 
     let out = concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/workflow-types/index.d.ts");
     Typescript::default().export_to(out, &types).expect("failed to write the workflow types");

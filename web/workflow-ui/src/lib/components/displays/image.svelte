@@ -24,5 +24,5 @@
 </script>
 
 {#if resolved && resolved.src}
-  <img class={display.class} src={mediaUrl(resolved.src)} alt={resolved.alt} />
+  <img class="max-w-full rounded-xl" src={mediaUrl(resolved.src)} alt={resolved.alt} />
 {/if}

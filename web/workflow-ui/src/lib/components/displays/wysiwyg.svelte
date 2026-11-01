@@ -33,7 +33,7 @@
       editable: false,
       editorProps: {
         attributes: {
-          class: `prose prose-invert outline-none ${display.class}`,
+          class: 'prose prose-invert outline-none',
         },
       },
     });
@@ -59,7 +59,6 @@
     <div
       class={cn(
         'prose prose-invert prose-code:before:content-none prose-code:after:content-none [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none',
-        display.class,
       )}
     >
       {@html html}

@@ -6,10 +6,9 @@
   import type { WorkflowResource } from '@tawks/workflow-types';
   import { onMount, type Snippet, setContext, getContext } from 'svelte';
 
-  import WorkflowDisplay from '../workflow-display.svelte';
-  import WorkflowHeader from './workflow-header.svelte';
   import WorkflowBody from './workflow-body.svelte';
   import WorkflowFooter from './workflow-footer.svelte';
+  import WorkflowDock from './workflow-dock.svelte';
   import ContextBridge from './context-bridge.svelte';
   import type { WorkflowStateProvider } from '../../workflow';
 
@@ -18,13 +17,19 @@
     titlebar,
     provider,
     onTitlebarUpdate,
+    dockHost,
     followChildren = true,
+    title,
   }: {
     workflow: WorkflowResource;
     titlebar?: Snippet;
     provider: WorkflowStateProvider;
     onTitlebarUpdate?: (snippet: Snippet) => void;
+    /** Where the host floats the page's tabs and buttons; without one they sit at the foot of the shell. */
+    dockHost?: { show: (dock: Snippet) => void; hide: (dock: Snippet) => void };
     followChildren?: boolean;
+    /** The host's name for the page, shown above it unless the page opens with its own title. */
+    title?: Snippet;
   } = $props();
 
   setContext('workflow-provider', provider);
@@ -73,7 +78,7 @@
     ),
   );
 
-  let stickyHeaderVisuals = $derived(
+  let tabVisuals = $derived(
     (viewWorkflow?.visuals || []).filter(
       (visual) =>
         visual &&
@@ -98,67 +103,26 @@
     ),
   );
 
-  function visualStructureKey(visuals: WorkflowResource["visuals"] = []) {
-    return visuals
-      .map((visual, index) => {
-        const displayType =
-          visual && typeof visual === "object"
-            ? Object.keys(visual.display ?? {})
-                .sort()
-                .join("+")
-            : "unknown";
-        let contentShape = "";
-        if (visual && typeof visual === "object") {
-          const display: any = visual.display;
-          if ("Block" in display) {
-            contentShape = `${display.Block.content?.length ?? 0}`;
-          } else if ("Sticky" in display) {
-            contentShape = `${display.Sticky.position}:${display.Sticky.content?.length ?? 0}`;
-          } else if ("Tile" in display) {
-            contentShape = `${display.Tile?.content?.length ?? 0}`;
-          } else if ("Modal" in display) {
-            contentShape = `${display.Modal?.content?.length ?? 0}`;
-          }
-        }
-        return `${index}:${visual?.id ?? ""}:${displayType}:${contentShape}`;
-      })
-      .join("|");
-  }
+  let hasDock = $derived(tabVisuals.length > 0 || toolbarVisuals.length > 0);
 
-  function displayKey(display: any, index: number) {
-    const typeKey =
-      typeof display?.type === "string"
-        ? display.type
-        : Object.keys(display?.type ?? {})
-            .sort()
-            .join("+");
-    return `${index}:${typeKey}:${display?.class ?? ""}`;
-  }
-
-  let workflowRenderKey = $derived.by(
-    () =>
-      `${viewWorkflow?.instance_id ?? ""}:${viewWorkflow?.current_node_id ?? ""}:${visualStructureKey(viewWorkflow?.visuals || [])}`,
-  );
+  $effect(() => {
+    if (!dockHost || !hasDock) return;
+    const host = dockHost;
+    host.show(floatingDock);
+    return () => host.hide(floatingDock);
+  });
 </script>
 
+{#snippet floatingDock()}
+  <ContextBridge {provider}>
+    <WorkflowDock workflow={viewWorkflow} tabs={tabVisuals} actions={toolbarVisuals} />
+  </ContextBridge>
+{/snippet}
+
+<!-- A page's own tabs and buttons go in its dock; the title bar keeps only
+     what the host page adds. -->
 {#snippet finalTitlebar()}
   <ContextBridge {provider}>
-    <!-- The page's own buttons sit at the right, just before the channel's bell. -->
-    {#if toolbarVisuals.length}
-      <div class="order-last ml-auto flex shrink-0 items-center gap-1">
-        {#each toolbarVisuals as visual (visual.id)}
-          {@const sticky = (visual.display as any).Sticky}
-          {#each sticky.content as display, index (displayKey(display, index))}
-            <WorkflowDisplay
-              from="shell-titlebar"
-              workflow={viewWorkflow}
-              {display}
-              inputs={viewWorkflow.responses}
-            />
-          {/each}
-        {/each}
-      </div>
-    {/if}
     {#if titlebar}
       {@render titlebar()}
     {/if}
@@ -166,18 +130,21 @@
 {/snippet}
 
 {#if viewWorkflow}
-  {#key workflowRenderKey}
-    <WorkflowHeader workflow={viewWorkflow} visuals={stickyHeaderVisuals} />
-
+  {#key viewWorkflow.instance_id}
     <div class="workflow-shell-body-container flex-grow">
       {#if replacing}
         <WorkflowBody workflow={{ ...viewWorkflow, visuals: [] }} />
       {:else}
-        <WorkflowBody workflow={viewWorkflow} />
+        <WorkflowBody workflow={viewWorkflow} {title} tabs={tabVisuals} />
       {/if}
     </div>
 
-    <WorkflowFooter workflow={viewWorkflow} visuals={stickyFooterVisuals} />
+    <WorkflowFooter
+      workflow={viewWorkflow}
+      visuals={stickyFooterVisuals}
+      tabs={dockHost ? [] : tabVisuals}
+      actions={dockHost ? [] : toolbarVisuals}
+    />
   {/key}
 {/if}
 

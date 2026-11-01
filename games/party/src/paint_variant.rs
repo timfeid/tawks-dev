@@ -43,7 +43,8 @@ impl PaintVariant {
 pub const RETAKE_FUSE: f32 = 40.0;
 pub const RETAKE_DEFUSE: f32 = 5.0;
 /// The bomb sits on open floor on the defending side of the site crate, so the
-/// retaking team has to push past cover to reach it.
+/// retaking team has to push past cover to reach it. A bigger field spreads the
+/// site out, and the bomb moves with it.
 pub const RETAKE_BOMB: (f32, f32) = (0.0, -3.6);
 pub const RETAKE_ZONE: f32 = 2.6;
 pub const RETAKE_BLAST: f32 = 7.5;
@@ -76,6 +77,7 @@ pub struct PaintPlaylist {
     placed: Option<Vec<Vec<u8>>>,
     rng: StdRng,
     target_shown_at: f32,
+    target_phases: BTreeMap<u8,f32>,
     target_slot: u8,
     target_expires_at: f32,
     defuse_progress: f32,
@@ -84,6 +86,8 @@ pub struct PaintPlaylist {
     /// How many started on each side, so an empty side is not a walkover.
     started: [usize; 2],
     nav: BTreeMap<u8, Nav>,
+    /// Where the bomb sits on this size of field.
+    bomb_at: (f32, f32),
 }
 
 /// What a bot remembers about walking into things.
@@ -110,6 +114,7 @@ impl PaintPlaylist {
         if matches!(kind, PaintVariant::SiteRetake) {
             inner.use_retake_site();
         }
+        let size = inner.size();
         let mut rng = StdRng::seed_from_u64(seed ^ 0xA17A_2E57);
         let first_slot = rng.random_range(0..9) as u8;
         let targets = if matches!(kind, PaintVariant::TargetFrenzy) {
@@ -140,11 +145,28 @@ impl PaintPlaylist {
             Vec::new()
         };
         let mut started = [0usize; 2];
+        if matches!(kind, PaintVariant::SiteRetake) {
+            // The board picks who attacks and who retakes; on your own you get
+            // the retake, so there is a bomb to defuse.
+            let solo = c.len() == 1;
+            let given = c.iter().any(|one| one.team != c[0].team);
+            for (index, contestant) in c.iter().enumerate() {
+                let team = if solo {
+                    1
+                } else if given {
+                    contestant.team.min(1)
+                } else {
+                    (index % 2) as u8
+                };
+                inner.set_team(contestant.seat, team);
+            }
+        }
         for contestant in c {
             if let Some(team) = inner.team_of(contestant.seat) {
                 started[team.min(1) as usize] += 1;
             }
         }
+        let target_phases=c.iter().map(|p|(p.seat,rng.random_range(0.0..std::f32::consts::TAU))).collect();
         Self {
             kind,
             inner,
@@ -154,6 +176,7 @@ impl PaintPlaylist {
             placed: None,
             rng,
             target_shown_at: 0.0,
+            target_phases,
             target_slot: first_slot,
             target_expires_at: 3.0,
             defuse_progress: 0.0,
@@ -161,7 +184,13 @@ impl PaintPlaylist {
             bomb: Bomb::Ticking,
             started,
             nav: BTreeMap::new(),
+            bomb_at: (RETAKE_BOMB.0 * size, RETAKE_BOMB.1 * size),
         }
+    }
+
+    /// How far a spot is from the bomb, squared.
+    fn at_bomb(&self, x: f32, z: f32) -> f32 {
+        (x - self.bomb_at.0).powi(2) + (z - self.bomb_at.1).powi(2)
     }
 
     fn target_input(&mut self, seat: u8, dt: f32) -> Input {
@@ -192,13 +221,14 @@ impl PaintPlaylist {
         // Their aim drifts around the target, they periodically hesitate, and
         // their side-step can put a prop between them and a shot.
         let sharpness = self.inner.skill_of(seat);
-        let wobble = (self.time * 1.65 + seat as f32 * 2.71).sin() * (1.4 - sharpness.level());
+        let phase=self.target_phases.get(&seat).copied().unwrap_or_default();
+        let wobble = (self.time * 1.65 + phase).sin() * (1.4 - sharpness.level());
         let yaw = (-dx).atan2(-dz) + wobble * 0.006;
         let pitch = ((target.y - (me.y + 1.38)) / distance).atan()
-            + (self.time * 1.07 + seat as f32).cos() * 0.004;
+            + (self.time * 1.07 + phase).cos() * 0.004;
         // A relaxed bot hangs back before slapping the light.
         let firing =
-            (self.time * 4.1 + seat as f32 * 1.93).sin() > 0.48 + (1.0 - sharpness.level()) * 0.42;
+            (self.time * 4.1 + phase).sin() > 0.48 + (1.0 - sharpness.level()) * 0.42;
         let advance = if distance > 34.0 { -0.82 } else { -0.12 };
         Input {
             stick: Stick {
@@ -210,6 +240,7 @@ impl PaintPlaylist {
             fire: firing,
             jump: false,
             crouch: false,
+            press: None,
         }
     }
 
@@ -376,7 +407,7 @@ impl PaintPlaylist {
             .filter(|fighter| {
                 fighter.hp > 0
                     && self.inner.team_of(fighter.seat) == Some(1)
-                    && at_bomb(fighter.x, fighter.z) <= RETAKE_ZONE * RETAKE_ZONE
+                    && self.at_bomb(fighter.x, fighter.z) <= RETAKE_ZONE * RETAKE_ZONE
             })
             .map(|fighter| fighter.seat)
             .collect()
@@ -420,7 +451,7 @@ impl PaintPlaylist {
                 .fighters
                 .iter()
                 .filter(|fighter| {
-                    fighter.hp > 0 && at_bomb(fighter.x, fighter.z) <= RETAKE_BLAST * RETAKE_BLAST
+                    fighter.hp > 0 && self.at_bomb(fighter.x, fighter.z) <= RETAKE_BLAST * RETAKE_BLAST
                 })
                 .map(|fighter| fighter.seat)
                 .collect();
@@ -431,8 +462,8 @@ impl PaintPlaylist {
             }
             events.push(json!({
                 "kind": "exploded",
-                "x": RETAKE_BOMB.0,
-                "z": RETAKE_BOMB.1,
+                "x": self.bomb_at.0,
+                "z": self.bomb_at.1,
                 "caught": caught,
             }));
             Some(0)
@@ -480,7 +511,7 @@ impl PaintPlaylist {
             return fighting;
         }
         let team = self.inner.team_of(seat).unwrap_or(0);
-        let distance2 = at_bomb(me.x, me.z);
+        let distance2 = self.at_bomb(me.x, me.z);
         let enemy_near = self.inner.fighters.iter().any(|other| {
             other.hp > 0
                 && self.inner.team_of(other.seat) != Some(team)
@@ -488,11 +519,12 @@ impl PaintPlaylist {
         });
         let toward_site = Input {
             stick: Stick { x: 0.0, z: -1.0 },
-            yaw: (me.x - RETAKE_BOMB.0).atan2(me.z - RETAKE_BOMB.1),
+            yaw: (me.x - self.bomb_at.0).atan2(me.z - self.bomb_at.1),
             pitch: 0.0,
             fire: fighting.fire,
             jump: false,
             crouch: false,
+            press: None,
         };
         if team == 1 {
             if distance2 <= RETAKE_ZONE * RETAKE_ZONE {
@@ -505,7 +537,7 @@ impl PaintPlaylist {
             if !enemy_near {
                 return self.unstick(seat, me.x, me.z, toward_site, dt);
             }
-        } else if !enemy_near && distance2 > 8.0 * 8.0 {
+        } else if !enemy_near && distance2 > (8.0 * self.inner.size()).powi(2) {
             // Guarding the bomb means staying near it, not wandering the map.
             return self.unstick(seat, me.x, me.z, toward_site, dt);
         }
@@ -575,11 +607,6 @@ impl PaintPlaylist {
     pub fn defuse_progress_for_test(&self) -> f32 {
         self.defuse_progress
     }
-}
-
-/// How far a spot is from the bomb, squared.
-fn at_bomb(x: f32, z: f32) -> f32 {
-    (x - RETAKE_BOMB.0).powi(2) + (z - RETAKE_BOMB.1).powi(2)
 }
 
 fn point(value: &Value) -> Option<(f32, f32, f32)> {
@@ -669,8 +696,8 @@ impl Bout for PaintPlaylist {
                 o.insert(
                     "objective".into(),
                     json!({
-                        "x": RETAKE_BOMB.0,
-                        "z": RETAKE_BOMB.1,
+                        "x": self.bomb_at.0,
+                        "z": self.bomb_at.1,
                         "progress": self.defuse_progress,
                         "needed": RETAKE_DEFUSE,
                         "fuse": self.fuse,
@@ -708,5 +735,59 @@ impl Bout for PaintPlaylist {
                 self.inner.placements()
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shooter::{Timberline, retake_site};
+
+    fn players(count: u8) -> Vec<Contestant> {
+        (0..count).map(Contestant::person).collect()
+    }
+
+    fn half(game: &PaintPlaylist) -> f32 {
+        game.setup()["half"].as_f64().unwrap() as f32
+    }
+
+    #[test]
+    fn a_bigger_field_spreads_the_popgun_ricochet_and_retake_maps() {
+        let grow = 2f32.sqrt();
+        for (kind, built) in [
+            (PaintVariant::PopgunKnockout, 26.0),
+            (PaintVariant::RicochetRumble, 34.0),
+            (PaintVariant::SiteRetake, 34.0),
+        ] {
+            let four = PaintPlaylist::new(kind, &players(4), 1);
+            assert_eq!(half(&four), built, "four play {} as built", kind.key());
+            assert_eq!(four.setup()["scale"], json!(1.0));
+            let eight = PaintPlaylist::new(kind, &players(8), 1);
+            assert!((half(&eight) / built - grow).abs() < 1e-4, "eight get the room of two fours");
+            assert_eq!(eight.setup()["scale"], json!(eight.inner.size()));
+            // Nobody starts on top of anybody else.
+            let spots: Vec<(f32, f32)> = eight.inner.fighters.iter().map(|f| (f.x, f.z)).collect();
+            for (i, a) in spots.iter().enumerate() {
+                assert!(spots[i + 1..].iter().all(|b| (a.0 - b.0).abs() + (a.1 - b.1).abs() > 1.0), "{} spawns overlap", kind.key());
+            }
+        }
+
+        // The popgun map keeps its look at four, and its stairs at any size.
+        let four = PaintPlaylist::new(PaintVariant::PopgunKnockout, &players(4), 1);
+        assert_eq!(four.setup()["blocks"].as_array().unwrap().len(), Timberline::build().blocks.len());
+        let big = Timberline::build_for(grow);
+        assert_eq!(big.blocks.len(), Timberline::build().blocks.len());
+        for &(x, z) in &big.spawns {
+            let floor = crate::shooter::ground_height(&big.blocks, x, z);
+            assert!(floor == 0.0 || floor == 2.4, "a spawn at {x},{z} starts on a rock or a tree");
+        }
+
+        // The site, and the bomb on it, spread out together.
+        let eight = PaintPlaylist::new(PaintVariant::SiteRetake, &players(8), 1);
+        assert_eq!(eight.setup()["blocks"].as_array().unwrap().len(), retake_site().len());
+        let bomb = &eight.snapshot()["objective"];
+        assert!((bomb["z"].as_f64().unwrap() as f32 - RETAKE_BOMB.1 * grow).abs() < 1e-4);
+        let four = PaintPlaylist::new(PaintVariant::SiteRetake, &players(4), 1);
+        assert_eq!(four.snapshot()["objective"]["z"], json!(RETAKE_BOMB.1));
     }
 }

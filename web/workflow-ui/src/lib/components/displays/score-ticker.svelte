@@ -26,10 +26,6 @@
 
 {#if scoreTicker && value !== undefined}
   <ScoreTicker
-    containerClass={scoreTicker?.container_class || undefined}
-    popContainerClass={scoreTicker.pop_container_class || undefined}
-    popTextClass={scoreTicker.pop_text_class || undefined}
-    class={display.class}
     {value}
     {icon}
   />

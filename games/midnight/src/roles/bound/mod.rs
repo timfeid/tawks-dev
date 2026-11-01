@@ -6,14 +6,13 @@ use ulid::Ulid;
 
 use workflow::builder::*;
 use workflow::server_action::ServerActionResult;
-use workflow::{
-    CreateWorkflowDefinition, DisplayType, DisplayVisual, NodeCondition, WorkflowDisplay,
-    WorkflowVisual,
-};
+use workflow::ui::*;
+use workflow::{CreateWorkflowDefinition, DisplayVisual, NodeCondition, WorkflowVisual};
 
+use crate::MidnightPage;
+use crate::game_title;
 use crate::gamestate::{GameState, Player, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
-use crate::title_visual;
 
 /// Shared cell holding the workflow definition id returned by Tawks when we register.
 /// Every Bound card clone must point at the SAME cell.
@@ -29,49 +28,28 @@ pub fn get_bound_workflow(action_id: String) -> CreateWorkflowDefinition {
         .add_node(
             "peek",
             WorkflowNodeBuilder::new("Bound Night Info")
-                // A. Dynamic Title
-                .visual(title_visual("{title}"))
-                // B. The Main Visual Block
                 .visual(
                     WorkflowVisualBuilder::new("bound_reveal")
-                        .display(DisplayVisual::Tile {
-                            content: vec![WorkflowDisplay {
-                                class: "flex flex-wrap gap-4 justify-center".into(),
-                                r#type: DisplayType::Condition {
-                                    // Only show the list if peers exist in the response
-                                    condition: NodeCondition::ResponseExists("bound_peers".into()),
-                                    content: vec![WorkflowDisplay {
-                                        r#type: DisplayType::List {
-                                            items_key: "bound_peers".into(),
-                                            r#as: "player".into(),
-                                            content: vec![WorkflowDisplay {
-                                                r#type: DisplayType::Div {
-                                                    content: vec![
-                                                        WorkflowDisplay {
-                                                            r#type: DisplayType::Image {
-                                                                src: "{player.avatar_url}".into(),
-                                                                alt_text: "{player.name}".into(),
-                                                            },
-                                                            class: "w-16 h-16 rounded-full border-2 border-white/20 mb-2"
-                                                                .into(),
-                                                        },
-                                                        WorkflowDisplay {
-                                                            r#type: DisplayType::Text {
-                                                                text: "{player.name}".into(),
-                                                            },
-                                                            class: "text-center text-lg font-bold font-halloween".into(),
-                                                        },
-                                                    ],
-                                                },
-                                                class: "flex player flex-col items-center min-w-[120px] bg-white/5 p-4 rounded-lg"
-                                                    .into(),
-                                            }],
-                                        },
-                                        class: "flex flex-wrap gap-4 justify-center items-center w-full".into(),
-                                    }],
-                                },
-                            }],
-                        })
+                        .midnight_page(
+                            PageWidth::Narrow,
+                            vec![
+                                game_title("{title}"),
+                                // Only show the list if peers exist in the response
+                                when(
+                                    NodeCondition::ResponseExists("bound_peers".into()),
+                                    vec![items(
+                                        "bound_peers",
+                                        "player",
+                                        Layout::Row { gap: Gap::Loose },
+                                        vec![
+                                            person("{player.avatar_url}", "{player.name}")
+                                                .size(Size::Large)
+                                                .mark("linked"),
+                                        ],
+                                    )],
+                                ),
+                            ],
+                        )
                         .build(),
                 )
                 // C. Entrance Animation
@@ -79,7 +57,7 @@ pub fn get_bound_workflow(action_id: String) -> CreateWorkflowDefinition {
                     id: "animation".into(),
                     display: DisplayVisual::Animation {
                         meta: HashMap::new(),
-                        id: ".player".into(),
+                        id: r#"[data-mark~="linked"]"#.into(),
                         animation_type: "link".into(),
                         trigger: Some("on_appear".into()),
                         delay_ms: Some(250),

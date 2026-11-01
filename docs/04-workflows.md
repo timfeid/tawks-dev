@@ -44,7 +44,7 @@ A `WorkflowNode` is one screen. Build it with `WorkflowNodeBuilder::new(title)`:
 - `.visual(v)` / `.visuals(iter)`: what to draw.
 - `.condition(c)`: a `NodeCondition` that must hold for this node to be picked.
 - `.parent_id(id)`: makes this node a child of another node.
-- `.description(..)`, `.layout(..)`: optional metadata. The app does not display node titles or descriptions, so they are for your own reference.
+- `.description(..)`: optional metadata. The app does not display node titles or descriptions, so they are for your own reference.
 
 A good structure is one root node plus one child per view, each child gated on a response value. A daily puzzle might have a root `main` (a loading message) and children `play`, `board`, `me` and `rules`, each with `Cond::response_equals("pz_view", json!("..."))`. Switching tabs is then a server action that sets `pz_view`.
 
@@ -57,15 +57,25 @@ Because children are sorted by id, keep their conditions mutually exclusive. Oth
 
 ### Visuals
 
-A node holds a list of `WorkflowVisual { id, display: DisplayVisual }`. Visuals are the top-level regions: a `Block` of content, a `Sticky` header or footer, a `Modal`, a `Tile` slot, a `Notification`, an `Animation` or a `Chat`. Build them with `WorkflowVisualBuilder::new(id)` and one of `.block(..)`, `.sticky(..)`, `.modal(..)`, `.tile(..)`, `.notification(..)`, `.animation(..)`, `.chat(..)`, then `.build()`. Most pages are a single `Block`.
+A node holds a list of `WorkflowVisual { id, display: DisplayVisual }`. Visuals are the top-level regions: a `Page` column, a `Block` of content, a `Sticky` header or footer, a `Modal`, a `Tile` slot, a `Notification`, an `Animation` or a `Chat`. Build them with `WorkflowVisualBuilder::new(id)` and one of `.page(..)`, `.block(..)`, `.sticky(..)`, `.modal(..)`, `.tile(..)`, `.notification(..)`, `.animation(..)`, `.chat(..)`, then `.build()`. Most pages are a single `Page`.
 
 ### Displays
 
-Inside a visual you nest `WorkflowDisplay { class, type }`. `class` is a string of Tailwind utility classes. `type` is a `DisplayType` variant: `Text`, `Div`, `List`, `Button`, `Form`, `Input`, `Condition`, `Image` and so on. Build one with `WorkflowDisplayBuilder::new(class)`, a variant method, and `.build()`:
+Inside a visual you nest `WorkflowDisplay { type, mark }`. `type` is a `DisplayType` variant: `Typography`, `Panel`, `Row`, `Action`, `Items`, `Form`, `Input`, `Condition` and so on. `mark` is optional; it names the display for [animations](05-displays.md#animation).
+
+Most displays come from the building blocks in `tawks_bot::workflow::ui`. Each one says what something is, such as a heading or the main button, and tawks decides how it looks. There are no classes:
 
 ```rust
-WorkflowDisplayBuilder::new("text-sm text-zinc-300").text("{pz_status_line}").build()
+use tawks_bot::workflow::ui::*;
+
+panel(vec![
+    subheading("Today's puzzle"),
+    body("{pz_status_line}"),
+    primary_action("Play", act("play")),
+])
 ```
+
+For the displays the blocks don't cover, such as forms and inputs, use `WorkflowDisplayBuilder::new()`, a variant method, and `.build()`.
 
 The [Display reference](05-displays.md) lists every display with what it reads and what it fires.
 
@@ -73,7 +83,7 @@ The [Display reference](05-displays.md) lists every display with what it reads a
 
 A display gets data out of `responses` in two ways:
 
-- **Templates.** String fields written with braces: `"{pz_message}"`, `"{f.name}"`, `"{w.class}"`. A path is dot separated and walks into objects. If a path does not resolve, the braces stay in the output as literal text, so show optional values behind a `Condition`. Objects are inserted as JSON. `{$user_id}` resolves to the instance owner's id. Every display's `class` is also a template, so you can compute styling per item: send `"class": "h-16 w-full ..."` with each word in a grid and use `"{w.class}"` on the display.
+- **Templates.** String fields written with braces: `"{pz_message}"`, `"{f.name}"`, `"{w.state}"`. A path is dot separated and walks into objects. If a path does not resolve, the braces stay in the output as literal text, so show optional values behind a `Condition`. Objects are inserted as JSON. `{$user_id}` resolves to the instance owner's id. Tone and state fields take templates too, so you can set how each item stands from your bot: send `"state": "Selected"` with each word in a grid and use `.state_from("{w.state}")` on its tile.
 - **Keys.** Fields named `items_key`, `key`, `value_key` and similar take a bare path, not a template: `"pz_grid"`, not `"{pz_grid}"`.
 
 `List`, `Table`, `Carousel` and the list-style inputs take an `as` name. Each item is added to the scope under that name, so children can write `{w.word}`.
@@ -156,21 +166,13 @@ If `UpdateResponses` carries a `$rev` number lower than the one the instance alr
 
 ## Lifecycle of an action round trip
 
-Take a player in a word puzzle tapping the word "BASS". The button was built as:
+Take a player in a word puzzle tapping the word "BASS". Its tile was built as:
 
 ```rust
-WorkflowDisplayBuilder::new("{w.class}")
-    .button(
-        vec![text("", "{w.word}")],
-        Some(HashMap::from([("word".to_string(), json!("{w.word}"))])),
-        "toggle_word",
-        "ghost",
-        "default",
-    )
-    .build()
+choice(vec![body("{w.word}")], act("toggle_word").input("word", "{w.word}")).state_from("{w.state}")
 ```
 
-1. **Click.** The app interpolates each input value against the current scope, giving `{ "word": "BASS" }`. The button dims and ignores further clicks while the action is pending. The app calls `workflow_process_action` with `{ instance_id, action_id: "toggle_word", inputs }`.
+1. **Click.** The app interpolates each input value against the current scope, giving `{ "word": "BASS" }`. The tile dims and ignores further clicks while the action is pending. The app calls `workflow_process_action` with `{ instance_id, action_id: "toggle_word", inputs }`.
 2. **Merge.** tawks checks that the caller may act on this instance, writes `$user` and `$anonymous` into context, and merges the inputs into `responses`. `responses.word` is now `"BASS"`.
 3. **Action lookup.** tawks finds the workflow action `toggle_word`. It is `RunServerAction` with its target set to your `sa-puzzle.toggle_word-<bot user id>`.
 4. **Dispatch.** tawks sets `$loading: true` in responses, marks the instance `waiting`, and sends your bot a `WorkflowRequestServerAction { action_id, id, workflow }` over the events socket. While it waits, inputs are read-only and other actions are refused unless they were built with `.allow_while_loading()`.
@@ -178,7 +180,7 @@ WorkflowDisplayBuilder::new("{w.class}")
 6. **Reply.** The SDK sends the result back with `workflow_respond_server_action { token: id, result }`. If the handler returned `Err`, the SDK sends `ServerActionResult::Error` instead. A request with no reply times out after 60 seconds.
 7. **Apply.** tawks clears the loading state, merges the responses and, because `progress_node` is true, re-picks the node.
 8. **Update.** tawks sends the updated instance to the user's open sessions. When the node changed, the update carries the new node's visuals.
-9. **Render.** The app re-renders the displays that read the changed keys, and the button leaves its pending state.
+9. **Render.** The app re-renders the displays that read the changed keys, and the tile leaves its pending state.
 
 ### Pushing updates without a click
 
@@ -213,48 +215,31 @@ use tawks_bot::workflow::{
         Cond, InputTypeBuilder, WorkflowActionBuilder, WorkflowDefinitionBuilder,
         WorkflowDisplayBuilder, WorkflowInputBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,
     },
+    ui::{Layout, PageWidth, act, body, display_title, items, lead, list_row, loading, panel, primary_action},
 };
 
 pub const WORKFLOW_ID: &str = "guess";
-
-const ROOT: &str = "mx-auto flex min-h-full w-full max-w-xl shrink-0 flex-col gap-4 p-4 md:p-6";
-const PANEL: &str = "rounded-2xl border border-white/10 bg-white/[0.03]";
 
 pub struct GuessActions {
     pub load: String,
     pub guess: String,
 }
 
-fn text(class: &str, s: &str) -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new(class).text(s).build()
-}
-
-fn div(class: &str, children: Vec<WorkflowDisplay>) -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new(class).div(children).build()
-}
-
 fn tries() -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new("flex flex-col gap-1")
-        .list(
-            "gn_tries",
-            "t",
-            vec![div(
-                "flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2",
-                vec![
-                    text("text-sm font-bold text-white", "{t.value}"),
-                    text("text-sm text-zinc-400", "{t.hint}"),
-                ],
-            )],
-        )
-        .build()
+    items(
+        "gn_tries",
+        "t",
+        Layout::Divided,
+        vec![list_row("{t.value}").trail(vec![body("{t.hint}")])],
+    )
 }
 
 fn guess_form() -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new("flex gap-2")
+    WorkflowDisplayBuilder::new()
         .form(
             "guess",
             vec![
-                WorkflowDisplayBuilder::new("min-w-0 flex-1")
+                WorkflowDisplayBuilder::new()
                     .input(
                         "gn_guess",
                         WorkflowInputBuilder::new()
@@ -263,9 +248,7 @@ fn guess_form() -> WorkflowDisplay {
                             .build(),
                     )
                     .build(),
-                WorkflowDisplayBuilder::new("shrink-0")
-                    .submit(vec![text("font-bold", "Guess")], None, "guess", "default", "default")
-                    .build(),
+                primary_action("Guess", act("guess")).submits(),
             ],
             SubmitWhen::OnSubmit,
         )
@@ -278,7 +261,7 @@ fn view(title: &str, condition: NodeCondition, content: Vec<WorkflowDisplay>) ->
         .condition(condition)
         .visual(
             WorkflowVisualBuilder::new(format!("guess_{}", title.to_lowercase()))
-                .block(ROOT, content)
+                .page(PageWidth::Narrow, content)
                 .build(),
         )
         .build()
@@ -288,12 +271,7 @@ fn play_node() -> WorkflowNode {
     view(
         "Play",
         Cond::response_equals("gn_done", json!(false)),
-        vec![
-            text("text-2xl font-black text-white", "Guess the number"),
-            text("text-sm text-zinc-300", "{gn_message}"),
-            guess_form(),
-            tries(),
-        ],
+        vec![display_title("Guess the number"), lead("{gn_message}"), guess_form(), tries()],
     )
 }
 
@@ -301,13 +279,7 @@ fn done_node() -> WorkflowNode {
     view(
         "Done",
         Cond::response_equals("gn_done", json!(true)),
-        vec![
-            text("text-2xl font-black text-white", "Solved"),
-            div(
-                &format!("{PANEL} flex flex-col gap-3 p-4"),
-                vec![text("text-sm text-zinc-200", "{gn_message}"), tries()],
-            ),
-        ],
+        vec![display_title("Solved"), panel(vec![body("{gn_message}"), tries()])],
     )
 }
 
@@ -323,7 +295,7 @@ pub fn build(actions: &GuessActions) -> CreateWorkflowDefinition {
     let root = WorkflowNodeBuilder::new("Guess")
         .visual(
             WorkflowVisualBuilder::new("guess_root")
-                .block(ROOT, vec![text("text-sm text-zinc-400 animate-pulse", "Loading...")])
+                .page(PageWidth::Narrow, vec![loading("Loading...")])
                 .build(),
         )
         .build();
@@ -344,7 +316,7 @@ pub fn build(actions: &GuessActions) -> CreateWorkflowDefinition {
 
 Points to notice:
 
-- The form's first argument, `"guess"`, is the workflow action id. When the user presses the submit button or Enter, the form sends every input inside it, keyed by input id, to that action. Inside a form, the submit button submits the form rather than firing its own `action_id`, so keep the two equal to avoid confusion.
+- The form's first argument, `"guess"`, is the workflow action id. When the user presses the submit button or Enter, the form sends every input inside it, keyed by input id, to that action. Inside a form, `.submits()` makes the button submit the form rather than run its own action, so keep the two equal to avoid confusion.
 - `gn_guess` arrives as a string because it comes from a text input.
 - `main` is added first, so it is the starting node. After `load` returns, `progress_node` moves the instance to the child whose condition matches, which is `play` while `gn_done` is false.
 
@@ -484,9 +456,9 @@ bot.start(|event, _sdk| async move {
 
 ## Trying pages in the playground
 
-![The playground running the Guess template: the page outline on the left, the page in the middle, and the server action's mock rules on the right](https://tawks-dev.vercel.app/img/docs/playground.webp)
+![The playground running the Guess template: the page outline on the left, the page in the middle, and the server action's mock rules on the right](https://docs.tawks.app/img/docs/playground.webp)
 
-The [playground](https://tawks-dev.vercel.app/playground) runs a page in your browser with the same node rules, conditions and transforms as tawks. Build on the left, use the page in the middle, and set what each server action answers on the right. Above, a guess of 70 went to the `guess.check` mock, whose rules answered "Too high". The Rust tab gives you the code for what you built, and the plug button connects to devhost so your real bot answers instead.
+The [playground](https://docs.tawks.app/playground) runs a page in your browser with the same node rules, conditions and transforms as tawks. Build on the left, use the page in the middle, and set what each server action answers on the right. Above, a guess of 70 went to the `guess.check` mock, whose rules answered "Too high". The Rust tab gives you the code for what you built, and the plug button connects to devhost so your real bot answers instead.
 
 ## Rules of thumb
 
@@ -494,5 +466,5 @@ The [playground](https://tawks-dev.vercel.app/playground) runs a page in your br
 - Prefix your response keys with a short tag (`gn_`, `pz_`) so they never collide with the inputs the app sends or with keys tawks uses, such as `$loading`.
 - Send computed booleans for every `Condition` instead of relying on `Gte` or on missing keys.
 - Rebuild the full view in one function and return it from every handler. Handlers stay small and the screens never drift out of sync.
-- Stick to common Tailwind utilities and the theme tokens. See [Styling](05-displays.md#styling).
+- Build pages from the [building blocks](05-displays.md#building-blocks) and let tawks style them. Use tones and states for anything that should stand out.
 - Try a page in the playground before you deploy it.

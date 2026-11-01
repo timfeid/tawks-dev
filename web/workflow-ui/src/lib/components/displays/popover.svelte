@@ -2,6 +2,7 @@
   import * as Popover from '@tawks/ui/popover/index.js';
   import { toast } from 'svelte-sonner';
   import { cn } from '../../utils.js';
+  import * as look from '../../look';
   import WorkflowBody from '../ui/workflow-body.svelte';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
@@ -76,7 +77,6 @@
 {#if popover}
   <Popover.Root bind:open onOpenChange={openChanged}>
     <Popover.Trigger
-      class={display.class}
       bind:ref={triggerRef}
       onclick={(e) => {
         // Prevent the Popover from toggling closed if it's already open
@@ -91,7 +91,7 @@
     </Popover.Trigger>
 
     <Popover.Content
-      class={cn('w-(--bits-floating-anchor-width) overflow-hidden p-0', popover.content_class)}
+      class={cn(look.popoverWidth[popover.width ?? 'Medium'], 'overflow-hidden p-0')}
       trapFocus={false}
       sideOffset={7}
       align="center"

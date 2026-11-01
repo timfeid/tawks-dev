@@ -1,0 +1,161 @@
+[
+  {
+    "file": "casual-man.glb",
+    "bytes": 355152,
+    "sha256": "a504618073cec92413f0aad209d7b21a029ce8ce773ae05049c6d2f5f8812230",
+    "nodes": 22,
+    "bones": 20,
+    "animations": [
+      "Death",
+      "Idle",
+      "RecieveHit",
+      "Run",
+      "Walk"
+    ],
+    "report": {
+      "bytes": 355152,
+      "vertices": 4596,
+      "triangles": 3216,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "RecieveHit",
+          "duration": 0.625
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Walk",
+          "duration": 1.25
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": null,
+        "sad": null,
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "file": "casual-woman.glb",
+    "bytes": 457252,
+    "sha256": "0d951c393f03edabfe4ca247c9c369f5328ae2ac34a43d8388cf7ca527f237eb",
+    "nodes": 22,
+    "bones": 20,
+    "animations": [
+      "Death",
+      "Idle",
+      "RecieveHit",
+      "Run",
+      "Walk"
+    ],
+    "report": {
+      "bytes": 457252,
+      "vertices": 6434,
+      "triangles": 6752,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "RecieveHit",
+          "duration": 0.625
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Walk",
+          "duration": 1.25
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": null,
+        "sad": null,
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  },
+  {
+    "file": "town-gentleman.glb",
+    "bytes": 437472,
+    "sha256": "252bb710bd79f3ff9ce54fd9f2adcb5db14781ebdb78206c57e9eef909438cb6",
+    "nodes": 22,
+    "bones": 20,
+    "animations": [
+      "Death",
+      "Idle",
+      "RecieveHit",
+      "Run",
+      "Walk"
+    ],
+    "report": {
+      "bytes": 437472,
+      "vertices": 6114,
+      "triangles": 5432,
+      "meshes": 1,
+      "textures": 0,
+      "rigged": true,
+      "playable": true,
+      "animations": [
+        {
+          "name": "Death",
+          "duration": 2.2916667461395264
+        },
+        {
+          "name": "Idle",
+          "duration": 4.166666507720947
+        },
+        {
+          "name": "RecieveHit",
+          "duration": 0.625
+        },
+        {
+          "name": "Run",
+          "duration": 0.875
+        },
+        {
+          "name": "Walk",
+          "duration": 1.25
+        }
+      ],
+      "clip_map": {
+        "idle": "Idle",
+        "ride": "Run",
+        "cheer": null,
+        "sad": null,
+        "fall": "Death"
+      },
+      "kind": "custom_model"
+    }
+  }
+]

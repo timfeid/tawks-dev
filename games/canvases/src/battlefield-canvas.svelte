@@ -3,6 +3,7 @@
   import * as THREE from "three";
   import type { WorkflowResource } from "@tawks/workflow-types";
   import { submitServerAction } from "@tawks/workflow-ui/components/workflow";
+  import { goFullscreen, onFullscreenChange } from "@tawks/activity-sdk";
   import type { WorkflowStateProvider } from "@tawks/workflow-ui/workflow";
 
   // State Logic
@@ -129,6 +130,14 @@
   let fps = $state(0);
   let manualCamera = $state(false);
   let isFullscreen = $state(false);
+
+  async function toggleFullscreen() {
+    try {
+      isFullscreen = await goFullscreen(!isFullscreen, container);
+    } catch {
+      isFullscreen = !!document.fullscreenElement;
+    }
+  }
   let showHelp = $state(false);
   let showPacks = $state(false);
   let preloadProgress = $state(0);
@@ -191,7 +200,14 @@
 
     // Auto-pass priority on our own spells so we don't have to click "PASS"
     // (the opponent gets the response window; we just yield).
-    if (len > 0 && workflow?.instance_id && viewer?.id) {
+    const choicePending =
+      (viewer?.scry?.length ?? 0) > 0 ||
+      !!viewer?.pending_trigger_choice ||
+      !!viewer?.pending_trigger_target ||
+      !!viewer?.pending_discard ||
+      !!viewer?.pending_sacrifice ||
+      viewer?.library_search_active === true;
+    if (len > 0 && !choicePending && workflow?.instance_id && viewer?.id) {
       const top = stack[0];
       if (top.owner_id === viewer.id) {
         if (!_autoResolveTimer) {
@@ -2319,15 +2335,7 @@
         toggleHelp: () => {
           showHelp = !showHelp;
         },
-        toggleFullscreen: () => {
-          if (!document.fullscreenElement) {
-            container?.requestFullscreen();
-            isFullscreen = true;
-          } else {
-            document.exitFullscreen();
-            isFullscreen = false;
-          }
-        },
+        toggleFullscreen,
         rotateRing,
         rotateKindFilters,
         revealCard: (index) =>
@@ -2476,10 +2484,9 @@
     );
     keyboardController.attach();
 
-    const handleFullscreenChange = () => {
-      isFullscreen = !!document.fullscreenElement;
-    };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    const stopWatchingFullscreen = onFullscreenChange((on) => {
+      isFullscreen = on;
+    });
 
     const fadeInterval = window.setInterval(() => {
       const now = performance.now();
@@ -2880,7 +2887,7 @@
       packMachine.dispose();
       buttonManager.dispose();
       hudManager.dispose();
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      stopWatchingFullscreen();
       window.clearInterval(fadeInterval);
     };
   });
@@ -3000,15 +3007,7 @@
     </button>
     <button
       class="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-500/50 bg-slate-950/90 text-slate-300 shadow-[0_0_15px_rgba(100,116,139,0.2)] transition-all hover:scale-110 hover:border-slate-400 hover:text-slate-100 hover:shadow-[0_0_25px_rgba(100,116,139,0.3)] active:scale-95"
-      onclick={() => {
-        if (!document.fullscreenElement) {
-          container?.requestFullscreen();
-          isFullscreen = true;
-        } else {
-          document.exitFullscreen();
-          isFullscreen = false;
-        }
-      }}
+      onclick={toggleFullscreen}
       title="Fullscreen (Alt+Enter)"
     >
       {#if isFullscreen}

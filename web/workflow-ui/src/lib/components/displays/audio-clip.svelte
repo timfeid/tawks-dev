@@ -27,6 +27,8 @@
   let playing = $state(false);
   let position = $state(0);
   let timer: ReturnType<typeof setInterval> | null = null;
+  let starting = false;
+  let destroyed = false;
 
   function stop() {
     if (audio) {
@@ -40,17 +42,26 @@
   }
 
   async function play() {
-    if (!audio || !src) return;
+    if (!audio || !src || starting) return;
     if (playing) {
       stop();
       return;
     }
-    audio.currentTime = 0;
+    const element = audio;
+    element.currentTime = 0;
+    starting = true;
     try {
-      await audio.play();
+      await element.play();
     } catch {
       return;
+    } finally {
+      starting = false;
     }
+    if (destroyed || element !== audio) {
+      element.pause();
+      return;
+    }
+    if (timer) clearInterval(timer);
     playing = true;
     // Poll finely: the timeupdate event fires too rarely to cut a one-second clip cleanly.
     timer = setInterval(() => {
@@ -67,14 +78,17 @@
     stop();
   });
 
-  onDestroy(stop);
+  onDestroy(() => {
+    destroyed = true;
+    stop();
+  });
 
   const pct = (s: number) => `${Math.min(100, (s / span) * 100)}%`;
   const label = (s: number) => `0:${String(Math.floor(s)).padStart(2, '0')}`;
 </script>
 
 {#if clip && src}
-  <div class="flex flex-col gap-2 {display.class}" data-audio-clip data-limit={limit}>
+  <div class="flex flex-col gap-2" data-audio-clip data-limit={limit}>
     <audio bind:this={audio} {src} preload="auto"></audio>
     <div class="relative h-3 w-full overflow-hidden rounded-full bg-white/10">
       <div class="absolute inset-y-0 left-0 bg-white/25" style="width: {pct(Math.min(limit, span))}"></div>

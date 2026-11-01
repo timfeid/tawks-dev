@@ -32,7 +32,9 @@ const dodgeball: BoutModule<DodgeballSnap, DodgeballSetup, GameEvent> = {
       shot(view) {
         const eye = court.firstPerson ? court.eye(view.look.yaw, view.look.pitch) : null;
         if (eye) return { kind: 'eye', ...eye };
-        return { kind: 'frame', half: [23, 20], pitch: 52, portraitPitch: 64, lookHeight: 0 };
+        // Framed for the gym for four, and widened with a bigger gym.
+        const grow = (view.setup?.half_x ?? 12) / 12;
+        return { kind: 'frame', half: [23 * grow, 20 * grow], pitch: 52, portraitPitch: 64, lookHeight: 0 };
       },
       shake: () => court.shake,
       facing(view) {

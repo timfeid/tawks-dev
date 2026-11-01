@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 // Circular dependency note is fine with Arc/Weak.
 use crate::gamestate::{GameState, Player};
@@ -39,6 +39,17 @@ pub enum Alliance {
     Unmarked,
     Assassin,
     // Add others if needed
+}
+
+impl Alliance {
+    /// The colour a side is told apart by wherever its roles are shown.
+    pub fn tone(&self) -> workflow::Tone {
+        match self {
+            Alliance::Hollow => workflow::Tone::Rose,
+            Alliance::Unmarked => workflow::Tone::Green,
+            Alliance::Assassin => workflow::Tone::Violet,
+        }
+    }
 }
 
 /// The structure returned by a Role when it wants to trigger a UI/Workflow.
@@ -167,6 +178,7 @@ impl Serialize for RoleCard {
             role_id: &'a str,
             description: &'a str,
             alliance: &'a Alliance,
+            alliance_tone: &'static str,
             priority: i32,
             night_duration: i64,
             image_url: &'a str,
@@ -179,6 +191,7 @@ impl Serialize for RoleCard {
             name: &self.name,
             description: &self.description,
             alliance: &self.alliance,
+            alliance_tone: self.alliance.tone().as_str(),
             priority: self.priority,
             night_duration: self.night_duration,
             image_url: &self.image_url,

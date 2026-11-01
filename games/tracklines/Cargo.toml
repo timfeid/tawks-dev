@@ -6,6 +6,7 @@ description = "Tracklines, a 3D railway-building game for tawks lobbies."
 license = "MIT"
 
 [dependencies]
+tawks-telemetry = { path = "../../sdk/telemetry", features = ["tracing"] }
 dotenvy = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 game-framework = { path = "../../sdk/framework" }

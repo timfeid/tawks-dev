@@ -7,14 +7,13 @@ use ulid::Ulid;
 
 use workflow::server_action::ServerActionResult;
 use workflow::service::WorkflowResourceWithContext;
-use workflow::{
-    CreateWorkflowDefinition, DisplayType, WorkflowDisplay, WorkflowPredicate,
-};
-use workflow::{WorkflowVisual, builder::*};
+use workflow::{CreateWorkflowDefinition, WorkflowPredicate};
+use workflow::{WorkflowVisual, builder::*, ui::*};
 
+use crate::MidnightPage;
 use crate::gamestate::{GameState, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
-use crate::role_card_display_for;
+use crate::{ability_header, role_summary};
 use game_framework::engine::GameEngine;
 
 // ----------------------------------------------------------------------------
@@ -36,144 +35,79 @@ pub const SPY_SABOTAGE_KEY: &str = "spy";
 
 fn spy_target_acquisition_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("spy_target_acquisition")
-        .tile(vec![
-            // 1. Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center mb-6")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-2xl font-halloween text-green-500 tracking-widest uppercase opacity-90 drop-shadow-sm")
-                        .text("Target Acquisition")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xs font-mono text-green-400/50 uppercase tracking-widest")
-                        .text("Select a signature to intercept")
-                        .build(),
-                ])
-                .build(),
-
-            // 2. The Grid
-            WorkflowDisplayBuilder::new("w-full grid grid-cols-2 gap-3")
-                .list(
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                ability_header(
+                    "Target Acquisition",
+                    Tone::Green,
+                    "Select a signature to intercept",
+                ),
+                items(
                     "available_roles",
                     "role",
-                    vec![
-                        // BUTTON WRAPPER
-                        // !p-0: Removes default button padding so the card touches the edges.
-                        // !h-auto: Stops the button from forcing a specific height.
-                        // !bg-transparent: Ensures the button's own hover effect doesn't show up behind your card.
-                        WorkflowDisplayBuilder::new("w-full h-auto p-0 bg-transparent hover:bg-transparent border-0 focus:outline-none")
-                        .submit(
-                                        vec![
-                                            // INNER CARD CONTAINER
-                                            WorkflowDisplayBuilder::new("w-full h-full bg-neutral-900/80 border border-white/10 rounded-md flex flex-col items-center justify-between overflow-hidden transition-all duration-200 group hover:border-green-500/50 hover:shadow-[0_0_15px_rgba(34,197,94,0.1)] active:scale-95")
-                                                // A. CONTENT AREA
-                                                // We create a nested div for the content logic
-                                                .div(vec![
-                                                    WorkflowDisplayBuilder::new("w-full p-4 flex flex-col items-center justify-center grow")
-                                                        .div(vec![
-                                                            WorkflowDisplay {
-                                                                class: "pointer-events-none".into(),
-                                                                r#type: role_card_display_for("role"),
-                                                            },
-                                                        ])
-                                                        .build(),
-
-                                                    // B. FOOTER BAR
-                                                    WorkflowDisplayBuilder::new("w-full bg-white/5 py-2 flex items-center justify-center border-t border-white/5 group-hover:bg-green-500/10 group-hover:border-green-500/30 transition-colors")
-                                                        .div(vec![
-                                                            WorkflowDisplayBuilder::new("text-[10px] font-mono font-bold uppercase tracking-widest text-green-500/60 transition-colors group-hover:text-green-400")
-                                                                .text("Initialize Link")
-                                                                .build()
-                                                        ])
-                                                        .build(),
-                                                ])
-                                                .build(),
-                                        ],
-                                        Some({
-                                            let mut m = HashMap::new();
-                                            m.insert("chosen_role".into(), json!("{role.role_id}"));
-                                            m
-                                        }),
-                                        SPY_START_OBSERVE_ACTION,
-                                        "ghost",
-                                        "md",
-                                    )
-                            .build(),
-                    ],
-                )
-                .build(),
-        ])
+                    Layout::Grid {
+                        columns: 2,
+                        gap: Gap::Normal,
+                        fixed: false,
+                    },
+                    vec![choice(
+                        vec![
+                            role_summary("role"),
+                            eyebrow("Initialize Link").tone(Tone::Green),
+                        ],
+                        act(SPY_START_OBSERVE_ACTION).input("chosen_role", json!("{role.role_id}")),
+                    )],
+                ),
+            ],
+        )
         .build()
 }
 
 fn spy_intercepting_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("spy_intercepting")
-        .tile(vec![
-            WorkflowDisplayBuilder::new(
-                "w-full flex flex-col items-center justify-center py-12 space-y-4 animate-pulse",
-            )
-            .div(vec![
-                // Icon or visual indicator
-                WorkflowDisplayBuilder::new("text-4xl text-green-500 mb-2")
-                    .text("📡")
-                    .build(),
-                WorkflowDisplayBuilder::new("text-xl font-halloween text-center text-green-400")
-                    .text("Intercepting Feed...")
-                    .build(),
-                WorkflowDisplayBuilder::new("text-sm font-mono text-center text-white/50")
-                    .text("Decryption in progress: {role_name}")
-                    .build(),
-            ])
-            .build(),
-        ])
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                loading("Intercepting Feed...")
+                    .with_icon("activity")
+                    .titled("Decryption in progress: {role_name}"),
+            ],
+        )
         .build()
 }
 
 fn spy_intel_report_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("spy_intel_report")
-        .tile(vec![
-            // Report Header
-            WorkflowDisplayBuilder::new("w-full border-b border-dashed border-green-500/30 pb-2 mb-4 flex justify-between items-end")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-lg font-halloween text-green-400")
-                        .text("Intel Report")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xs font-mono text-green-500/60 uppercase")
-                        .text("Subject: {role_name}")
-                        .build(),
-                ])
-                .build(),
-
-        ])
-        .tile(vec![
-            WorkflowDisplay {
-                                class: "text-lg font-halloween text-center mt-4".into(),
-                                r#type: DisplayType::Tile {
-                                    workflow: "observed_results".into(),
-                                },
-                            }
-
-        ])
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                row(
+                    Gap::Normal,
+                    vec![
+                        subheading("Intel Report").themed().tone(Tone::Green),
+                        fine("Subject: {role_name}"),
+                    ],
+                )
+                .between(),
+                WorkflowDisplayBuilder::new()
+                    .tile("observed_results")
+                    .build(),
+            ],
+        )
         .build()
 }
 
 fn spy_mission_failed_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("spy_mission_failed")
-        .tile(vec![
-            WorkflowDisplayBuilder::new(
-                "flex flex-col items-center justify-center py-8 opacity-70",
-            )
-            .div(vec![
-                WorkflowDisplayBuilder::new("text-3xl mb-2")
-                    .text("🚫")
-                    .build(),
-                WorkflowDisplayBuilder::new("text-lg font-halloween text-center text-red-400")
-                    .text("Signal Lost")
-                    .build(),
-                WorkflowDisplayBuilder::new("text-sm text-center text-white/60 mt-2 max-w-xs")
-                    .text("The target could not be located or has no active night signature.")
-                    .build(),
-            ])
-            .build(),
-        ])
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                empty("Signal Lost")
+                    .with_icon("x-circle")
+                    .titled("The target could not be located or has no active night signature."),
+            ],
+        )
         .build()
 }
 
@@ -331,7 +265,10 @@ pub fn spy_start_observe(
         .ok_or_else(|| anyhow!("Invalid role selected"))?;
 
     // A role whose turn has passed will not act again, so there is nothing to wait for.
-    let acts_later = game.stages_queue.iter().any(|stage| stage.role.role_id == effective_role.role_id);
+    let acts_later = game
+        .stages_queue
+        .iter()
+        .any(|stage| stage.role.role_id == effective_role.role_id);
     if !acts_later {
         let mut r = HashMap::new();
         r.insert("no_results".into(), json!(true));

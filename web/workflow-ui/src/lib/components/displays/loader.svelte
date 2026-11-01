@@ -19,7 +19,7 @@
   });
 </script>
 
-<div class={cn('flex items-center justify-center p-4', display.class)}>
+<div class="flex items-center justify-center p-4">
   {#if show}
     <div class="flex items-center gap-2 text-primary animate-pulse">
         <span class="text-sm font-medium">Loading...</span>

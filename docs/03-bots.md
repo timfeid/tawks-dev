@@ -18,7 +18,7 @@ Bot accounts are issued by the tawks team for now. When yours is created you get
 
 - the bot's **user id**, such as `hellobot`. Your workflow and server action ids are built from it.
 - the **token**. Keep it secret and load it from the environment.
-- membership in the niche where the bot will run, if it will post in that niche's chats.
+- membership in the hub where the bot will run, if it will post in that hub's chats.
 
 ### Endpoints
 
@@ -58,11 +58,11 @@ use serde_json::{Value, json};
 use tawks_bot::types::{BotOptions, Event, MessageEvent, UserResource};
 use tawks_bot::workflow::CreateWorkflowDefinition;
 use tawks_bot::workflow::builder::{
-    WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,
-    WorkflowNodeBuilder, WorkflowVisualBuilder,
+    WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,
 };
 use tawks_bot::workflow::server_action::ServerActionResult;
 use tawks_bot::workflow::service::WorkflowResourceWithContext;
+use tawks_bot::workflow::ui::{PageWidth, act, body, primary_action, title};
 use tawks_bot::{ServerActionHandler, TawksBot, TawksSdk, shutdown_token, with_jitter};
 use tokio::{select, time::sleep};
 use tracing::{error, info, warn};
@@ -113,21 +113,15 @@ async fn register_actions(bot: &TawksBot) -> Result<Actions> {
 }
 
 fn hello_workflow(actions: &Actions) -> CreateWorkflowDefinition {
-    let text = |class: &str, s: &str| WorkflowDisplayBuilder::new(class).text(s).build();
-    let wave_button = WorkflowDisplayBuilder::new("")
-        .button(vec![text("", "Wave")], None, "wave", "default", "sm")
-        .build();
-
     let main = WorkflowNodeBuilder::new("Hello")
-        .layout("w-full")
         .visual(
             WorkflowVisualBuilder::new("hello_root")
-                .block(
-                    "mx-auto flex w-full max-w-xl flex-col gap-3 p-4",
+                .page(
+                    PageWidth::Narrow,
                     vec![
-                        text("text-2xl font-bold", "{greeting}"),
-                        text("text-sm text-zinc-400", "{wave_label}"),
-                        wave_button,
+                        title("{greeting}"),
+                        body("{wave_label}"),
+                        primary_action("Wave", act("wave")),
                     ],
                 )
                 .build(),
@@ -307,7 +301,7 @@ Writing that out for every action is noisy, so define a small adapter like `hand
 - `workflow: WorkflowResource`: the instance. You will mostly use `responses` (a `HashMap<String, Value>` holding the page's state), `user_id`, `instance_id` and `current_node_id`.
 - `context: HashMap<String, Value>`: values tawks attaches. It holds `$user` (the acting user as a `UserResource`) and `$anonymous` (true for guests).
 
-When a channel starts your workflow, these responses are filled in for you: `channel_id`, `niche_id`, `niche_slug`, `channel_slug`, `feed_url` and `page_url_prefix`, plus `permissions` for users who can manage pages in that niche.
+When a channel starts your workflow, these responses are filled in for you: `channel_id`, `niche_id`, `niche_slug`, `channel_slug`, `feed_url` and `page_url_prefix`, plus `permissions` for users who can manage pages in that hub.
 
 Button inputs land in `responses` too. A button with inputs `{"view": "board"}` makes `ctx.workflow.responses["view"]` equal `"board"` when your action runs.
 
@@ -363,11 +357,12 @@ A quick tour of the builders, all in `tawks_bot::workflow::builder`:
 
 - `WorkflowDefinitionBuilder::new(id, name)` starts a definition. `.starting_server_action(id)` names the action that runs when an instance starts; use it to fill in the page. `.response(key, value)` sets an initial response.
 - `WorkflowNodeBuilder::new(title)` is a view. It holds one or more visuals, an optional `condition` and an optional `parent_id`.
-- `WorkflowVisualBuilder::new(id)` wraps displays in a region. `.block(class, displays)` is the usual choice.
-- `WorkflowDisplayBuilder::new(class)` makes one element: `.text(s)`, `.div(children)`, `.button(..)`, `.list(..)` and many more, listed in the [Display reference](05-displays.md).
+- `WorkflowVisualBuilder::new(id)` wraps displays in a region. `.page(width, displays)` is the usual choice for a channel page.
+- `tawks_bot::workflow::ui` has the building blocks a page is made of: `title`, `body`, `panel`, `list_row`, `primary_action` and many more, listed in the [Display reference](05-displays.md#building-blocks). tawks styles each one, so there are no classes to write.
+- `WorkflowDisplayBuilder::new()` makes the lower level displays the blocks don't cover: `.list(..)`, `.form(..)`, `.input(..)`, `.share_result(..)` and the rest.
 - `WorkflowActionBuilder::new(id)` is something a button can trigger. `.run_server_action().target(server_action_id)` calls your bot.
 
-A button's `action_id` is the workflow action's id (`"wave"`), not the server action id. The workflow action's `target` is the server action id.
+A button's action (`act("wave")`) is the workflow action's id, not the server action id. The workflow action's `target` is the server action id.
 
 ## Showing your workflow in a channel
 
@@ -381,7 +376,7 @@ The owner part is the bot's **user id**, not its username or display name.
 
 There are two ways to set it:
 
-1. **Channel settings.** The niche owner, or anyone allowed to manage channels in that niche, opens the channel's settings and picks your workflow from the list. It appears there once your bot has registered it.
+1. **Channel settings.** The hub owner, or anyone allowed to manage channels in that hub, opens the channel's settings and picks your workflow from the list. It appears there once your bot has registered it.
 2. **The API.** Call `channel_update` with `{ "channel_id": ..., "workflow_id": "wf-hello-hellobot" }`. The caller needs the same channel management rights.
 
 A channel also has a lobby workflow setting, which works the same way for the workflow that starts when someone opens a lobby there. See [Building games](06-games.md).
@@ -484,9 +479,9 @@ A bot can send push and in-app notifications about one of its channels, such as 
 
 - A bot declares notification **kinds** for a channel: a key, a label people see, an optional description, and whether it is a `reminder` or an `event`. Declaring a kind sends nothing.
 - Every kind starts off for everyone. People turn each kind on or off from the channel's bell menu, and a bot has no way to turn one on for them.
-- People can also mute a whole niche, or everything for a while. tawks applies those mutes on every send.
+- People can also mute a whole hub, or everything for a while. tawks applies those mutes on every send.
 - A send goes to a kind, not to a list of people. tawks looks up who turned the kind on and delivers to them, minus anyone who has muted it.
-- A kind belongs to the bot that registered it first. Only that bot can change the kind, send on it or see who turned it on, and the bot must be a member of the channel's niche. The app's own kinds, such as chat mentions, belong to no bot and can't be claimed.
+- A kind belongs to the bot that registered it first. Only that bot can change the kind, send on it or see who turned it on, and the bot must be a member of the channel's hub. The app's own kinds, such as chat mentions, belong to no bot and can't be claimed.
 
 So a bot can't reach someone who has not asked to hear from it, and no bot can send on another bot's kinds or read their subscribers.
 
@@ -596,7 +591,7 @@ let view = card.view();
 ```
 
 - `path()` returns `/share/<game>/<payload>`. tawks renders a preview page and image for it.
-- `view()` returns `{ path, title, text }`. Put it under a response key and show it with `WorkflowDisplayBuilder::new("").share_result("hello_share", "Share today's result")`.
+- `view()` returns `{ path, title, text }`. Put it under a response key and show it with `WorkflowDisplayBuilder::new().share_result("hello_share", "Share today's result")`.
 - `rows` are strings of color letters from `tawks_bot::share::SQUARES` (`"gybporwk"`: green, yellow, blue, purple, orange, red, white, and `k` for empty).
 - `lines` are short text rows shown under the headline.
 - `play` must be an in-app path starting with `/niche/`.
@@ -604,6 +599,112 @@ let view = card.view();
 ## Scores
 
 Users have a tawks score that shows on their profile. Score is awarded by first-party games for now. Your bot can keep its own points, streaks and leaderboards in responses or in your own storage and show them with the displays in the [Display reference](05-displays.md).
+
+## The top bar
+
+Your bot can put things in the bar across the top of the app, for everyone in a hub it belongs to. People can switch any bot's ticker or flashes off from the bar; both start on.
+
+A ticker item is a short line that stays until you change or remove it, such as a game's score. Set it again with the same key to update it, and wrap text in `**` to make it bold:
+
+```rust
+use tawks_bot::ticker::{Flash, TickerItem};
+
+bot.set_ticker(
+    &TickerItem::new("game-42", "hockey", "**NJD 3** - 1 NYR")
+        .detail("2nd 14:32")
+        .live(true)
+        .url("/niche/hockey/tonight")
+        .expires_in(6 * 3600),
+)
+.await?;
+bot.remove_ticker("game-42").await?;
+```
+
+A flash takes over the bar for a moment, for the hub's members or only the people who follow one of its channels. Start from a style (`goal`, `alert`, `info` or `serious`) and change any part of its look:
+
+```rust
+bot.flash(
+    &Flash::new("hockey", "Goal")
+        .text("Devils score · NJD 3 - 1 NYR")
+        .style("goal")
+        .look(serde_json::json!({ "window": "slam", "background": "strobe", "colors": ["#7f1d1d", "#dc2626"] }))
+        .for_followers_of("devils")
+        .url("/niche/hockey/tonight"),
+)
+.await?;
+```
+
+- `background`: `stripes`, `solid`, `pulse` or `strobe`, in one or two `#rrggbb` `colors`.
+- `window`: how the message arrives. `sweep` slides a band across, `center` fades one in, `slam` drops one in, `expand` opens one from the middle, and `full` puts the text straight on the background. `window_color` colours the band.
+- `font`: `mono`, `display` or `sans`, in `text_color`, blinking to `blink` if you set it.
+- `.action(label, url)` adds a button, up to two. A flash with buttons waits for a choice.
+
+Each bot can send six flashes a minute.
+
+For a sport's scores, `ScoreLane` keeps one tab per game in step with your scoreboard. Hand it the games in order each time you poll; it updates only the tabs that changed, removes games you stop passing, and returns every score that went up in a live game so you can decide what deserves a flash:
+
+```rust
+use tawks_bot::scoreboard::{Matchup, Phase, ScoreLane, Side};
+
+let mut lane = ScoreLane::new("nhl", "hockey");
+let game = Matchup {
+    id: "2026020114".into(),
+    away: Side { abbrev: "NJD".into(), score: Some(3), color: Some("#ce1126".into()) },
+    home: Side { abbrev: "NYR".into(), score: Some(1), color: Some("#0038a8".into()) },
+    phase: Phase::Live { clock: "2nd 14:32".into() },
+    url: Some("/niche/hockey/tonight".into()),
+    starts_at: Some("2026-10-27T23:00:00Z".into()),
+};
+for scored in lane.sync(&bot.sdk.web_client, &[game]).await {
+    println!("{} · {}", scored.side().abbrev, scored.score_line());
+}
+```
+
+## Selling in the store
+
+People earn tickets as they rank up and play, can buy them at a dollar each, and spend them in the Tawks store. Your bot can list its own products there. Each purchase takes the tickets, then starts a workflow of yours for the buyer, with `purchase_id` and `fulfillment_payload` in its responses. Deliver the item in its first server action, then settle the purchase:
+
+```rust
+use tawks_bot::Product;
+
+let workflow_id = bot.register_workflow(deliver(&grant_action)).await?;
+bot.register_product(
+    &Product::new("starter-kit", "Starter Kit", 5, &workflow_id)
+        .description("Three extra lives")
+        .icon("gift")
+        .payload(serde_json::json!({ "lives": 3 })),
+)
+.await?;
+
+// Inside the server action, once the item is delivered:
+bot.confirm_purchase(&purchase_id, &item_id).await?;
+// Or, when it can't be delivered, to refund the buyer:
+bot.fail_purchase(&purchase_id, "Out of stock").await?;
+```
+
+- Register on every start; registering again updates the product. A product id belongs to the first bot that registers it.
+- Prices run from 1 to 1000 tickets. `.active(false)` takes a product off the store without removing it.
+- Confirming twice with the same reference is harmless, so a retried delivery is safe. Make the delivery itself idempotent by keying it on `purchase_id`.
+- When your workflow can't be started at all, Tawks refunds the buyer on its own.
+
+### Games and online access
+
+A game can be sold once per person with some days of online access, and passes add more days. Tawks keeps the entitlement and delivers both itself, so the workflow is not started; your game asks Tawks who owns it:
+
+```rust
+let game = Product::game_license("pucklab", "PuckLab", 30, 30, &workflow_id);
+let month = Product::access_pass("pucklab-month", "PuckLab online · 30 days", 10, "pucklab", 30, &workflow_id);
+bot.register_product(&game).await?;
+bot.register_product(&month).await?;
+
+for owner in bot.product_owners("pucklab", &user_ids).await? {
+    println!("{} owns: {}, online until {:?}", owner.user_id, owner.owns, owner.access_expires_at);
+}
+```
+
+- Only owners can buy a pass. It extends access from the current expiry, or from now if access has lapsed.
+- Only the bot selling a game can ask who owns it. `list_product_owners` pages through every owner.
+- `refund_purchase` gives the tickets back: a refunded game is no longer owned, and a refunded pass takes its days back.
 
 ## The JavaScript SDK
 
@@ -633,10 +734,10 @@ const hello = ui.workflow(
   'Hello',
   {
     home: ui.node('Hello', [
-      ui.page([
-        ui.text('Hello, {name}!', 'text-2xl font-bold'),
-        ui.form('wave', [ui.textInput('name', 'Your name'), ui.submit('Wave', 'wave')], { cls: 'flex gap-2' }),
-        ui.text('{reply}', 'text-muted-foreground'),
+      ui.page('Narrow', [
+        ui.title('Hello, {name}!'),
+        ui.form('wave', [ui.row('Tight', [ui.textInput('name', 'Your name'), ui.submit('Wave', 'wave')])]),
+        ui.body('{reply}'),
       ]),
     ]),
   },
@@ -671,23 +772,21 @@ RSPC_URL=http://localhost:8787/rspc EVENTS_WS_URL=ws://localhost:8787/events BOT
 | `bot.say(chatId, text)` | Posts a chat message. For a chat channel, the chat id is the channel id. |
 | `bot.registerNotifications`, `bot.notify`, `bot.notificationSubscribers` | Notifications for your channels. See [Notifications](#notifications). |
 | `bot.on('connect' \| 'disconnect' \| 'error' \| 'message', listener)` | Connection events, and any event from tawks that is not a server action request for one of your handlers. |
-| `bot.api.query(name, input)`, `bot.api.mutate(name, input)` | Any API procedure by name, as in the [API explorer](https://tawks-dev.vercel.app/api). |
+| `bot.api.query(name, input)`, `bot.api.mutate(name, input)` | Any API procedure by name, as in the [API explorer](https://docs.tawks.app/api). |
 
 A handler receives a `ServerActionContext` and returns a result. `ctx.input(key)` reads a response, including the inputs the page just sent, and `ctx.number(key)` also accepts numbers that arrive as strings from templates. `ctx.user` is the person using the page, and `ctx.anonymous` is true for a guest. Return `result.responses({...})`, `result.context({...})`, `result.complete(message)`, `result.error(message)` or `result.none()`, or any `ServerActionResult` as plain JSON. A handler that throws answers with its error message.
 
-`ui` builds the displays most pages need: `text`, `div`, `image`, `badge`, `list`, `when`, `button`, `submit`, `form`, `textInput`, `numberInput`, `switchInput`, `page`, `node`, `workflow`, plus `ui.actions` and `ui.cond`. Each returns the plain JSON from the [Display reference](05-displays.md), so you can mix them with displays written by hand. In TypeScript every definition is checked against the types in `@tawks/workflow-types`.
+`ui` has the same [building blocks](05-displays.md#building-blocks) as the Rust `ui` module, with camelCase names: `title`, `body`, `row`, `column`, `panel`, `listRow`, `primaryAction`, `items` and the rest. Where a Rust block takes a modifier, the JavaScript one takes an options object instead, such as `ui.stat('{wins}', 'Wins', { tone: 'Success' })`. `ui.page(width, content, { center, backdrop, typeface })` makes the page, `ui.form`, `ui.textInput`, `ui.numberInput` and `ui.switchInput` build forms, and `ui.submit(label, actionId)` is a primary button that submits its form. `ui.node`, `ui.workflow`, `ui.actions` and `ui.cond` put the definition together. Each returns the plain JSON from the [Display reference](05-displays.md), so you can mix them with displays written by hand. In TypeScript every definition is checked against the types in `@tawks/workflow-types`.
 
-For the full range of displays, `@tawks/bot` also has the same builders as the Rust SDK: `WorkflowDefinitionBuilder`, `WorkflowNodeBuilder`, `WorkflowVisualBuilder`, `WorkflowDisplayBuilder`, `WorkflowInputBuilder`, `InputTypeBuilder`, `WorkflowActionBuilder` and `Cond`, with the Rust method names in camelCase. A chain gives the same JSON as its Rust twin. The [playground](https://tawks-dev.vercel.app/playground)'s TypeScript tab writes this code for any page you build there.
+For the full range of displays, `@tawks/bot` also has the same builders as the Rust SDK: `WorkflowDefinitionBuilder`, `WorkflowNodeBuilder`, `WorkflowVisualBuilder`, `WorkflowDisplayBuilder`, `WorkflowInputBuilder`, `InputTypeBuilder`, `WorkflowActionBuilder` and `Cond`, with the Rust method names in camelCase. A chain gives the same JSON as its Rust twin. The [playground](https://docs.tawks.app/playground)'s TypeScript tab writes this code for any page you build there.
 
 ```ts
-import { WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder } from '@tawks/bot';
+import { WorkflowDefinitionBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder, ui } from '@tawks/bot';
 
 const hello = new WorkflowDefinitionBuilder('hello', 'Hello')
   .addNode('home', new WorkflowNodeBuilder('Hello')
     .visual(new WorkflowVisualBuilder('page')
-      .block('mx-auto flex max-w-md flex-col gap-4 p-8', [
-        new WorkflowDisplayBuilder('text-2xl font-bold').text('Hello, {name}!').build(),
-      ])
+      .page('Narrow', [ui.title('Hello, {name}!')])
       .build())
     .build())
   .build();

@@ -8,6 +8,8 @@ export type SceneManagerOptions = {
   canvas: HTMLCanvasElement;
   useBloom?: boolean;
   useSmaa?: boolean;
+  directRendering?:boolean;
+  maxPixelRatio?:number;
 };
 
 export class SceneManager {
@@ -16,11 +18,13 @@ export class SceneManager {
   public renderer: THREE.WebGLRenderer;
   public composer: EffectComposer;
   
+  private directRendering=false;
   private clock: THREE.Clock;
   private resizeObserver: ResizeObserver;
 
   constructor(options: SceneManagerOptions) {
     const { canvas, useBloom = true, useSmaa = false } = options;
+    this.directRendering=options.directRendering??false;
 
     // 1. Scene Setup
     this.scene = new THREE.Scene();
@@ -44,7 +48,7 @@ export class SceneManager {
       depth: true,
     });
     this.renderer.localClippingEnabled = true;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, options.maxPixelRatio??2.0));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     // 4. Composer (Post-processing)
@@ -80,7 +84,12 @@ export class SceneManager {
 
   public render() {
     if (this.renderer.getContext().isContextLost()) return;
-    this.composer.render();
+    if(this.directRendering)this.renderer.render(this.scene,this.camera);
+    else this.composer.render();
+  }
+
+  public setPixelRatio(ratio:number){
+    this.renderer.setPixelRatio(ratio);this.composer.setPixelRatio(ratio);this.resize();
   }
 
   public getDelta() {
@@ -119,7 +128,9 @@ export class SceneManager {
 
   public dispose() {
     this.resizeObserver.disconnect();
-    this.renderer.dispose();
+    this.composer.passes.forEach((pass) => pass.dispose());
     this.composer.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 }

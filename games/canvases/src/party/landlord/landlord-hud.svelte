@@ -18,6 +18,7 @@
     type LandlordPlayer,
     type LandlordView,
   } from './rules';
+  import { handSpacing } from '../table/hand';
 
   let {
     view,
@@ -65,6 +66,8 @@
   let discardSelection = $state<number[]>([]);
   let moving = $state<number | null>(null);
   let showRules = $state(false);
+  let handWidth = $state(0);
+  const spacing = $derived(handSpacing(handWidth - 8, hand.length, 80));
   let seenHit = 0;
 
   $effect(() => {
@@ -224,6 +227,7 @@
       );
     if (k.kind === 'tower') return (meP?.sets ?? []).some((s) => s.house && !s.hotel);
     if (k.kind === 'takeover') return others.some((p) => p.sets.some((s) => s.complete));
+    if (k.kind === 'trade_up' && !(meP?.sets ?? []).length) return false;
     if (k.kind === 'backroom_deal' || k.kind === 'trade_up')
       return others.some((p) => p.sets.some((s) => !s.complete));
     if (k.kind === 'cash' || k.kind === 'lawyer_up' || k.kind === 'rent_hike') return false;
@@ -330,6 +334,7 @@
     if (k === 'rent') return 'You need a deed in one of its districts first.';
     if (k === 'renovation' || k === 'tower') return 'You need a complete district to build on.';
     if (k === 'takeover') return 'No rival has a complete district yet.';
+    if (k === 'trade_up' && !(meP?.sets ?? []).length) return 'You need a deed of your own to swap.';
     if (k === 'backroom_deal' || k === 'trade_up') return 'No rival has a loose deed to take.';
     return null;
   }
@@ -371,11 +376,17 @@
       ? '#0f172a'
       : '#fff'}"
   >
-    <span class="flex items-start justify-between gap-1 font-black leading-tight {big ? 'text-lg' : 'text-[11px]'}">
-      <span>{cardTitle(spec)}</span>
-      <span class="shrink-0 rounded bg-black/30 px-1 {big ? 'text-base' : 'text-[10px]'}">${spec.value}</span>
+    <span
+      class="block shrink-0 font-black leading-tight {big
+        ? 'text-lg'
+        : cardTitle(spec).length > 24
+          ? 'text-[9px]'
+          : 'text-[11px]'}"
+    >
+      <span class="float-right ml-1 rounded bg-black/30 px-1 {big ? 'text-base' : 'text-[10px]'}">${spec.value}</span>
+      {cardTitle(spec)}
     </span>
-    <span class="mt-auto leading-tight opacity-90 {big ? 'text-sm' : 'line-clamp-4 text-[9px]'}">{cardText(spec)}</span>
+    <span class="mt-auto min-h-0 overflow-hidden leading-tight opacity-90 {big ? 'text-sm' : 'line-clamp-4 text-[9px]'}">{cardText(spec)}</span>
   </span>
 {/snippet}
 
@@ -452,7 +463,7 @@
       {/each}
     </div>
     <div class="{panel} max-h-44 overflow-y-auto p-2 text-[11px] leading-snug text-white/75">
-      {#each [...view.log].reverse() as entry, i (i)}
+      {#each view.log as entry, i (i)}
         <div class="border-b border-white/5 py-0.5 last:border-0">{describe(entry, view.seats)}</div>
       {/each}
     </div>
@@ -463,7 +474,7 @@
       <div class="mb-1 flex items-center justify-between font-black">
         What happened <button aria-label="Close" onclick={() => (showLog = false)}><X class="size-4" /></button>
       </div>
-      {#each [...view.log].reverse() as entry, i (i)}
+      {#each view.log as entry, i (i)}
         <div class="border-b border-white/5 py-1 text-white/75 last:border-0">{describe(entry, view.seats)}</div>
       {/each}
     </div>
@@ -685,6 +696,9 @@
     >
       <div class="text-3xl font-black text-amber-300">{nameOf(phase.winner)} wins</div>
       <div class="mt-2 text-sm text-white/70">Three districts, fully owned.</div>
+      {#if room.phase.name === 'game_over'}
+        <div class="mt-3 text-xs text-white/60">Back to the lobby in {Math.ceil(room.phase.seconds)}</div>
+      {/if}
     </div>
   {/if}
 
@@ -745,19 +759,19 @@
             {/if}
           </div>
         {/if}
-        <div class="mt-1 flex gap-1.5 overflow-x-auto px-1 pb-1 pt-2">
-          {#each hand as id (id)}
+        <div class="mt-1 flex px-1 pb-1 pt-2" bind:clientWidth={handWidth}>
+          {#each hand as id, i (id)}
             {@const spec = card(id)}
             {@const marked = phase?.kind === 'discard' && discardSelection.includes(id)}
             {@const green = canPlay && playable(id)}
             <button
-              class="h-28 w-20 shrink-0 overflow-hidden rounded-lg border transition {marked
-                ? '-translate-y-2 ring-2 ring-amber-300'
+              class="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg border shadow-md transition hover:z-10 {marked
+                ? 'z-10 -translate-y-2 ring-2 ring-amber-300'
                 : ''} {green ? 'border-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.6)]' : 'border-white/20'} {canPlay ||
               phase?.kind === 'discard'
                 ? 'hover:-translate-y-1'
                 : 'opacity-70'}"
-              style="background:{cardColor(spec)}"
+              style="background:{cardColor(spec)}; margin-left:{i ? spacing : 0}px"
               onclick={() =>
                 phase?.kind === 'discard' && phase.seat === mySeat
                   ? (discardSelection = toggle(discardSelection, id))

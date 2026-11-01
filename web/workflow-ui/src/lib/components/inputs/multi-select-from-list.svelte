@@ -2,7 +2,7 @@
   import { deepEqual, getNestedValue, interpolate, objectInterpolate } from '../../utils';
   import type { Props } from '../workflow-input.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
-  import Button from '@tawks/ui/button/button.svelte';
+  import * as look from '../../look';
   import { onChange } from '../workflow';
   import { evaluateCondition } from '../../utils.js';
   import { getContext } from 'svelte';
@@ -55,22 +55,24 @@
 </script>
 
 {#if selectFromList}
+  <div class={selectFromList.columns ? ['grid gap-2', look.columns(selectFromList.columns, true)] : 'flex flex-col gap-2'}>
   {#each items as item}
     {@const newInputs = { ...inputs, [selectFromList.as]: item }}
     {@const itemVal = objectInterpolate(newInputs, selectFromList.value)}
     {@const readonly = !input.input.readonly
       ? false
       : evaluateCondition(input.input.readonly, newInputs)}
-    <Button
-      variant={selectedVals && selectedVals.some((v) => deepEqual(v, itemVal))
-        ? 'outline'
-        : 'ghost'}
+    {@const selected = !!selectedVals && selectedVals.some((v: unknown) => deepEqual(v, itemVal))}
+    <button
+      type="button"
+      aria-pressed={selected}
       onclick={() => toggleValue(itemVal)}
-      class="h-auto {selectFromList.class} {readonly ? 'pointer-events-none' : ''}"
+      class={['flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors', look.choiceState[selected ? 'Selected' : 'Default'], readonly && 'pointer-events-none']}
     >
       {#each selectFromList.content as displayItem}
         <WorkflowDisplay from="wf-multi-select-from-list" inputs={newInputs} {workflow} display={displayItem} />
       {/each}
-    </Button>
+    </button>
   {/each}
+  </div>
 {/if}

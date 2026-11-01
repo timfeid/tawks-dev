@@ -4,6 +4,8 @@ export const WATER_Y = -3;
 
 export type PartyStage = {
   sun: THREE.DirectionalLight;
+  /** The little islands out at sea, which a board has its own of. */
+  islands: THREE.Group[];
   update: (time: number) => void;
   dispose: () => void;
 };
@@ -100,6 +102,7 @@ export function createPartyStage(scene: THREE.Scene, options: { mobile: boolean 
   const hillGeometry = track(new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2));
   const trunkGeometry = track(new THREE.CylinderGeometry(0.12, 0.18, 2.4, 8));
   const frondGeometry = track(new THREE.ConeGeometry(1.1, 0.5, 7));
+  const islands: THREE.Group[] = [];
   for (const [x, z, r] of [[-38, -46, 7], [44, -52, 9], [-60, -18, 5], [58, -10, 6], [8, -70, 11]]) {
     const island = new THREE.Group();
     const base = new THREE.Mesh(islandGeometry, sand);
@@ -119,6 +122,7 @@ export function createPartyStage(scene: THREE.Scene, options: { mobile: boolean 
     island.add(palm);
     island.position.set(x, WATER_Y - 0.2, z);
     scene.add(island);
+    islands.push(island);
   }
 
   const cloudMaterial = track(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: 0.95 }));
@@ -140,6 +144,7 @@ export function createPartyStage(scene: THREE.Scene, options: { mobile: boolean 
 
   return {
     sun,
+    islands,
     update: (time) => {
       uniforms.uTime.value = time;
       rippleTexture.offset.set(time * 0.012, time * 0.02);

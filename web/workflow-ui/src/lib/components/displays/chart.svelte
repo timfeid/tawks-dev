@@ -13,7 +13,7 @@
 </script>
 
 {#if chart}
-  <div class={cn(display.class, "flex items-center justify-center bg-muted/20 border border-dashed rounded-lg p-4")}>
+  <div class={cn("flex items-center justify-center bg-muted/20 border border-dashed rounded-lg p-4")}>
     <div class="text-center">
         <div class="text-sm font-medium">{chart.type} Chart</div>
         <div class="text-xs text-muted-foreground">Data: {chart.chart_data_key} ({Array.isArray(data) ? data.length : 0} items)</div>

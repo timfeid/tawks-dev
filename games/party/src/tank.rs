@@ -73,6 +73,8 @@ struct BotBrain {
 }
 
 pub struct TankClash {
+    /// Partners, when played in pairs: their shells pass each other by.
+    allies: std::collections::HashMap<u8, u8>,
     pub tanks: Vec<Tank>,
     pub shells: Vec<Shell>,
     pub crates: Vec<Crate>,
@@ -80,7 +82,11 @@ pub struct TankClash {
     next_shell: u32,
     rng: StdRng,
     brains: std::collections::HashMap<u8, BotBrain>,
+    skills: std::collections::HashMap<u8, Skill>,
     placements: Option<Vec<Vec<u8>>>,
+    /// How far each wall is from the middle, bigger for a bigger crowd.
+    half: f32,
+    spawns: Vec<(f32, f32)>,
 }
 
 /// The yard: solid blocks in the middle, breakable crates around them.
@@ -144,6 +150,25 @@ fn spawns() -> Vec<(f32, f32)> {
     ]
 }
 
+/// The yard spread out by `size` for a bigger crowd: crates move out from the
+/// middle and grow to match, so there is as much cover each.
+pub fn yard_for(size: f32) -> Vec<Crate> {
+    yard()
+        .into_iter()
+        .map(|c| Crate { x: c.x * size, z: c.z * size, half: c.half * size, ..c })
+        .collect()
+}
+
+/// Spawn spots for `tanks` on a yard spread out by `size`. Six spots seat six;
+/// any more get the middle of the two side walls rather than doubling up.
+fn spawns_for(tanks: usize, size: f32) -> Vec<(f32, f32)> {
+    let mut spots = spawns();
+    if tanks > spots.len() {
+        spots.extend([(-18.5, 0.0), (18.5, 0.0)]);
+    }
+    spots.into_iter().map(|(x, z)| (x * size, z * size)).collect()
+}
+
 fn wrap_angle(a: f32) -> f32 {
     let tau = std::f32::consts::TAU;
     let mut angle = a % tau;
@@ -163,7 +188,8 @@ pub fn muzzle(yaw: f32) -> (f32, f32) {
 
 impl TankClash {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
-        let places = spawns();
+        let size = crate::bout::crowd_scale(contestants.len());
+        let places = spawns_for(contestants.len(), size);
         let tanks = contestants
             .iter()
             .enumerate()
@@ -196,14 +222,18 @@ impl TankClash {
             })
             .collect();
         TankClash {
+            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
             tanks,
             shells: Vec::new(),
-            crates: yard(),
+            crates: yard_for(size),
             time: 0.0,
             next_shell: 0,
             rng: StdRng::seed_from_u64(seed),
             brains,
+            skills:contestants.iter().map(|c|(c.seat,Skill(c.skill))).collect(),
             placements: None,
+            half: YARD_HALF * size,
+            spawns: places,
         }
     }
 
@@ -263,7 +293,7 @@ impl TankClash {
             here_x + dx * speed * push * dt,
             here_z + dz * speed * push * dt,
         );
-        let edge = YARD_HALF - TANK_RADIUS;
+        let edge = self.half - TANK_RADIUS;
         if !self.blocked(nx, here_z, TANK_RADIUS) && nx.abs() < edge {
             self.tanks[index].x = nx;
         }
@@ -315,7 +345,7 @@ impl TankClash {
             let mut vx = shell.vx;
             let mut vz = shell.vz;
             let mut bounced = false;
-            let edge = YARD_HALF - SHELL_RADIUS;
+            let edge = self.half - SHELL_RADIUS;
             if nx.abs() > edge {
                 vx = -vx;
                 bounced = true;
@@ -374,6 +404,7 @@ impl TankClash {
             if let Some(mark) = self.tanks.iter().find(|tank| {
                 tank.rolling()
                     && (tank.seat != shell.by || shell.age > OWN_SHELL_GRACE)
+                    && (tank.seat == shell.by || !crate::bout::allied(self.allies.get(&shell.by).copied(), self.allies.get(&tank.seat).copied()))
                     && (tank.x - shell.x).abs() <= reach
                     && (tank.z - shell.z).abs() <= reach
             }) {
@@ -411,11 +442,13 @@ impl TankClash {
         let live: Vec<(f32, f32)> = self
             .tanks
             .iter()
-            .filter(|t| t.seat != seat && t.rolling())
+            .filter(|t| t.seat != seat && t.rolling()&&!crate::bout::allied(self.allies.get(&seat).copied(),self.allies.get(&t.seat).copied()))
             .map(|t| (t.x, t.z))
             .collect();
-        let spot = spawns()
-            .into_iter()
+        let spot = self
+            .spawns
+            .iter()
+            .copied()
             .max_by(|a, b| {
                 let score = |p: (f32, f32)| {
                     live.iter()
@@ -469,8 +502,9 @@ impl Bout for TankClash {
     fn setup(&self) -> Value {
         json!({
             "game": "tank",
+            "reload": RELOAD_SECONDS,
             "rule": "Drive with the keys, aim with the mouse, and bounce shells off the walls.",
-            "half": YARD_HALF,
+            "half": self.half,
             "radius": TANK_RADIUS,
             "crates": self.crates.iter().map(|block| json!({
                 "x": block.x, "z": block.z, "half": block.half, "breakable": block.breakable,
@@ -517,17 +551,18 @@ impl Bout for TankClash {
         if !me.rolling() {
             return Input::default();
         }
+        let skill=self.skills.get(&seat).copied().unwrap_or_default();
         let mut brain = self.brains.remove(&seat).unwrap_or_default();
         brain.think_in -= dt;
         if brain.think_in <= 0.0 {
-            brain.think_in = self.rng.random_range(0.4..1.0);
-            brain.aim_error = self.rng.random_range(-0.12..0.12);
+            brain.think_in = skill.reaction()+self.rng.random_range(0.1..0.4);
+            brain.aim_error = self.rng.random_range(-1.0..1.0)*skill.aim_error();
             brain.circle = [-1.0, 1.0][self.rng.random_range(0..2)];
         }
         let mark = self
             .tanks
             .iter()
-            .filter(|t| t.seat != seat && t.rolling())
+            .filter(|t| t.seat != seat && t.rolling()&&!crate::bout::allied(self.allies.get(&seat).copied(),self.allies.get(&t.seat).copied()))
             .min_by(|a, b| {
                 let near = |t: &Tank| (t.x - me.x).powi(2) + (t.z - me.z).powi(2);
                 near(a)
@@ -543,7 +578,7 @@ impl Bout for TankClash {
             let (dx, dz) = (mark.x - me.x, mark.z - me.z);
             let distance = (dx * dx + dz * dz).sqrt().max(0.01);
             let want = (-dx).atan2(-dz) + brain.aim_error;
-            input.yaw = me.turret + wrap_angle(want - me.turret) * (5.0 * dt).min(1.0);
+            input.yaw = me.turret + wrap_angle(want - me.turret) * (skill.tracking() * dt).min(1.0);
             let sighted = self.clear_shot((me.x, me.z), (mark.x, mark.z));
             let (fx, fz) = muzzle(input.yaw);
             let lined_up = (fx * dx + fz * dz) / distance;
@@ -562,6 +597,7 @@ impl Bout for TankClash {
                 z: tz * toward + tx * brain.circle * 0.7,
             }
             .clamped();
+            input.stick.x*=skill.pace();input.stick.z*=skill.pace();
         } else {
             input.stick = Stick { x: 0.0, z: 0.0 };
         }
@@ -603,5 +639,46 @@ impl Bout for TankClash {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn players(count: u8) -> Vec<Contestant> {
+        (0..count).map(Contestant::person).collect()
+    }
+
+    #[test]
+    fn a_bigger_crowd_gets_a_bigger_yard() {
+        let four = TankClash::new(&players(4), 1);
+        assert_eq!(four.setup()["half"], json!(YARD_HALF), "four play it as built");
+        assert_eq!(four.spawns, spawns());
+        assert!(four.crates.iter().zip(yard()).all(|(a, b)| a.x == b.x && a.half == b.half));
+
+        let eight = TankClash::new(&players(8), 1);
+        let grow = eight.half / YARD_HALF;
+        assert!((grow - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert_eq!(eight.setup()["half"], json!(eight.half), "and the client is told");
+        assert!((eight.crates[0].half / yard()[0].half - grow).abs() < 1e-4, "the crates grow too");
+        // Eight tanks, eight different spots, none of them in a crate.
+        for (i, a) in eight.tanks.iter().enumerate() {
+            assert!(!eight.blocked(a.x, a.z, TANK_RADIUS));
+            assert!(eight.tanks[i + 1..].iter().all(|b| (a.x - b.x).abs() + (a.z - b.z).abs() > 2.0));
+        }
+    }
+}
+
+#[cfg(test)]
+mod bot_regressions {
+    use super::*;
+    #[test]
+    fn a_tank_bot_targets_an_enemy_instead_of_its_nearer_partner() {
+        let seats:Vec<_>=(0..3).map(|seat|Contestant{ally:if seat<2{Some(0)}else{None},..Contestant::bot(seat,0.7)}).collect();
+        let mut game=TankClash::new(&seats,4);
+        game.crates.clear();game.tanks[0].x=-16.;game.tanks[0].z=-16.;game.tanks[0].turret=-std::f32::consts::FRAC_PI_2;
+        game.tanks[1].x=-16.;game.tanks[1].z=-14.;game.tanks[2].x=-10.;game.tanks[2].z=-16.;
+        let input=game.bot_input(0,1./60.);assert!(input.fire,"the enemy is already sighted; the nearer friendly tank must not distract the turret");
     }
 }

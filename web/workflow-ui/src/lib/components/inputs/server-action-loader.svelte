@@ -1,24 +1,21 @@
 <script lang="ts">
-  import { onMount, getContext } from 'svelte';
+  import { getContext, untrack } from 'svelte';
   import type { Props } from '../workflow-input.svelte';
   import type { WorkflowStateProvider } from '../../workflow';
 
   let { workflow, input, inputs }: Props = $props();
   const provider = getContext<WorkflowStateProvider>('workflow-provider');
 
-  onMount(async () => {
-    if (typeof input.input.type !== 'string' && 'ServerActionLoader' in input.input.type) {
-      if (provider.processAction) {
-          await provider.processAction(
-              workflow.instance_id,
-              input.input.type.ServerActionLoader.target,
-              inputs
-          );
-      }
-    }
+  let firedFor = '';
+
+  $effect(() => {
+    if (typeof input.input.type === 'string' || !('ServerActionLoader' in input.input.type)) return;
+    const target = input.input.type.ServerActionLoader.target;
+    const step = `${workflow.instance_id}:${workflow.current_node_id}:${input.id}:${target}`;
+    if (step === firedFor) return;
+    firedFor = step;
+    untrack(() => provider.processAction?.(workflow.instance_id, target, inputs));
   });
 </script>
 
-<div class="flex items-center justify-center p-4 italic text-muted-foreground text-xs">
-    Loading data...
-</div>
+<span class="sr-only">Loading</span>

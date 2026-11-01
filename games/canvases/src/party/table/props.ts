@@ -33,7 +33,12 @@ export function textTexture(
   ctx.fillStyle = color;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const size = lines.length > 1 ? 34 : 40;
+  const base = lines.length > 1 ? 34 : 40;
+  ctx.font = `800 ${base}px system-ui, sans-serif`;
+  const widest = Math.max(1, ...lines.map((line) => ctx.measureText(line).width));
+  const size = Math.floor(
+    Math.min(base, (base * (width - 40)) / widest, (height - 40) / lines.length - 8),
+  );
   ctx.font = `800 ${size}px system-ui, sans-serif`;
   lines.forEach((line, i) =>
     ctx.fillText(line, width / 2, height / 2 + (i - (lines.length - 1) / 2) * (size + 8)),

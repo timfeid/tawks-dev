@@ -746,6 +746,10 @@ async fn quiz_advance_impl(
             ("selected".into(), json!(null)),
         ]);
         if !already_recorded {
+            if let Some(bot) = &state.tawks_client {
+                bot.daily_finishes("trivia")
+                    .report(&ctx.workflow.user_id, None);
+            }
             let payload = json!({
                 "amount": score,
                 "reason": "TRIVIA_SCORE",

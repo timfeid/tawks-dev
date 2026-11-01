@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { project } from './geography';
+import { buildCar, buildRails, carMaterials } from './rolling-stock';
 import { createScenery, createStation } from './scenery';
 
 export type MapCity = { id: string; name: string; longitude: number; latitude: number };
@@ -119,7 +119,7 @@ export class TracklinesBoard {
       const trim = Math.min(0.16 / fullPath.getLength(), 0.15);
       const path = new THREE.CatmullRomCurve3(Array.from({ length: 49 }, (_, i) => fullPath.getPointAt(trim + (1 - 2 * trim) * i / 48)));
       const length = path.getLength();
-      const rails = this.makeRails(path, length);
+      const rails = buildRails(path, length);
       const line = new THREE.Mesh(
         new THREE.TubeGeometry(path, 72, 0.045, 5, false),
         new THREE.MeshBasicMaterial({ color: colors[route.color], transparent: true, opacity: 0.62 }),
@@ -213,98 +213,23 @@ export class TracklinesBoard {
     return sprite;
   }
 
-  private makeRails(path: THREE.CatmullRomCurve3, length: number): THREE.Group {
-    const group = new THREE.Group();
-    const metal = new THREE.MeshStandardMaterial({ color: '#c3c7bb', metalness: 0.65, roughness: 0.35 });
-    for (const offset of [-0.065, 0.065]) {
-      const points = Array.from({ length: 81 }, (_, i) => {
-        const position = path.getPointAt(i / 80);
-        const direction = path.getTangentAt(i / 80);
-        return position.add(new THREE.Vector3(-direction.z * offset, 0.075, direction.x * offset));
-      });
-      group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 80, 0.017, 5, false), metal));
-    }
-    const count = Math.max(3, Math.floor(length / 0.13));
-    const ties = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.045, 0.035, 0.23),
-      new THREE.MeshStandardMaterial({ color: '#665744', roughness: 1 }),
-      count,
-    );
-    const transform = new THREE.Object3D();
-    for (let i = 0; i < count; i++) {
-      const t = (i + 0.5) / count;
-      transform.position.copy(path.getPointAt(t)).setY(0.032);
-      const direction = path.getTangentAt(t);
-      transform.rotation.y = Math.atan2(-direction.z, direction.x);
-      transform.updateMatrix();
-      ties.setMatrixAt(i, transform.matrix);
-    }
-    group.add(ties);
-    return group;
-  }
-
   private makeTrain(key: string, path: THREE.CatmullRomCurve3, owner: string, color: string, offset: number): Train {
     const length = path.getLength();
     const group = new THREE.Group();
     group.name = `train-${key}`;
-    const body = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.15 });
-    const roof = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).lerp(new THREE.Color('#ffffff'), 0.12), roughness: 0.5 });
-    const dark = new THREE.MeshStandardMaterial({ color: '#253035', roughness: 0.7 });
-    const glass = new THREE.MeshStandardMaterial({ color: '#b9e4f1', roughness: 0.22, metalness: 0.35 });
-    const lamp = new THREE.MeshBasicMaterial({ color: '#fff3b0' });
+    const materials = carMaterials(color);
     const cars: THREE.Group[] = [];
     const lights: THREE.Mesh[] = [];
     const count = length > 3 ? 4 : length > 1.65 ? 3 : length > 1 ? 2 : 1;
     const scale = Math.min(1, length / 0.9);
-    const addBox = (parent: THREE.Group, dimensions: number[], position: number[], material: THREE.Material) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...dimensions as [number, number, number]), material);
-      mesh.position.set(...position as [number, number, number]);
-      parent.add(mesh);
-      return mesh;
-    };
     for (let i = 0; i < count; i++) {
-      const car = new THREE.Group();
-      car.scale.setScalar(scale);
-      addBox(car, [0.38, 0.07, 0.18], [0, 0.12, 0], dark);
-      addBox(car, [0.35, 0.14, 0.17], [0, 0.2, 0], body);
-      addBox(car, [0.37, 0.035, 0.19], [0, 0.29, 0], roof);
-      // Dark wheels, colored roof and body, and pale windows read clearly from above.
-      for (const x of [-0.11, 0.11]) {
-        for (const z of [-0.1, 0.1]) {
-          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.024, 10), dark);
-          wheel.rotation.x = Math.PI / 2;
-          wheel.position.set(x, 0.085, z);
-          car.add(wheel);
-        }
-      }
-      for (const x of [-0.1, 0, 0.1]) {
-        for (const z of [-0.088, 0.088]) addBox(car, [0.06, 0.052, 0.008], [x, 0.232, z], glass);
-      }
       // Cabs at both ends let the train reverse at a station without teleporting cars.
-      for (const end of [-1, 1]) {
-        if ((end === 1 && i !== 0) || (end === -1 && i !== count - 1)) continue;
-        addBox(car, [0.03, 0.065, 0.125], [end * 0.177, 0.225, 0], glass);
-        const light = addBox(car, [0.012, 0.028, 0.1], [end * 0.2, 0.165, 0], lamp);
-        light.userData.direction = end;
-        lights.push(light);
-      }
-      // Batch the repeated parts into four meshes per car instead of one draw per wheel/window.
-      for (const material of [body, roof, dark, glass]) {
-        const parts = car.children.filter((object) => object instanceof THREE.Mesh && object.material === material) as THREE.Mesh[];
-        const geometries = parts.map((part) => {
-          part.updateMatrix();
-          part.geometry.applyMatrix4(part.matrix);
-          return part.geometry;
-        });
-        const merged = mergeGeometries(geometries);
-        if (merged) {
-          parts.forEach((part) => car.remove(part));
-          geometries.forEach((geometry) => geometry.dispose());
-          car.add(new THREE.Mesh(merged, material));
-        }
-      }
-      group.add(car);
-      cars.push(car);
+      const cabs = [1, -1].filter((end) => (end === 1 && i === 0) || (end === -1 && i === count - 1));
+      const built = buildCar(materials, { cabs });
+      built.car.scale.setScalar(scale);
+      lights.push(...built.lights);
+      group.add(built.car);
+      cars.push(built.car);
     }
     this.group.add(group);
     return {

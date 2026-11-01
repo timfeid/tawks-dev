@@ -8,7 +8,7 @@ It assumes you have a bot running already. If not, start with [Your first bot](0
 
 ### Daily puzzles in a channel
 
-Connections, Earworm and Railyard are daily single-player puzzles. Each one is the page of a channel. Everyone who opens the channel gets their own workflow instance, plays today's puzzle, and can share a result card afterwards.
+Linkup, Earworm and Railyard are daily single-player puzzles. Each one is the page of a channel. Everyone who opens the channel gets their own workflow instance, plays today's puzzle, and can share a result card afterwards.
 
 A daily puzzle does not need the game framework, because players never see each other's moves. It is an ordinary workflow:
 
@@ -49,9 +49,9 @@ The lobby's voice and chat are handled by tawks. A game can speak in the lobby's
 
 ### Starting a third-party game today
 
-A lobby's game menu lists the first-party games plus any [game activities](07-tables.md) a niche has turned on. A game built from workflow displays cannot be picked there, so start it from a channel instead:
+A lobby's game menu lists the first-party games plus any [game activities](07-tables.md) a hub has turned on. A game built from workflow displays cannot be picked there, so start it from a channel instead:
 
-- **A channel page.** A niche admin sets your workflow as a channel's page in channel settings, as described in [Writing a bot](03-bots.md). Everyone who opens the channel gets an instance with `channel_id`, `niche_id`, `niche_slug` and `channel_slug` as inputs. When there is no `lobby_id`, the framework groups instances by channel instead, so everyone in that channel shares one game. Give the page a "Take a seat" or "Start game" button, as the example below does.
+- **A channel page.** A hub admin sets your workflow as a channel's page in channel settings, as described in [Writing a bot](03-bots.md). Everyone who opens the channel gets an instance with `channel_id`, `niche_id`, `niche_slug` and `channel_slug` as inputs. When there is no `lobby_id`, the framework groups instances by channel instead, so everyone in that channel shares one game. Give the page a "Take a seat" or "Start game" button, as the example below does.
 - **A chat command.** Your bot can listen for chat messages such as `!duel` and reply with a link to the channel that hosts the game, `/niche/<niche_slug>/<channel_slug>`. Chat events are covered in [Writing a bot](03-bots.md).
 
 A channel game has no voice of its own. Players who want to talk while they play can open a lobby in a channel that allows lobbies and keep the game open beside it.
@@ -137,7 +137,7 @@ Your workflow reads the view like any other response. A display can use `"{game.
 
 ### How actions come back
 
-Players act through ordinary workflow actions. A button names an action of your workflow, the action targets the server action id that `register_route` returned, and the button's `input_map` arrives as inputs. Template values in `input_map` arrive as strings, so parse numbers on your side.
+Players act through ordinary workflow actions. A button names an action of your workflow, the action targets the server action id that `register_route` returned, and the inputs on the button's `act(..)` arrive as inputs. Template values among them arrive as strings, so parse numbers on your side.
 
 ### Effects
 
@@ -185,10 +185,12 @@ use serde_json::{Value, json};
 use tawks_bot::types::UserResource;
 use tawks_bot::workflow::CreateWorkflowDefinition;
 use tawks_bot::workflow::builder::{
-    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder,
-    WorkflowNodeBuilder, WorkflowVisualBuilder,
+    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,
 };
 use tawks_bot::workflow::service::WorkflowResourceWithContext;
+use tawks_bot::workflow::ui::{
+    Gap, Layout, PageWidth, act, body, items, list_row, primary_action, secondary_action, stat_text, title, when,
+};
 use tawks_bot::{TawksBot, TawksSdk};
 use tokio::sync::mpsc;
 
@@ -522,56 +524,37 @@ pub async fn register(bot: &TawksBot) -> Result<String> {
 }
 
 fn definition(view: &str, join: &str, play: &str, rematch: &str) -> CreateWorkflowDefinition {
-    let text = |class: &str, s: &str| WorkflowDisplayBuilder::new(class).text(s).build();
-    let button = |label: &str, input: Option<HashMap<String, Value>>, action: &str| {
-        WorkflowDisplayBuilder::new("")
-            .button(vec![text("", label)], input, action, "outline", "default")
-            .build()
-    };
     let action = |id: &str, target: &str| {
         WorkflowActionBuilder::new(id).run_server_action().target(target).progress_node(false).build()
     };
 
-    let seats = WorkflowDisplayBuilder::new("flex flex-col gap-1")
-        .list("game.seats", "s", vec![text("text-sm", "{s.name}: {s.points} ({s.state})")])
-        .build();
-    let hand = WorkflowDisplayBuilder::new("flex gap-2")
-        .list(
-            "game.hand",
-            "c",
-            vec![button(
-                "{c.value}",
-                Some(HashMap::from([("value".to_string(), json!("{c.value}"))])),
-                "play",
-            )],
-        )
-        .build();
-    let join_button = WorkflowDisplayBuilder::new("")
-        .condition(
-            Cond::response_equals("game.can_join", json!(true)),
-            vec![button("Take a seat", None, "join")],
-        )
-        .build();
-    let rematch_button = WorkflowDisplayBuilder::new("")
-        .condition(
-            Cond::response_equals("game.over", json!(true)),
-            vec![button("Rematch", None, "rematch")],
-        )
-        .build();
+    let seats = items(
+        "game.seats",
+        "s",
+        Layout::Divided,
+        vec![list_row("{s.name}").meta("{s.state}").trail(vec![stat_text("{s.points}")])],
+    );
+    let hand = items(
+        "game.hand",
+        "c",
+        Layout::Row { gap: Gap::Tight },
+        vec![secondary_action("{c.value}", act("play").input("value", "{c.value}"))],
+    );
+    let join_button = when(
+        Cond::response_equals("game.can_join", json!(true)),
+        vec![primary_action("Take a seat", act("join"))],
+    );
+    let rematch_button = when(
+        Cond::response_equals("game.over", json!(true)),
+        vec![primary_action("Rematch", act("rematch"))],
+    );
 
     let node = WorkflowNodeBuilder::new("Duel")
         .visual(
             WorkflowVisualBuilder::new("duel")
-                .block(
-                    "mx-auto flex w-full max-w-md flex-col gap-4 p-4",
-                    vec![
-                        text("text-xl font-bold", "{game.status}"),
-                        text("text-sm text-zinc-400", "{game.last}"),
-                        seats,
-                        hand,
-                        join_button,
-                        rematch_button,
-                    ],
+                .page(
+                    PageWidth::Narrow,
+                    vec![title("{game.status}"), body("{game.last}"), seats, hand, join_button, rematch_button],
                 )
                 .build(),
         )
@@ -616,7 +599,7 @@ async fn file_results(sdk: Arc<TawksSdk>, mut inbox: mpsc::UnboundedReceiver<Fin
 }
 ```
 
-Call `duel::register(&bot).await?` where your bot registers its other workflows, inside the reconnect loop from [Your first bot](02-first-bot.md). It returns the workflow id, `wf-duel-<your bot's user id>`. Ask a niche admin to set it as a channel's page, open the channel in two browsers signed in as different people, and take a seat in each.
+Call `duel::register(&bot).await?` where your bot registers its other workflows, inside the reconnect loop from [Your first bot](02-first-bot.md). It returns the workflow id, `wf-duel-<your bot's user id>`. Ask a hub admin to set it as a channel's page, open the channel in two browsers signed in as different people, and take a seat in each.
 
 A few things to notice:
 
@@ -630,7 +613,7 @@ A few things to notice:
 
 The Duel is small on purpose. These are the questions that come up once a game has hidden hands, timers and more than two players.
 
-![Hoard running in devhost with three players. Each frame shows the same table, with only that player's own hand face up](https://tawks-dev.vercel.app/img/docs/hoard.webp)
+![Hoard running in devhost with three players. Each frame shows the same table, with only that player's own hand face up](https://docs.tawks.app/img/docs/hoard.webp)
 
 The Hoard example in devhost, one frame per player. The market and deck are shared, and each player's hand is face up only in their own frame, because `view_for` leaves the other hands out.
 
@@ -734,7 +717,7 @@ The tawks app does not show these for third-party games yet. Show them on a page
 
 ### Showing what someone is playing
 
-`presence_set_activity { user_ids, activity: { game, detail? }, ttl_secs? }` shows "Playing Number Duel" (with the detail after it) next to those players in the member list and on their profile cards. It expires after `ttl_secs`, 120 by default, so refresh it while the game runs and send `activity: null` to clear it. It only reaches players who are in a niche with your bot; the rest are skipped.
+`presence_set_activity { user_ids, activity: { game, detail? }, ttl_secs? }` shows "Playing Number Duel" (with the detail after it) next to those players in the member list and on their profile cards. It expires after `ttl_secs`, 120 by default, so refresh it while the game runs and send `activity: null` to clear it. It only reaches players who are in a hub with your bot; the rest are skipped.
 
 ### Other score
 

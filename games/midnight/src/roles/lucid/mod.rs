@@ -5,12 +5,13 @@ use std::sync::Arc;
 use tawks_bot::TawksBot;
 use ulid::Ulid;
 
-use workflow::{CreateWorkflowDefinition, WorkflowDisplay};
-use workflow::{WorkflowVisual, builder::*};
+use workflow::CreateWorkflowDefinition;
+use workflow::{WorkflowVisual, builder::*, ui::*};
 
+use crate::MidnightPage;
 use crate::gamestate::GameState;
-use crate::role_card_display_for;
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
+use crate::{ability_header, role_card};
 use game_framework::engine::GameEngine;
 
 // ----------------------------------------------------------------------------
@@ -26,50 +27,32 @@ pub const LUCID_WORKFLOW_ID: &str = "lucid_reality_check_workflow";
 
 fn lucid_reality_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("lucid_reality")
-        .tile(vec![
-            // 1. Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center mb-8")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-4xl animate-pulse mb-2 text-cyan-400")
-                        .text("🧿")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-2xl font-halloween text-cyan-400 tracking-widest uppercase opacity-90 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]")
-                        .text("The Lucid")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xs font-mono text-cyan-200/50 uppercase tracking-widest text-center mt-2")
-                        .text("The dream shifts around you. What have you become?")
-                        .build(),
-                ])
-                .build(),
-
-            // 2. The Reveal Container
-            WorkflowDisplayBuilder::new("w-full flex justify-center py-4 relative group")
-                .div(vec![
-                    // A glowing "Portal" effect behind the card
-                    WorkflowDisplayBuilder::new("absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-80 bg-cyan-500/10 blur-3xl rounded-full animate-pulse pointer-events-none")
-                        .build(),
-
-                    // The Current Role Card
-                    // We simply ask the frontend to render "my_role", which we passed in the workflow inputs
-                    WorkflowDisplay {
-                        class: "w-full max-w-xs relative z-10 transition-transform duration-500 hover:scale-105".into(),
-                        r#type: role_card_display_for("current_role"),
-                    }
-                ])
-                .build(),
-
-            // 3. Status Footer
-            WorkflowDisplayBuilder::new("w-full text-center mt-8")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-sm font-halloween text-white/90")
-                        .text("This is your true form.")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-[10px] font-mono text-white/40 uppercase tracking-widest mt-1")
-                        .text("If this is not The Lucid, you have been moved.")
-                        .build(),
-                ])
-                .build(),
-        ])
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                column(
+                    Gap::Tight,
+                    vec![
+                        icon("sparkles", IconSize::Large).tone(Tone::Cyan),
+                        ability_header(
+                            "The Lucid",
+                            Tone::Cyan,
+                            "The dream shifts around you. What have you become?",
+                        ),
+                    ],
+                )
+                .align(Align::Center),
+                // The role passed in as `current_role` when the night started.
+                role_card("current_role"),
+                column(
+                    Gap::Tight,
+                    vec![
+                        body("This is your true form.").themed().centered(),
+                        fine("If this is not The Lucid, you have been moved.").centered(),
+                    ],
+                ),
+            ],
+        )
         .build()
 }
 
@@ -130,7 +113,7 @@ While the village dreams in ignorance, your eyes remain wide open. At the very e
             let current_role = player.effective_role_card(None);
 
             let mut inputs = HashMap::new();
-            // We pass the full role object so 'role_card_display_for' can render it
+            // We pass the full role object so 'role_card' can render it
             inputs.insert("current_role".into(), json!(current_role));
 
             Some(WorkflowStart {

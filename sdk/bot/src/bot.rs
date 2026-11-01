@@ -157,6 +157,7 @@ impl TawksBot {
         ws_url.set_query(Some(&qp.finish()));
 
         let (ws_stream, _) = connect_async(ws_url.as_str()).await?;
+        crate::outage::connection_restored();
         let (ws_write, mut ws_read) = ws_stream.split();
 
         let sdk = self.sdk.clone();

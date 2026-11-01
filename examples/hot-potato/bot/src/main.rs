@@ -49,10 +49,9 @@ async fn register_routes(engine: Arc<GameEngine<HotPotato>>) -> Result<Routes> {
 
 fn workflow(routes: &Routes) -> CreateWorkflowDefinition {
     let board = WorkflowNodeBuilder::new("Hot Potato")
-        .layout("min-h-screen w-full relative")
         .visual(
             WorkflowVisualBuilder::new("potato")
-                .tile(vec![WorkflowDisplayBuilder::new("absolute inset-0").activity("game", "input").build()])
+                .tile(vec![WorkflowDisplayBuilder::new().activity("game", "input").build()])
                 .build(),
         )
         .build();
@@ -75,7 +74,7 @@ async fn on_event(event: Event) {
     match event {
         Event::Connect => info!("connected"),
         Event::Disconnect => warn!("disconnected"),
-        Event::Error { error } => error!(%error, "event stream error"),
+        Event::Error { error } => warn!(%error, "event stream error"),
         Event::Message { .. } => {}
     }
 }

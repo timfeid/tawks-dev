@@ -41,8 +41,12 @@ impl Brawler {
 }
 
 pub struct BalloonBrawl {
+    /// Partners, when played in pairs, who leave each other alone.
+    allies: std::collections::HashMap<u8, u8>,
     pub players: Vec<Brawler>,
     pub time: f32,
+    /// Half the width of the pen, wider for a bigger field.
+    pub half: f32,
     rng: StdRng,
     skills: std::collections::HashMap<u8, Skill>,
     placements: Option<Vec<Vec<u8>>>,
@@ -50,7 +54,8 @@ pub struct BalloonBrawl {
 
 impl BalloonBrawl {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
-        let spread = ground::ring(contestants.len().max(1), ARENA_HALF * 0.85, 0.6);
+        let half = ARENA_HALF * crate::bout::crowd_scale(contestants.len());
+        let spread = ground::ring(contestants.len().max(1), half * 0.85, 0.6);
         let players = contestants
             .iter()
             .enumerate()
@@ -66,8 +71,10 @@ impl BalloonBrawl {
             })
             .collect();
         BalloonBrawl {
+            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
             players,
             time: 0.0,
+            half,
             rng: StdRng::seed_from_u64(seed),
             skills: contestants
                 .iter()
@@ -99,6 +106,7 @@ impl BalloonBrawl {
                 .players
                 .iter()
                 .filter(|p| p.playing() && p.seat != seat && p.safe <= 0.0)
+                .filter(|p| !crate::bout::allied(self.allies.get(&seat).copied(), self.allies.get(&p.seat).copied()))
                 .map(|p| {
                     (
                         p.seat,
@@ -175,7 +183,7 @@ impl Bout for BalloonBrawl {
         json!({
             "game": "balloon",
             "rule": "Dash into a rival to burst a balloon. Lose all three and you are out.",
-            "half": ARENA_HALF,
+            "half": self.half,
             "balloons": BALLOONS,
         })
     }
@@ -227,7 +235,7 @@ impl Bout for BalloonBrawl {
                 input.stick
             };
             ground::step_runner(&mut player.run, stick, dt, speed);
-            ground::hold_square(&mut player.run, ARENA_HALF);
+            ground::hold_square(&mut player.run, self.half);
             if player.run.speed() > 0.2 {
                 player.facing = player.run.facing();
             }
@@ -238,7 +246,7 @@ impl Bout for BalloonBrawl {
         for (player, run) in self.players.iter_mut().zip(runners) {
             if player.playing() {
                 player.run = run;
-                ground::hold_square(&mut player.run, ARENA_HALF);
+                ground::hold_square(&mut player.run, self.half);
             }
         }
 
@@ -313,5 +321,28 @@ impl Bout for BalloonBrawl {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bout::Contestant;
+
+    fn field(count: u8) -> Vec<Contestant> {
+        (0..count).map(|seat| Contestant::bot(seat, 0.5)).collect()
+    }
+
+    #[test]
+    fn a_bigger_field_gets_a_wider_pen() {
+        let four = BalloonBrawl::new(&field(4), 1);
+        assert_eq!(four.half, ARENA_HALF, "four play it as built");
+        let eight = BalloonBrawl::new(&field(8), 1);
+        assert!((eight.half / ARENA_HALF - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert!(
+            eight.players.iter().all(|p| p.run.distance_to(0.0, 0.0) > ARENA_HALF * 0.85 + 1.0),
+            "and start further apart"
+        );
+        assert_eq!(eight.setup()["half"], json!(eight.half), "and the client is told");
     }
 }

@@ -8,16 +8,14 @@ use ulid::Ulid;
 use workflow::builder::*;
 use workflow::server_action::ServerActionResult;
 use workflow::service::WorkflowResourceWithContext;
-use workflow::{
-    CreateWorkflowDefinition, DisplayType, DisplayVisual, NodeCondition, WorkflowDisplay,
-    WorkflowInput,
-};
+use workflow::{CreateWorkflowDefinition, NodeCondition, WorkflowInput, ui::PageWidth};
 
+use crate::MidnightPage;
 use crate::gamestate::{GameState, Player, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
 use crate::workflows::CardSelect;
-use crate::workflows::visuals::reveal_button_visual;
-use crate::{create_reveal_cards_node, hidden_display_for_card_list, title_visual};
+use crate::workflows::visuals::reveal_button;
+use crate::{create_reveal_cards_node, game_title, hidden_display_for_card_list};
 use game_framework::engine::GameEngine;
 
 pub const HOLLOW_ROLE_ID: &str = "hollow";
@@ -25,12 +23,6 @@ pub const HOLLOW_WORKFLOW_ID: &str = "hollow_ability_workflow";
 pub const HOLLOW_ANALYZE_ACTION: &str = "games.midnight.hollow.analyze_cards";
 
 // ---- Workflow definition ----
-
-fn select_card_lists_visual(content: Vec<WorkflowDisplay>) -> workflow::WorkflowVisual {
-    WorkflowVisualBuilder::new("hollow_select_card_lists")
-        .display(DisplayVisual::Tile { content })
-        .build()
-}
 
 pub fn hollow_ability_workflow(analyze_action_id: String) -> CreateWorkflowDefinition {
     WorkflowDefinitionBuilder::new(HOLLOW_WORKFLOW_ID, "Hollow Ability")
@@ -41,34 +33,45 @@ pub fn hollow_ability_workflow(analyze_action_id: String) -> CreateWorkflowDefin
             "select_cards",
             WorkflowNodeBuilder::new("Choose a Hidden Card")
                 .description("Select a card to inspect from the center")
-                .visual(title_visual("{title}"))
-                .visual(select_card_lists_visual(vec![WorkflowDisplay {
-                    class: "w-full space-y-2 flex items-center flex-col".into(),
-                    r#type: DisplayType::Input {
-                        id: "select_cards".into(),
-                        input: WorkflowInput {
-                            r#type: workflow::InputType::MultiSelectFromList {
-                                items_key: "card_options".into(),
-                                r#as: "card".into(),
-                                value: "{card.value}".into(),
-                                class: "h-auto w-full".into(),
-                                content: vec![hidden_display_for_card_list()],
-                                min: Some(1),
-                                max: Some(1),
-                            },
-                            default_value: None,
-                            required: true,
-                            readonly: None,
-                            on_change_action: Some((HOLLOW_ANALYZE_ACTION.into(), HashMap::new())),
-                        },
-                    },
-                }]))
-                .visual(reveal_button_visual())
+                .visual(
+                    WorkflowVisualBuilder::new("hollow_select_card_lists")
+                        .midnight_page(
+                            PageWidth::Narrow,
+                            vec![
+                                game_title("{title}"),
+                                WorkflowDisplayBuilder::new()
+                                    .input(
+                                        "select_cards",
+                                        WorkflowInput {
+                                            r#type: workflow::InputType::MultiSelectFromList {
+                                                items_key: "card_options".into(),
+                                                r#as: "card".into(),
+                                                value: "{card.value}".into(),
+                                                columns: 3,
+                                                content: vec![hidden_display_for_card_list()],
+                                                min: Some(1),
+                                                max: Some(1),
+                                            },
+                                            default_value: None,
+                                            required: true,
+                                            readonly: None,
+                                            on_change_action: Some((
+                                                HOLLOW_ANALYZE_ACTION.into(),
+                                                HashMap::new(),
+                                            )),
+                                        },
+                                    )
+                                    .build(),
+                                reveal_button(),
+                            ],
+                        )
+                        .build(),
+                )
                 .build(),
         )
         .add_node(
             "reveal_hidden_cards",
-            create_reveal_cards_node("{card.name} is currently")
+            create_reveal_cards_node("{card.name} is currently", None)
                 .condition(NodeCondition::ResponseExists("reveal_cards".into()))
                 .build(),
         )

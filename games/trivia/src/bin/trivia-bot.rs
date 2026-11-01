@@ -18,6 +18,8 @@ use trivia::{
     multiplayer::{TriviaGameState, TriviaInitArgs},
     state::TriviaState,
 };
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 fn generator() -> Result<Arc<dyn Generator + Send + Sync>> {
     if std::env::var("OPENAI_API_KEY").is_ok_and(|key| !key.is_empty()) {
@@ -58,10 +60,13 @@ async fn register(
 #[tokio::main]
 async fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
+    let _glitchtip = tawks_telemetry::init_from_env("trivia-bot");
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
         ))
+        .finish()
+        .with(tawks_telemetry::layer())
         .init();
 
     let opts = BotOptions::from_env()?;

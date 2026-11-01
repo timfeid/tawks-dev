@@ -49,7 +49,11 @@ const SESSION_IDLE: Duration = Duration::from_secs(30 * 60);
 
 /// Pages that may call devhost from their own origin: the docs site's
 /// playground, API explorer and Play page.
-const DOCS_ORIGINS: [&str; 3] = ["https://tawks-dev.vercel.app", "http://localhost:5300", "http://127.0.0.1:5300"];
+const DOCS_ORIGINS: [&str; 3] = [
+    "https://docs.tawks.app",
+    "http://localhost:5300",
+    "http://127.0.0.1:5300",
+];
 
 struct Public {
     /// The sandbox's own host name, such as sandbox.tawks.app.
@@ -322,6 +326,10 @@ async fn call(app: &Shared, bot: &str, procedure: &str, input: Value) -> Result<
         }
         "milestone_event" => {
             host.log("info", format!("milestone {}", input));
+            Ok(Value::Null)
+        }
+        "dailies_finished" => {
+            host.log("info", format!("daily finish {}", input));
             Ok(Value::Null)
         }
         "channel_post_publish" => {

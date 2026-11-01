@@ -46,7 +46,16 @@ const battle: BoutModule<BattleSnap, BattleSetup, GameEvent> = {
         const me = view.snapshot?.players.find((p) => p.seat === view.mySeat);
         return me ? Math.atan2(-(point.x - me.x), -(point.z - me.z)) : null;
       },
-      hud: (view) => ({ objective: OBJECTIVES[view.key], hint: HINTS[view.key] }),
+      hud(view) {
+        const snap=view.snapshot,me=snap?.players.find(p=>p.seat===view.mySeat);
+        return {
+          objective:OBJECTIVES[view.key],
+          hint:HINTS[view.key],
+          scores:snap?.players.map(p=>({seat:p.seat,hits:p.kills??p.hits??0,downs:p.deaths??p.downs??0,up:!p.out})),
+          meter:snap?.titan?{label:'TITAN',progress:Math.max(0,snap.titan.health)/Math.max(1,snap.titan.max_health),text:`${Math.max(0,snap.titan.health)} / ${snap.titan.max_health}`}:
+            me?{label:me.out?'↻':'●',progress:me.out?0:1-Math.min(1,(me.reload??0)/(view.setup?.game==='tank'?(view.setup.reload??1.15):1.15)),text:me.out?`${Math.ceil(me.back_in??0)}s`:`${me.kills??0}`} :null,
+        };
+      },
       dispose() {
         field.reset();
         field.dispose();

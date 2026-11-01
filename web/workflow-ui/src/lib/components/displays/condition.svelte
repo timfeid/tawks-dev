@@ -10,16 +10,8 @@
 
 {#if 'Condition' in display.type}
   {#if evaluateCondition(display.type.Condition.condition, inputs)}
-    {#if display.class && display.class.trim().length > 0}
-      <div class={display.class}>
-        {#each display.type.Condition.content as displayItem}
-          <WorkflowDisplay from="wf-condition" {inputs} {workflow} display={displayItem} />
-        {/each}
-      </div>
-    {:else}
-      {#each display.type.Condition.content as displayItem}
-        <WorkflowDisplay from="wf-condition" {inputs} {workflow} display={displayItem} />
-      {/each}
-    {/if}
+    {#each display.type.Condition.content as displayItem}
+      <WorkflowDisplay from="wf-condition" {inputs} {workflow} display={displayItem} />
+    {/each}
   {/if}
 {/if}

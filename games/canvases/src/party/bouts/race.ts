@@ -41,12 +41,13 @@ const race: BoutModule<RaceSnap, RaceSetup, GameEvent> = {
         track.sync(view.snapshot, view.setup ?? PREVIEW, asMembers(view.seats), roster(view.seats));
         track.update(view.dt);
       },
-      shot: () => ({ kind: 'frame', half: [13, 43], pitch: 58, portraitPitch: 65 }),
+      // A bigger field races on a wider track, so the shot widens with it.
+      shot: (view) => ({ kind: 'frame', half: [(view.setup?.half ?? PREVIEW.half) + 2, 43], pitch: 58, portraitPitch: 65 }),
       hud: (view) =>
         view.key === 'race'
           ? {
               objective: 'Pump to build speed · steer onto boosts',
-              hint: 'Alternate A and D to pump. W and S steer for boost pads.',
+              hint: 'Alternate W and S to pump. A and D steer for boost pads.',
               touch: 'pump',
             }
           : {

@@ -30,7 +30,9 @@ fn hash(token: &str) -> String {
 /// Bot names become part of workflow ids, so they are short and URL-safe.
 pub fn valid_name(name: &str) -> bool {
     (3..=24).contains(&name.len())
-        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
         && name.starts_with(|c: char| c.is_ascii_lowercase())
 }
 
@@ -41,20 +43,39 @@ impl Tokens {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(error) => return Err(error.into()),
         };
-        Ok(Tokens { path, entries: Mutex::new(entries) })
+        Ok(Tokens {
+            path,
+            entries: Mutex::new(entries),
+        })
     }
 
     pub async fn bot_for(&self, token: &str) -> Option<String> {
         let wanted = hash(token);
-        self.entries.lock().await.iter().find(|e| e.hash == wanted).map(|e| e.bot.clone())
+        self.entries
+            .lock()
+            .await
+            .iter()
+            .find(|e| e.hash == wanted)
+            .map(|e| e.bot.clone())
     }
 
     pub async fn bots_of(&self, owner_id: &str) -> Vec<String> {
-        self.entries.lock().await.iter().filter(|e| e.owner_id == owner_id).map(|e| e.bot.clone()).collect()
+        self.entries
+            .lock()
+            .await
+            .iter()
+            .filter(|e| e.owner_id == owner_id)
+            .map(|e| e.bot.clone())
+            .collect()
     }
 
     /// Makes a token for a new bot. The token is shown once and never stored.
-    pub async fn create(&self, owner_id: &str, owner_name: &str, bot: &str) -> Result<String, String> {
+    pub async fn create(
+        &self,
+        owner_id: &str,
+        owner_name: &str,
+        bot: &str,
+    ) -> Result<String, String> {
         if !valid_name(bot) {
             return Err("Bot names are 3 to 24 lowercase letters, digits or underscores, starting with a letter.".into());
         }
@@ -63,10 +84,17 @@ impl Tokens {
             return Err(format!("The name {bot} is taken. Pick another."));
         }
         if entries.iter().filter(|e| e.owner_id == owner_id).count() >= PER_ACCOUNT {
-            return Err(format!("You have {PER_ACCOUNT} sandbox bots already. Delete one to make another."));
+            return Err(format!(
+                "You have {PER_ACCOUNT} sandbox bots already. Delete one to make another."
+            ));
         }
         let token = format!("sbx_{}{}", ulid::Ulid::new(), ulid::Ulid::new()).to_lowercase();
-        entries.push(Entry { hash: hash(&token), bot: bot.into(), owner_id: owner_id.into(), owner_name: owner_name.into() });
+        entries.push(Entry {
+            hash: hash(&token),
+            bot: bot.into(),
+            owner_id: owner_id.into(),
+            owner_name: owner_name.into(),
+        });
         self.save(&entries)?;
         Ok(token)
     }
@@ -84,7 +112,9 @@ impl Tokens {
     fn save(&self, entries: &[Entry]) -> Result<(), String> {
         let text = serde_json::to_string_pretty(entries).map_err(|e| e.to_string())?;
         let temp = self.path.with_extension("tmp");
-        std::fs::write(&temp, text).and_then(|_| std::fs::rename(&temp, &self.path)).map_err(|e| format!("could not save tokens: {e}"))
+        std::fs::write(&temp, text)
+            .and_then(|_| std::fs::rename(&temp, &self.path))
+            .map_err(|e| format!("could not save tokens: {e}"))
     }
 }
 
@@ -100,12 +130,20 @@ mod tests {
 
         let token = tokens.create("u1", "ana", "anas_bot").await.unwrap();
         assert_eq!(tokens.bot_for(&token).await.as_deref(), Some("anas_bot"));
-        assert!(!std::fs::read_to_string(dir.join("tokens.json")).unwrap().contains(&token));
-        assert!(tokens.create("u2", "ben", "anas_bot").await.is_err(), "names are unique");
+        assert!(!std::fs::read_to_string(dir.join("tokens.json"))
+            .unwrap()
+            .contains(&token));
+        assert!(
+            tokens.create("u2", "ben", "anas_bot").await.is_err(),
+            "names are unique"
+        );
         assert!(tokens.create("u1", "ana", "Bad Name").await.is_err());
 
         for n in 1..PER_ACCOUNT {
-            tokens.create("u1", "ana", &format!("ana_{n}")).await.unwrap();
+            tokens
+                .create("u1", "ana", &format!("ana_{n}"))
+                .await
+                .unwrap();
         }
         assert!(tokens.create("u1", "ana", "one_too_many").await.is_err());
 

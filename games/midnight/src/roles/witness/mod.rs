@@ -7,15 +7,13 @@ use ulid::Ulid;
 
 use workflow::server_action::ServerActionResult;
 use workflow::service::WorkflowResourceWithContext;
-use workflow::{
-    CreateWorkflowDefinition, NodeCondition,
-    WorkflowDisplay,
-};
-use workflow::{WorkflowVisual, builder::*};
+use workflow::{CreateWorkflowDefinition, NodeCondition};
+use workflow::{WorkflowVisual, builder::*, ui::*};
 
+use crate::MidnightPage;
 use crate::gamestate::{GameState, PlayerResource, PlayerRole};
 use crate::roles::{Alliance, RoleCard, WorkflowStart};
-use crate::role_card_display_for;
+use crate::{ability_header, role_card};
 use game_framework::engine::GameEngine;
 
 // ----------------------------------------------------------------------------
@@ -37,205 +35,131 @@ pub const WITNESS_SABOTAGE_KEY: &str = "witness";
 // ----------------------------------------------------------------------------
 
 fn witness_selection_visual() -> WorkflowVisual {
+    let reveal_ready = |ready: bool| NodeCondition::ResponseEquals {
+        field: "show_reveal_action".into(),
+        value: json!(ready),
+    };
     WorkflowVisualBuilder::new("witness_selection")
-        .tile(vec![
-            // 1. Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center mb-6")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-2xl font-halloween text-green-500 tracking-widest uppercase opacity-90 drop-shadow-sm")
-                        .text("Witness Ability")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xs font-mono text-green-400/50 uppercase tracking-widest")
-                        .text("Choose 1 player or 2 hidden roles (middle only) to observe")
-                        .build(),
-                ])
-                .build(),
-
-            // 2. Multi-Select Grid
-            WorkflowDisplayBuilder::new("w-full grid grid-cols-2 gap-2")
-                .input(
-                    "select_cards",
-                    WorkflowInputBuilder::new()
-                        .r#type(InputTypeBuilder::multi_select_from_list(
-                            "card_options", // items_key
-                            "player_or_hidden", // as
-                            "{player_or_hidden.id}",  // value
-                            vec![
-                                        // Avatar or Hidden Role display
-                                        WorkflowDisplayBuilder::new("size-8 rounded-full border border-white/20 bg-black/50 overflow-hidden")
-                                            .image("{player_or_hidden.avatar_url}", "{player_or_hidden.name}")
-                                            .build(),
-                                        // Name or Hidden Role text
-                                        WorkflowDisplayBuilder::new("text-sm font-halloween text-white/90 truncate")
-                                            .text("{player_or_hidden.name}")
-                                            .build()
-                            ],
-                            "flex gap-3 items-center", // grid layout
-                            Some(1), // min
-                            Some(2)  // max, allow 2 hidden roles or 1 player
-                        ))
-                        .required(true)
-                        .on_change_action(WITNESS_ANALYZE_ACTION, HashMap::new())
-                        .build()
-                )
-                .build(),
-
-            // 3. Conditional Feedback (Dynamic Instructions)
-            WorkflowDisplayBuilder::new("w-full text-center text-xs font-mono text-green-400/60")
-                .condition(
-                    NodeCondition::ResponseEquals {
-                        field: "show_reveal_action".into(),
-                        value: json!(false),
-                    },
-                    vec![
-                        WorkflowDisplayBuilder::new("text-center font-mono text-yellow-500")
-                            .text("Select 2 hidden cards or 1 player to observe")
-                            .build()
-                    ]
-                )
-                .condition(
-                    NodeCondition::ResponseEquals {
-                        field: "show_reveal_action".into(),
-                        value: json!(true),
-                    },
-                    vec![
-                        WorkflowDisplayBuilder::new("text-center font-mono text-green-500")
-                            .text("Confirm the selection?")
-                            .build()
-                    ]
-                )
-                .build(),
-
-            // 4. Conditional "Reveal" Button
-            WorkflowDisplayBuilder::new("w-full mt-6")
-                .condition(
-                    NodeCondition::ResponseEquals {
-                        field: "show_reveal_action".into(),
-                        value: json!(true),
-                    },
-                    vec![
-                         WorkflowDisplayBuilder::new("w-full")
-                            .button(
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                ability_header(
+                    "Witness Ability",
+                    Tone::Green,
+                    "Choose 1 player or 2 hidden roles (middle only) to observe",
+                ),
+                WorkflowDisplayBuilder::new()
+                    .input(
+                        "select_cards",
+                        WorkflowInputBuilder::new()
+                            .r#type(InputTypeBuilder::multi_select_from_list(
+                                "card_options",
+                                "player_or_hidden",
+                                "{player_or_hidden.id}",
                                 vec![
-                                    WorkflowDisplayBuilder::new("w-full text-center font-halloween text-green-400 uppercase tracking-widest")
-                                        .text("Reveal Card")
-                                        .build()
+                                    row(
+                                        Gap::Normal,
+                                        vec![
+                                            avatar(
+                                                "{player_or_hidden.avatar_url}",
+                                                "{player_or_hidden.name}",
+                                                Size::Small,
+                                            ),
+                                            body("{player_or_hidden.name}").themed(),
+                                        ],
+                                    )
+                                    .nowrap(),
                                 ],
-                                None,
-                                WITNESS_REVEAL_ACTION,
-                                "outline",
-                                "lg"
-                            )
-                            .build()
-                    ]
-                )
-                .build()
-        ])
+                                2,
+                                Some(1),
+                                // Two hidden roles or one player.
+                                Some(2),
+                            ))
+                            .required(true)
+                            .on_change_action(WITNESS_ANALYZE_ACTION, HashMap::new())
+                            .build(),
+                    )
+                    .build(),
+                when(
+                    reveal_ready(false),
+                    vec![
+                        fine("Select 2 hidden cards or 1 player to observe")
+                            .centered()
+                            .tone(Tone::Warning),
+                    ],
+                ),
+                when(
+                    reveal_ready(true),
+                    vec![
+                        fine("Confirm the selection?")
+                            .centered()
+                            .tone(Tone::Success),
+                    ],
+                ),
+                when(
+                    reveal_ready(true),
+                    vec![primary_action("Reveal Card", act(WITNESS_REVEAL_ACTION)).full_width()],
+                ),
+            ],
+        )
         .build()
 }
 
 fn witness_reveal_success_visual() -> WorkflowVisual {
     WorkflowVisualBuilder::new("witness_reveal_success")
-        .tile(vec![
-            // Header
-            WorkflowDisplayBuilder::new("w-full flex flex-col items-center justify-center py-8 space-y-6")
-                .div(vec![
-                    WorkflowDisplayBuilder::new("text-4xl animate-pulse mb-2 text-center")
-                        .text("🔎")
-                        .build(),
-                    WorkflowDisplayBuilder::new("text-xl font-halloween text-center text-green-400")
-                        .text("Insight Unveiled")
-                        .build(),
-                ])
-                .build(),
-
-            // ------------------------------------------------------------
-            // CASE A: Player reveal (Avatar + Role Card)
-            // ------------------------------------------------------------
-            WorkflowDisplayBuilder::new("w-full")
-                .condition(
+        .midnight_page(
+            PageWidth::Narrow,
+            vec![
+                column(
+                    Gap::Tight,
+                    vec![
+                        icon("search", IconSize::Large).tone(Tone::Green),
+                        title("Insight Unveiled")
+                            .themed()
+                            .centered()
+                            .tone(Tone::Green),
+                    ],
+                )
+                .align(Align::Center),
+                when(
                     NodeCondition::ResponseExists("revealed_player".into()),
-                    vec![
-                        WorkflowDisplayBuilder::new("w-full max-w-md mx-auto space-y-6")
-                            .div(vec![
-                                // 1. The Player Identity
-                                WorkflowDisplayBuilder::new("bg-neutral-900/80 border border-white/10 rounded-md p-3 flex items-center gap-3")
-                                    .div(vec![
-                                        WorkflowDisplayBuilder::new("size-10 rounded-full border border-green-500/30 bg-black/50 overflow-hidden shadow-[0_0_10px_rgba(34,197,94,0.2)]")
-                                            .image("{revealed_player.avatar_url}", "{revealed_player.name}")
-                                            .build(),
-                                        WorkflowDisplayBuilder::new("flex-1 min-w-0")
-                                            .div(vec![
-                                                WorkflowDisplayBuilder::new("text-xs font-mono text-white/50 uppercase tracking-widest")
-                                                    .text("Observed Player")
-                                                    .build(),
-                                                WorkflowDisplayBuilder::new("text-sm font-halloween text-white/90 truncate")
-                                                    .text("{revealed_player.name}")
-                                                    .build(),
-                                            ])
-                                            .build(),
-                                    ])
-                                    .build(),
-
-                                // 2. The Revealed Role Card
-                                WorkflowDisplayBuilder::new("w-full flex justify-center")
-                                    .div(vec![
-                                        WorkflowDisplay {
-                                            class: "pointer-events-none".into(),
-                                            r#type: role_card_display_for("revealed_role"),
-                                        }
-                                    ])
-                                    .build(),
-                            ])
-                            .build(),
-                    ],
-                )
-                .build(),
-
-            // ------------------------------------------------------------
-            // CASE B: Two hidden reveals (Side-by-side Cards)
-            // ------------------------------------------------------------
-            WorkflowDisplayBuilder::new("w-full")
-                .condition(
+                    vec![column(
+                        Gap::Normal,
+                        vec![
+                            list_row("{revealed_player.name}")
+                                .meta("Observed Player")
+                                .lead_with(vec![avatar(
+                                    "{revealed_player.avatar_url}",
+                                    "{revealed_player.name}",
+                                    Size::Medium,
+                                )]),
+                            role_card("revealed_role"),
+                        ],
+                    )],
+                ),
+                when(
                     NodeCondition::ResponseExists("revealed_hidden".into()),
-                    vec![
-                        WorkflowDisplayBuilder::new("w-full max-w-2xl mx-auto")
-                            .div(vec![
-                                WorkflowDisplayBuilder::new("text-center text-xs font-mono text-white/50 uppercase tracking-widest mb-4")
-                                    .text("Hidden Roles Revealed")
-                                    .build(),
-
-                                // Grid of 2 Cards
-                                WorkflowDisplayBuilder::new("w-full grid grid-cols-2 gap-4")
-                                    .list(
-                                        "revealed_hidden",
-                                        "item",
-                                        vec![
-                                            // Each item is just the full card display
-                                            WorkflowDisplayBuilder::new("w-full flex justify-center")
-                                                .div(vec![
-                                                    WorkflowDisplay {
-                                                        class: "pointer-events-none mx-auto".into(),
-                                                        // Note: 'item' is the wrapper { selected:..., card:... }
-                                                        // so we point to 'item.card'
-                                                        r#type: role_card_display_for("item.card"),
-                                                    }
-                                                ])
-                                                .build()
-                                        ],
-                                    )
-                                    .build(),
-                            ])
-                            .build(),
-                    ],
-                )
-                .build(),
-
-            // Footer
-            WorkflowDisplayBuilder::new("text-sm font-mono text-center text-white/50 mx-auto mt-8")
-                .text("The role is now revealed in the shadows.")
-                .build(),
-        ])
+                    vec![column(
+                        Gap::Normal,
+                        vec![
+                            eyebrow("Hidden Roles Revealed").centered(),
+                            // Each item wraps its card: { selected, card }.
+                            items(
+                                "revealed_hidden",
+                                "item",
+                                Layout::Grid {
+                                    columns: 2,
+                                    gap: Gap::Normal,
+                                    fixed: false,
+                                },
+                                vec![role_card("item.card")],
+                            ),
+                        ],
+                    )],
+                ),
+                fine("The role is now revealed in the shadows.").centered(),
+            ],
+        )
         .build()
 }
 

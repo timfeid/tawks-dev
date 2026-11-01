@@ -52,7 +52,7 @@
 
 {#if searchable}
   <Popover.Root bind:open>
-    <Popover.Trigger class={display.class}>
+    <Popover.Trigger>
         <div class="flex items-center gap-2 px-3 py-2 border rounded-md bg-background">
             <span class="text-muted-foreground italic text-sm">Search...</span>
         </div>

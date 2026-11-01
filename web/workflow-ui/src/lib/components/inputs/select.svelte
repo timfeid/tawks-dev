@@ -69,7 +69,7 @@
       ? false
       : evaluateCondition(input.input.readonly, inputs)}
   >
-    <Select.Trigger class="h-full w-full {select.class}">
+    <Select.Trigger class="h-full w-full">
       {#if selected}
         {#each select.selected_content || select.content as display}
           <WorkflowDisplay from="wf-select-selected" {workflow} {display} inputs={selected.inputs} />

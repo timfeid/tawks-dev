@@ -89,6 +89,12 @@ pub struct TitanSiege {
     pub attack: Attack,
     pub timer: f32,
     pub time: f32,
+    /// The yard's radius, wider than the one built for four on a bigger field.
+    pub radius: f32,
+    /// How much it can take, more when more raiders are swinging at it.
+    pub max_health: i32,
+    /// How much wider than the yard for four, for the size of the field.
+    size: f32,
     rng: StdRng,
     skills: std::collections::HashMap<u8, Skill>,
     placements: Option<Vec<Vec<u8>>>,
@@ -96,7 +102,12 @@ pub struct TitanSiege {
 
 impl TitanSiege {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
-        let spread = ground::ring(contestants.len().max(1), ARENA_RADIUS * 0.7, 0.4);
+        let size = crate::bout::crowd_scale(contestants.len());
+        let radius = ARENA_RADIUS * size;
+        // Twice the raiders would fell it twice as fast, so it gets the
+        // health of one titan per four of them and the siege runs as long.
+        let max_health = crate::bout::crowd_count(TITAN_HEALTH as usize, contestants.len()) as i32;
+        let spread = ground::ring(contestants.len().max(1), radius * 0.7, 0.4);
         let raiders = contestants
             .iter()
             .enumerate()
@@ -114,11 +125,14 @@ impl TitanSiege {
             x: 0.0,
             z: 0.0,
             facing: 0.0,
-            health: TITAN_HEALTH,
+            health: max_health,
             state: Move::Stalk,
             attack: Attack::Slam,
             timer: 2.0,
             time: 0.0,
+            radius,
+            max_health,
+            size,
             rng: StdRng::seed_from_u64(seed),
             skills: contestants
                 .iter()
@@ -209,7 +223,7 @@ impl TitanSiege {
             } else {
                 Attack::Slam
             }
-        } else if close > 12.0 {
+        } else if close > 12.0 * self.size {
             Attack::Charge
         } else if self.rng.random_bool(0.5) {
             Attack::Slam
@@ -282,7 +296,7 @@ impl TitanSiege {
         }
 
         let out = (self.x * self.x + self.z * self.z).sqrt();
-        let edge = ARENA_RADIUS - TITAN_RADIUS;
+        let edge = self.radius - TITAN_RADIUS;
         if out > edge && out > 0.01 {
             self.x = self.x / out * edge;
             self.z = self.z / out * edge;
@@ -324,9 +338,9 @@ impl Bout for TitanSiege {
         json!({
             "game": "titan",
             "rule": "Dodge the wind-up, then strike the core while the titan is winded.",
-            "radius": ARENA_RADIUS,
+            "radius": self.radius,
             "titan": TITAN_RADIUS,
-            "health": TITAN_HEALTH,
+            "health": self.max_health,
             "core": CORE_RANGE,
         })
     }
@@ -338,6 +352,7 @@ impl Bout for TitanSiege {
         self.time += dt;
 
         let core_open = self.open();
+        let radius = self.radius;
         let (titan_x, titan_z) = (self.x, self.z);
         for index in 0..self.raiders.len() {
             let seat = self.raiders[index].seat;
@@ -351,11 +366,11 @@ impl Bout for TitanSiege {
             if !raider.up() {
                 raider.down_for -= dt;
                 ground::step_runner(&mut raider.run, Stick::default(), dt, ground::RUN_SPEED);
-                ground::hold_inside(&mut raider.run, ARENA_RADIUS);
+                ground::hold_inside(&mut raider.run, radius);
                 continue;
             }
             ground::step_runner(&mut raider.run, input.stick, dt, ground::RUN_SPEED);
-            ground::hold_inside(&mut raider.run, ARENA_RADIUS);
+            ground::hold_inside(&mut raider.run, radius);
 
             // Strike the core: close enough, swinging, and the titan is winded.
             let close = raider.run.distance_to(titan_x, titan_z) <= TITAN_RADIUS + CORE_RANGE;
@@ -384,7 +399,7 @@ impl Bout for TitanSiege {
         ground::separate(&mut runners);
         for (raider, run) in self.raiders.iter_mut().zip(runners) {
             raider.run = run;
-            ground::hold_inside(&mut raider.run, ARENA_RADIUS);
+            ground::hold_inside(&mut raider.run, radius);
         }
 
         // Nobody walks through the titan.
@@ -470,7 +485,7 @@ impl Bout for TitanSiege {
                 "z": round(self.z),
                 "facing": round(self.facing),
                 "health": self.health,
-                "max_health": TITAN_HEALTH,
+                "max_health": self.max_health,
                 "state": match self.state {
                     Move::Stalk => "stalk",
                     Move::Winding => "winding",
@@ -497,5 +512,28 @@ impl Bout for TitanSiege {
 
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placements.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn raiders(count: u8) -> Vec<Contestant> {
+        (0..count).map(|seat| Contestant::bot(seat, 0.5)).collect()
+    }
+
+    #[test]
+    fn a_bigger_siege_gets_a_wider_yard_and_a_tougher_titan() {
+        let four = TitanSiege::new(&raiders(4), 1);
+        assert_eq!(four.radius, ARENA_RADIUS, "four play it as built");
+        assert_eq!(four.health, TITAN_HEALTH);
+        let eight = TitanSiege::new(&raiders(8), 1);
+        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
+        assert_eq!(eight.health, TITAN_HEALTH * 2, "and twice the titan to chop down");
+        assert!(eight.raiders.iter().any(|r| r.run.distance_to(0.0, 0.0) > ARENA_RADIUS * 0.75));
+        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
+        assert_eq!(eight.setup()["health"], json!(TITAN_HEALTH * 2));
+        assert_eq!(eight.snapshot()["titan"]["max_health"], json!(TITAN_HEALTH * 2));
     }
 }

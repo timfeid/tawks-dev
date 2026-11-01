@@ -21,6 +21,11 @@ export class CardFactory {
     string,
     THREE.ShaderMaterial | THREE.MeshBasicMaterial
   >();
+  private static readonly MAX_IDLE_CARD_MATERIALS = 64;
+  private cardMaterialKeys = new Map<string, string>();
+  private cardMaterialUsers = new Map<string, number>();
+  private idleCardMaterials = new Set<string>();
+  private cardTextureUsers = new Map<string, number>();
   private wearTexture: THREE.Texture;
   private wearTexture2: THREE.Texture;
   private rarityTextures: Record<string, THREE.Texture> = {};
@@ -411,8 +416,10 @@ export class CardFactory {
       ? card.visual_spec.wear
       : 0.4 + this.hashId(card.id) * 0.6;
     const key = `${texture.uuid}:${isSick}:${isUsable}:${card.rarity}:${card.visual_spec?.seed ?? 0}:${defaultWear}:${card.visual_spec?.holo ?? false}`;
+    this.retainCardMaterial(card.id, key);
 
     if (this.materialCache.has(key)) {
+      this.evictIdleCardMaterials();
       return this.materialCache.get(key)! as any;
     }
 
@@ -449,7 +456,44 @@ export class CardFactory {
     mat.uniforms.showBadge.value = card.rarity === 'public' ? 0.0 : 1.0;
 
     this.materialCache.set(key, mat);
+    this.cardTextureUsers.set(texture.uuid, (this.cardTextureUsers.get(texture.uuid) ?? 0) + 1);
+    this.evictIdleCardMaterials();
     return mat;
+  }
+
+  private retainCardMaterial(cardId: string, key: string) {
+    const prev = this.cardMaterialKeys.get(cardId);
+    if (prev === key) return;
+    this.cardMaterialKeys.set(cardId, key);
+    this.cardMaterialUsers.set(key, (this.cardMaterialUsers.get(key) ?? 0) + 1);
+    this.idleCardMaterials.delete(key);
+    if (prev === undefined) return;
+    const left = (this.cardMaterialUsers.get(prev) ?? 1) - 1;
+    if (left > 0) {
+      this.cardMaterialUsers.set(prev, left);
+      return;
+    }
+    this.cardMaterialUsers.delete(prev);
+    this.idleCardMaterials.add(prev);
+  }
+
+  private evictIdleCardMaterials() {
+    for (const key of this.idleCardMaterials) {
+      if (this.idleCardMaterials.size <= CardFactory.MAX_IDLE_CARD_MATERIALS) break;
+      this.idleCardMaterials.delete(key);
+      const mat = this.materialCache.get(key);
+      this.materialCache.delete(key);
+      if (!(mat instanceof THREE.ShaderMaterial)) continue;
+      const texture = mat.uniforms.tDiffuse.value as THREE.Texture;
+      mat.dispose();
+      const users = (this.cardTextureUsers.get(texture.uuid) ?? 1) - 1;
+      if (users > 0) {
+        this.cardTextureUsers.set(texture.uuid, users);
+        continue;
+      }
+      this.cardTextureUsers.delete(texture.uuid);
+      this.textureUtils.releaseCardTexture(texture);
+    }
   }
 
   public getBackMaterial(): THREE.MeshBasicMaterial {

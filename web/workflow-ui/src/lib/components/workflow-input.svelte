@@ -45,13 +45,16 @@
 
   const formState = getContext<{ version: number } | undefined>('form-state');
   let seenVersion = formState?.version ?? 0;
+  let seenField = '';
 
   // 2. The Sync Guard: Only update localValue from props if the user ISN'T typing
   $effect(() => {
     const serverValue = resolveValue(originalProps.inputs, originalProps.input.id);
     const version = formState?.version ?? 0;
-    if (version !== seenVersion) {
+    const field = `${originalProps.workflow.current_node_id}:${originalProps.input.id}`;
+    if (version !== seenVersion || field !== seenField) {
       seenVersion = version;
+      seenField = field;
       localValue = serverValue;
       return;
     }

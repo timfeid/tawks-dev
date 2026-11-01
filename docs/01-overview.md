@@ -1,6 +1,6 @@
 # What you can build on tawks
 
-Tawks is a community app. People gather in niches around shared interests, keep up with their own people in friend groups, talk in channels, hang out in lobbies and play games together. Most of what a user sees inside a channel is drawn from a **workflow**: a description of a page that a bot sends to tawks as data. Tawks renders that page on the web, on desktop and on mobile. Your bot never ships any client code.
+Tawks is a community app. People gather in hubs around shared interests, keep up with their own people in friend groups, talk in channels, hang out in lobbies and play games together. Most of what a user sees inside a channel is drawn from a **workflow**: a description of a page that a bot sends to tawks as data. Tawks renders that page on the web, on desktop and on mobile. Your bot never ships any client code.
 
 A bot is a program you write and run yourself, in your own repository, on your own machine or server. It connects to the hosted tawks at https://tawks.app, registers the pages and handlers it provides, and reacts when people use them.
 
@@ -8,19 +8,21 @@ This page explains the concepts you build against. [Your first bot](02-first-bot
 
 ## The community model
 
-Tawks splits what a Discord server does into two things: niches for interests, and friend groups for people. If you know Discord, the friend group is the closer match to a server.
+Tawks splits what a Discord server does into two things: hubs for interests, and friend groups for people. If you know Discord, the friend group is the closer match to a server.
 
-### Niches
+### Hubs
 
-A niche is a broad community built around an interest, such as hockey, cooking or word puzzles. Niches are meant to be big and open: one niche per topic, shared by everyone who cares about it, rather than one per circle of friends. That is where pages, puzzles, feeds and games live, and where people who don't know each other yet meet.
+A hub is a broad community built around an interest, such as hockey, cooking or word puzzles. Hubs are meant to be big and open: one hub per topic, shared by everyone who cares about it, rather than one per circle of friends. That is where pages, puzzles, feeds and games live, and where people who don't know each other yet meet.
 
-A niche has a name, a logo, an owner and a short slug that appears in its URLs, for example `https://tawks.app/niche/<niche slug>/<channel slug>`.
+A hub has a name, a logo, an owner and a short slug that appears in its URLs, for example `https://tawks.app/niche/<niche slug>/<channel slug>`.
 
-- **Public niches** are listed in Explore. Anyone with an account can join one with a single click, and guests can look around without joining.
-- **Private niches** are not listed and can't be joined from Explore. The only way in is an invite from someone who manages the niche.
-- **Creating niches.** People can't create niches themselves, public or private. The tawks team creates them, so that each topic has one home instead of many small copies.
+The API and the URLs still call a hub a niche, so you will see `niche_id`, `niche_slug` and procedures under `niche` wherever these docs show code.
 
-The niche owner, and anyone with an admin role, manages the niche from its settings: the profile, roles, channels, invites, flairs and emojis.
+- **Public hubs** are listed in Explore. Anyone with an account can join one with a single click, and guests can look around without joining.
+- **Private hubs** are not listed and can't be joined from Explore. The only way in is an invite from someone who manages the hub.
+- **Creating hubs.** People can't create hubs themselves, public or private. The tawks team creates them, so that each topic has one home instead of many small copies.
+
+The hub owner, and anyone with an admin role, manages the hub from its settings: the profile, roles, channels, invites, flairs and emojis.
 
 ### Friend groups
 
@@ -30,13 +32,13 @@ A friend group is a small, invite-only space for people who already know each ot
 - Its own custom emojis and invite links.
 - A place in your conversations, next to direct messages. A direct message is a friend group with exactly two people in it.
 
-Friend groups don't have channels. When a group wants to play, its members open a lobby in a niche channel together, and the lobby shows them side by side as a group. Recordings of the games they play there are shared with the group.
+Friend groups don't have channels. When a group wants to play, its members open a lobby in a hub channel together, and the lobby shows them side by side as a group. Recordings of the games they play there are shared with the group.
 
-For a bot this means your pages and games always run in niche channels, and friend groups are how people bring their friends to them. Design for strangers meeting in a public niche and for a group of friends who arrive together.
+For a bot this means your pages and games always run in hub channels, and friend groups are how people bring their friends to them. Design for strangers meeting in a public hub and for a group of friends who arrive together.
 
 ### Categories and channels
 
-A niche groups its channels into categories in the sidebar. Every channel has a type, which mostly decides its sidebar icon:
+A hub groups its channels into categories in the sidebar. Every channel has a type, which mostly decides its sidebar icon:
 
 | Type | Typical use |
 | --- | --- |
@@ -46,36 +48,36 @@ A niche groups its channels into categories in the sidebar. Every channel has a 
 | `tiles` | Interactive pages. Most daily puzzles and game channels use this type. |
 | `multi_media` | Audio and media channels. |
 
-What a channel actually shows comes from the **workflow** attached to it. A niche admin picks that workflow in the channel's settings, and any workflow your bot has registered appears in the list. When someone opens the channel, tawks starts your workflow for that person and passes it the channel and niche it is running in, plus who is viewing.
+What a channel actually shows comes from the **workflow** attached to it. A hub admin picks that workflow in the channel's settings, and any workflow your bot has registered appears in the list. When someone opens the channel, tawks starts your workflow for that person and passes it the channel and hub it is running in, plus who is viewing.
 
-![The Connections channel in the Tawks niche: the channel list on the left, and the daily puzzle a bot draws with a workflow on the right](https://tawks-dev.vercel.app/img/docs/niche-page.webp)
+![The Linkup channel in the Tawks hub: the channel list on the left, and the daily puzzle a bot draws with a workflow on the right](https://docs.tawks.app/img/docs/niche-page.webp)
 
-The Tawks niche, opened as a guest. The sidebar lists its channels by category, and the Connections puzzle in the middle is a page a bot describes with a workflow.
+The Tawks hub, opened as a guest. The sidebar lists its channels by category, and the Linkup puzzle in the middle is a page a bot describes with a workflow.
 
 ### Roles and permissions
 
-Each niche has roles, ordered by position, with an `everyone` role that applies to all members. Roles carry permissions, and a channel can override them per role or per member. The permissions that matter most when you set up a bot are:
+Each hub has roles, ordered by position, with an `everyone` role that applies to all members. Roles carry permissions, and a channel can override them per role or per member. The permissions that matter most when you set up a bot are:
 
 | Permission | What it lets someone do |
 | --- | --- |
-| Administrator | Change any niche setting |
+| Administrator | Change any hub setting |
 | Manage Channels | Edit a channel's name, workflow and lobby settings |
 | Manage Roles | Edit roles and channel permission overrides |
-| Manage Niche Profile | Edit the niche name, logo and default channel |
+| Manage Hub Profile | Edit the hub name, logo and default channel |
 
-The niche owner passes every niche-level check. To attach your bot's workflow to a channel you need to own the niche or hold Manage Channels in it.
+The hub owner passes every hub-level check. To attach your bot's workflow to a channel you need to own the hub or hold Manage Channels in it.
 
-A bot account is a user like any other. When it calls the API, it gets the same answers a person with the same memberships would get. If your bot posts in a niche's chat, it needs to be a member of that niche.
+A bot account is a user like any other. When it calls the API, it gets the same answers a person with the same memberships would get. If your bot posts in a hub's chat, it needs to be a member of that hub.
 
 ### Guests
 
-Visitors who have not signed up browse tawks as anonymous guests. Guests can open channels and play, but actions that write to a niche need a signed-in account. Your workflow can tell the two apart: each instance carries an `$anonymous` flag next to the viewing user.
+Visitors who have not signed up browse tawks as anonymous guests. Guests can open channels and play, but actions that write to a hub need a signed-in account. Your workflow can tell the two apart: each instance carries an `$anonymous` flag next to the viewing user.
 
 ### Lobbies
 
 A lobby is a temporary room inside a channel where a group of people play or watch something together. It has an owner, its own chat and voice, and room for one running game at a time.
 
-People can open lobbies in any channel where the "Members can create lobbies" setting is on. A lobby's game menu lists the first-party games and any [game activities](07-tables.md) the niche has turned on, so the way to put your game in lobbies is to make it an activity. See [Building games](06-games.md).
+People can open lobbies in any channel where the "Members can create lobbies" setting is on. A lobby's game menu lists the first-party games and any [game activities](07-tables.md) the hub has turned on, so the way to put your game in lobbies is to make it an activity. See [Building games](06-games.md).
 
 ## Workflows: UI as data
 
@@ -102,7 +104,7 @@ That full id is what appears in the channel settings list and what a channel sto
 ## What you can build
 
 - **Channel pages.** A workflow attached to a channel becomes that channel's page: standings, a schedule, a dashboard, a form. Pages can update live while people have them open.
-- **Daily puzzles.** A page that shows the same puzzle to everyone each day, keeps each player's progress in their own instance, and offers a share card when they finish. Several of the puzzles in the Tawks niche are built this way.
+- **Daily puzzles.** A page that shows the same puzzle to everyone each day, keeps each player's progress in their own instance, and offers a share card when they finish. Several of the puzzles in the Tawks hub are built this way.
 - **Chat commands and replies.** Your bot receives chat messages over the events connection and can reply with the same API calls people use. A bot that answers `!ping` with `pong` is a few lines; see [Writing a bot](03-bots.md).
 - **Notifications.** A bot can send push and in-app notifications on behalf of a channel. Users opt in per kind from the channel's bell menu, so they only get what they asked for.
 - **Lobby games.** A workflow that runs inside a lobby for a group of players, from turn-based card games to real-time 3D tables. See [Building games](06-games.md). A game that needs its own screen, such as a canvas or 3D game, can ship it as a web app: see [Game activities](07-tables.md).
@@ -135,9 +137,9 @@ The Rust SDK, the `tawks-bot` crate, handles all of this for you: the auth heade
 
 The bot platform is open to outside developers as a preview. A few things are still handled by hand:
 
-- **Bot accounts.** Making bots is by invitation: a niche's admins grant the Create Bots permission, and you make the bot and its tokens under Settings, then Bots. Each person owns one bot unless the tawks team raises the limit. Ask in `dev-chat` if you need access.
+- **Bot accounts.** Making bots is by invitation: a hub's admins grant the Create Bots permission, and you make the bot and its tokens under Settings, then Bots. Each person owns one bot unless the tawks team raises the limit. Ask in `dev-chat` if you need access.
 - **SDKs.** The Rust SDK (`tawks-bot`), the JavaScript SDK (`@tawks/bot`), the game framework and the TypeScript packages are open source in the [tawks-dev repository](https://github.com/timfeid/tawks-dev), with examples and a local stand-in for tawks. They are not on crates.io or npm yet, so depend on them by git.
-- **Test niches and channels.** Only the tawks team creates niches, and that includes private ones. Ask in `dev-chat` for a private niche to test in; once you own it you can add channels, attach your workflows and invite testers from its settings.
-- **Lobby picker.** The in-lobby game menu lists first-party games and the game activities a niche has turned on. A game built from workflow displays starts from a channel page instead.
+- **Test hubs and channels.** Only the tawks team creates hubs, and that includes private ones. Ask in `dev-chat` for a private hub to test in; once you own it you can add channels, attach your workflows and invite testers from its settings.
+- **Lobby picker.** The in-lobby game menu lists first-party games and the game activities a hub has turned on. A game built from workflow displays starts from a channel page instead.
 - **Tawks score.** Awarding tawks score is limited to first-party games for now.
 - **First-party games.** Three lobby games that ship with tawks are open source in the [tawks-dev repository](https://github.com/timfeid/tawks-dev) under `games/`: Cards, Midnight and Tracklines. They run on the same game framework as your bots, so you can read real games end to end.

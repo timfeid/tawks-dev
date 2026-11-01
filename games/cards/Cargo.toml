@@ -6,6 +6,7 @@ description = "Cards, the collectible card game that runs in tawks lobbies, with
 license = "MIT"
 
 [dependencies]
+tawks-telemetry = { path = "../../sdk/telemetry", features = ["tracing"] }
 game-framework = { path = "../../sdk/framework" }
 workflow = { package = "workflow-model", path = "../../sdk/workflow-model" }
 tawks-bot = { path = "../../sdk/bot" }

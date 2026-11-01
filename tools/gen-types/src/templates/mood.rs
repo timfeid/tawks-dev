@@ -1,16 +1,10 @@
 use serde_json::json;
+use workflow_model::CreateWorkflowDefinition;
 use workflow_model::builder::{
-    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowDisplayBuilder, WorkflowNodeBuilder,
-    WorkflowVisualBuilder,
+    Cond, WorkflowActionBuilder, WorkflowDefinitionBuilder, WorkflowNodeBuilder, WorkflowVisualBuilder,
 };
 use workflow_model::transform::TransformOp;
-use workflow_model::{CreateWorkflowDefinition, WorkflowDisplay};
-
-fn button(label: &str, action: &str) -> WorkflowDisplay {
-    WorkflowDisplayBuilder::new("")
-        .button(vec![WorkflowDisplayBuilder::new("").text(label).build()], None, action, "default", "default")
-        .build()
-}
+use workflow_model::ui::*;
 
 fn set_mood(action: &str, mood: &str) -> workflow_model::WorkflowAction {
     WorkflowActionBuilder::new(action)
@@ -22,25 +16,13 @@ fn set_mood(action: &str, mood: &str) -> workflow_model::WorkflowAction {
 /// pick what to show.
 pub fn definition() -> CreateWorkflowDefinition {
     let page = WorkflowVisualBuilder::new("page")
-        .block(
-            "mx-auto flex max-w-md flex-col gap-4 p-8",
+        .page(
+            PageWidth::Narrow,
             vec![
-                WorkflowDisplayBuilder::new("text-xl font-semibold").text("How is your day?").build(),
-                WorkflowDisplayBuilder::new("flex gap-2")
-                    .div(vec![button("Good", "good"), button("Meh", "meh")])
-                    .build(),
-                WorkflowDisplayBuilder::new("")
-                    .condition(
-                        Cond::response_equals("mood", json!("good")),
-                        vec![WorkflowDisplayBuilder::new("text-primary").text("Glad to hear it.").build()],
-                    )
-                    .build(),
-                WorkflowDisplayBuilder::new("")
-                    .condition(
-                        Cond::response_equals("mood", json!("meh")),
-                        vec![WorkflowDisplayBuilder::new("text-muted-foreground").text("Tomorrow is another one.").build()],
-                    )
-                    .build(),
+                heading("How is your day?"),
+                row(Gap::Tight, vec![secondary_action("Good", act("good")), secondary_action("Meh", act("meh"))]),
+                when(Cond::response_equals("mood", json!("good")), vec![body("Glad to hear it.").tone(Tone::Primary)]),
+                when(Cond::response_equals("mood", json!("meh")), vec![body("Tomorrow is another one.")]),
             ],
         )
         .build();

@@ -1,10 +1,10 @@
 use std::{future::Future, time::Duration};
 
 use tokio::{select, time::sleep};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::{
-    TawksBot, shutdown_token,
+    TawksBot, connection_failed, shutdown_token,
     types::{BotOptions, Event},
     with_jitter,
 };
@@ -30,7 +30,7 @@ where
                 match event {
                     Event::Connect => info!("connected"),
                     Event::Disconnect => warn!("disconnected"),
-                    Event::Error { error } => error!(%error, "event stream error"),
+                    Event::Error { error } => warn!(%error, "event stream error"),
                     Event::Message { .. } => {}
                 }
             })
@@ -41,7 +41,7 @@ where
             _ = shutdown.cancelled() => return Ok(()),
             result = session => match result {
                 Ok(()) => backoff = Duration::from_secs(1),
-                Err(error) => error!(%error, "bot stopped"),
+                Err(error) => connection_failed(&error, "bot stopped"),
             },
         }
 

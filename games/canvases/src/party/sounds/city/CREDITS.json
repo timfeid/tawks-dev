@@ -1,0 +1,48 @@
+{
+  "assets": [
+    {
+      "file": "street.ogg",
+      "title": "City Street",
+      "author": "NachtmahrTV",
+      "source": "https://freesound.org/people/NachtmahrTV/sounds/553248/",
+      "download": "https://cdn.freesound.org/previews/553/553248_5620304-hq.mp3",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modifications": "Trimmed, filtered, loudness normalized, seam crossfaded and encoded as Vorbis.",
+      "sha256": "71cc62eb2ba670a415c0bd5df427f02c9d4ea037c507609d31800944c6fd15f6"
+    },
+    {
+      "file": "crowd.ogg",
+      "title": "Busy Room Ambience / People talking in background #2",
+      "author": "Breviceps",
+      "source": "https://freesound.org/people/Breviceps/sounds/465699/",
+      "download": "https://cdn.freesound.org/previews/465/465699_9159316-hq.mp3",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modifications": "Trimmed, filtered, loudness normalized, seam crossfaded and encoded as Vorbis.",
+      "sha256": "931ed14e2bbe07c9d27165909b88323cce06f630cadb7186918bef4b69b76ae7"
+    },
+    {
+      "file": "hum.ogg",
+      "title": "The Shop \u2014 convenience store drinks fridge drone",
+      "author": "LEGIT Audio",
+      "source": "https://opengameart.org/content/the-shop",
+      "download": "https://opengameart.org/sites/default/files/01_-_legit_audio_-_theshopcollection_convenience_store_drinks_fridge_drone.mp3",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modifications": "Trimmed, filtered, loudness normalized, seam crossfaded and encoded as Vorbis.",
+      "sha256": "603a34a50a6d60c22650f44092acfe4cefd5f220be717efbd4e939013b0f3fa1"
+    },
+    {
+      "file": "siren.ogg",
+      "title": "Police siren.mp3",
+      "author": "MultiMax2121",
+      "source": "https://freesound.org/people/MultiMax2121/sounds/156869/",
+      "download": "https://cdn.freesound.org/previews/156/156869_2538033-hq.mp3",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modifications": "Twelve-second excerpt, filtered, normalized and faded.",
+      "sha256": "b9d00b992701c4b3f49f88ea23ac2dd0f9aae493dadf01ff7ef8112db16eb34b"
+    }
+  ]
+}

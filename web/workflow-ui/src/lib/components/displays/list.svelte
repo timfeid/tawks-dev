@@ -27,7 +27,7 @@
 </script>
 
 {#if listDisplay}
-  <div class={display.class}>
+  <div class="flex flex-col gap-2">
     {#each items as item}
       {#each listDisplay.content as displayItem}
         <WorkflowDisplay

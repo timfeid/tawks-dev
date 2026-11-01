@@ -25,7 +25,7 @@ function faceTexture(id: number) {
   const spec = card(id);
   const dark = ['#facc15', '#7dd3fc', '#a3e635', '#fb923c'].includes(cardColor(spec));
   return textTexture(
-    [spec.title, `$${spec.value}`, ...wrap(tableText(spec), 16)],
+    [...wrap(spec.title, 16), `$${spec.value}`, ...wrap(tableText(spec), 16)],
     dark ? '#0f172a' : '#f8fafc',
     cardColor(spec),
   );
@@ -118,7 +118,7 @@ export class LandlordTable {
       }
     }
     const count = view?.deck ?? 0;
-    this.deck.scale.y = Math.max(1, count * 1.2);
+    this.deck.scale.y = Math.max(1, count * 0.1);
     this.deck.position.y = TABLE_TOP + 0.02 * this.deck.scale.y;
     this.deck.visible = count > 0;
     const top = view?.discard_top ?? -1;

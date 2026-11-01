@@ -17,7 +17,7 @@ use tawks_bot::workflow::builder::{
 };
 use tawks_bot::{Activity, TawksBot, shutdown_token, with_jitter};
 use tokio::{select, time::sleep};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use game::{Action, Input, TicTacToe};
 
@@ -46,10 +46,9 @@ async fn register_routes(engine: Arc<GameEngine<TicTacToe>>) -> Result<Routes> {
 
 fn workflow(routes: &Routes) -> CreateWorkflowDefinition {
     let board = WorkflowNodeBuilder::new("Tic-tac-toe")
-        .layout("min-h-screen w-full relative")
         .visual(
             WorkflowVisualBuilder::new("board")
-                .tile(vec![WorkflowDisplayBuilder::new("absolute inset-0").activity("game", "input").build()])
+                .tile(vec![WorkflowDisplayBuilder::new().activity("game", "input").build()])
                 .build(),
         )
         .build();
@@ -74,7 +73,7 @@ async fn on_event(event: Event) {
     match event {
         Event::Connect => info!("connected"),
         Event::Disconnect => warn!("disconnected"),
-        Event::Error { error } => error!(%error, "event stream error"),
+        Event::Error { error } => warn!(%error, "event stream error"),
         Event::Message { .. } => {}
     }
 }
@@ -123,7 +122,7 @@ async fn main() -> Result<()> {
             _ = shutdown.cancelled() => return Ok(()),
             result = session => {
                 if let Err(error) = result {
-                    error!(%error, "bot stopped");
+                    tawks_bot::connection_failed(&error, "bot stopped");
                 }
             }
         }
