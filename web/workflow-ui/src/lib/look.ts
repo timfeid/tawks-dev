@@ -379,6 +379,24 @@ export const chipToggle = {
   on: 'inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/15 py-1.5 pr-3 pl-2.5 text-sm font-medium text-foreground transition-colors hover:bg-primary/20',
 };
 
+/** Words wrapped on a shared baseline, each drawn at one of five steps by its weight (0 to 1). */
+export const wordCloud = {
+  box: 'flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1.5 leading-tight',
+  word: 'rounded-sm transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none',
+  steps: [
+    'text-xs font-medium text-muted-foreground/70',
+    'text-sm font-medium text-muted-foreground',
+    'text-base font-semibold text-foreground/80',
+    'text-lg font-semibold tracking-tight text-foreground',
+    'text-xl font-bold tracking-tight text-primary',
+  ],
+};
+
+export function wordStep(weight: unknown): string {
+  const w = typeof weight === 'number' && Number.isFinite(weight) ? Math.min(Math.max(weight, 0), 1) : 0;
+  return wordCloud.steps[Math.min(wordCloud.steps.length - 1, Math.floor(w * wordCloud.steps.length))];
+}
+
 /** A link's thumbnail, beside its content on the right. */
 export const thumb = 'size-20 shrink-0 rounded-xl bg-foreground/5 object-cover sm:size-26';
 
