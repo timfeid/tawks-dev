@@ -200,8 +200,23 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     }
   }
   if(costume?.gloves) {
-    const fabric=costume.gloves==='gloves-hockey'?cloth('#223650'):materials.accent;
-    arms.forEach((shoulder,i)=>{const glove=mesh(new THREE.SphereGeometry(0.112,14,10),fabric,shoulder);glove.position.y=-ARM_REACH;glove.scale.y=1.15;limbs[i].ends.push(glove);});
+    const hockey=costume.gloves==='gloves-hockey';
+    arms.forEach((shoulder,i)=>{
+      const side=i===0?-1:1;
+      const glove=new THREE.Group();glove.position.y=-ARM_REACH;shoulder.add(glove);limbs[i].ends.push(glove);
+      const piece=(geometry:THREE.BufferGeometry,material:THREE.Material,x:number,y:number,z:number)=>{const part=mesh(geometry,material,glove);part.position.set(x,y,z);return part;};
+      if(hockey) {
+        const navy=cloth('#223650');
+        piece(new THREE.BoxGeometry(0.21,0.2,0.19),navy,0,-0.02,0.01);
+        for(const y of [-0.075,-0.025]) piece(new THREE.CylinderGeometry(0.04,0.04,0.215,10),cloth('#2d4566'),0,y,0.09).rotation.z=Math.PI/2;
+        piece(new THREE.CylinderGeometry(0.15,0.125,0.11,16),navy,0,0.115,0);
+        piece(new THREE.CylinderGeometry(0.152,0.152,0.026,16),cloth('#f2f2f2'),0,0.13,0);
+      } else {
+        piece(new THREE.SphereGeometry(0.105,14,10),materials.accent,0,-0.015,0).scale.set(1,1.2,0.85);
+        piece(new THREE.SphereGeometry(0.045,10,8),materials.accent,-side*0.075,0.015,0.04);
+        piece(new THREE.TorusGeometry(0.083,0.032,8,20),cloth('#f1ece0'),0,0.09,0).rotation.x=Math.PI/2;
+      }
+    });
   }
   // Extras sit on the round head; once the bigger pumpkin is on, they move out to its face and below its chin.
   const extras=new THREE.Group();extras.name='worn-head-extras';
@@ -306,8 +321,10 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     // The pumpkin hangs lower than the old head, so the bowtie drops to just under its chin.
     const chin=head.position.y-pumpkin.size.y/2;
     if(chin<0.98) {
-      const y=Math.max(0.6,chin-0.03);
-      const surface=0.95*Math.sqrt(Math.max(0,0.42*0.42-((y-0.55)/1.08)**2));
+      const y=Math.max(0.6,chin-0.07);
+      // A shirt sits proud of the body, so the bowtie rests on the shirt's front instead of inside it.
+      const [radius,depth]=costume?.shirt?[0.445,0.97]:[0.42,0.95];
+      const surface=depth*Math.sqrt(Math.max(0,radius*radius-((y-0.55)/1.08)**2));
       neckwear.position.set(0,y,surface+0.04);
     }
   }) ?? Promise.resolve());
