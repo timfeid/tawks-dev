@@ -1,0 +1,47 @@
+Tawkathon pets: recoloured Quaternius cute monsters, 2026-11-01
+
+Source
+Pack: Textured Cute Monster Pack ("Cute Animated Monsters - Aug 2020")
+Author: Quaternius (https://quaternius.com, https://www.patreon.com/quaternius)
+Page: https://opengameart.org/content/textured-cute-monster-pack
+Archive: https://opengameart.org/sites/default/files/cute_animated_monsters_-_aug_2020.zip
+Archive SHA-256: 844824c04936a9af954ee82011f98ad8c14ba291a20a0dd0b83c172764ba0eb2
+License: CC0 1.0 Universal (public domain dedication), as listed on the
+OpenGameArt page posted by quaternius on June 18, 2021. The archive itself
+carries no license file; LICENSE-Quaternius.txt reproduces the author's CC0
+notice from his other OpenGameArt releases. CC0 needs no attribution; it is
+recorded here for provenance. Verified November 1, 2026.
+
+The creatures are the author's own generic designs (a dragon, a penguin, a
+cactus, a bee and a pig); none is derived from an existing franchise.
+
+Files
+| File | Pet | Source blend | Source texture | Blend SHA-256 | Texture SHA-256 |
+| --- | --- | --- | --- | --- | --- |
+| pet-ember.glb | Ember (Blaze) | Blends/YellowDragon.blend | Textures/YellowDragon_Texture.png | 4dd350db19f0c18b416271435623169ac9a03924cab85dd181bee6f269d5ad81 | 481d03759b3c2fbecc2c47f261f202e2c38ed059e274a328b8b23fbdf9f92d0d |
+| pet-puddle.glb | Puddle (Splash) | Blends/Penguin.blend | Textures/Penguin_Texture.png | ceb8a13ff22c01c741331df2fc70efef7f5c78fb727d259430bc4fa817132af0 | 5c65fc9c7df34b754b7e38796306c7a61e17e8637839161cb1f774b67bed0bf0 |
+| pet-sprout.glb | Sprout (Bloom) | Blends/Cactus.blend | Textures/Cactus_Texture.png | c6dc7c5dad19b10d67b01c7f0f60c70e91e6cc39e9d51120bbc9df1cc540cf47 | 25216e5ccbe726e3bb2678fad8b78abf4712d4c7d73b1807f7206ac795e26b0f |
+| pet-fizz.glb | Fizz (Spark) | Blends/Bee.blend | Textures/Bee_Texture.png | 1891011756bf2c57f82937c2dc1aec018427a77dfe1098aea28aae9b0399f31c | 69ce7f8dad2c92da0b348a1a29a9fb91cc556600ddb49ca9c265a0815fc82242 |
+| pet-mochi.glb | Mochi (Dream) | Blends/Pig.blend | Textures/Pig_Texture.png | 8b5e05a2db6214036a7ba00b9d72be52d682e0d6734be8970771714ac1e793db | 2ab083aba927b75a57b40c5d03a9d93e94b32f27b049ed07638bdedf47ddad26 |
+
+Modifications
+- Texture repainted into flat colour regions matching each pet's catalog body
+  and accent colours (rules in recolour.json), shrunk from 512 to 256 px and
+  embedded in the GLB. Eyes, mouths and teeth keep the original layout.
+  Ember: orange body, gold belly and horns, deep orange wings.
+  Puddle: blue body, pale blue belly, gold beak and feet.
+  Sprout: green body, pink flower, cream spines.
+  Fizz: gold and dark stripes, pale wings.
+  Mochi: pink body, deeper pink ears and snout, cream teeth.
+- Materials replaced by one plain PBR material per pet; the app draws it
+  with toon shading.
+- Animations trimmed and renamed: Idle (the pack's Idle, or Flying for the
+  dragon and bee), Cheer (Dance, or Bite_Front for flyers) and Hop (Jump,
+  where present). All other clips and non-character objects are dropped.
+- Geometry, rig and skin weights are unchanged (840 to 1,400 vertices, under
+  1,600 triangles, 5 to 17 bones). Each GLB is 115 to 160 KB.
+
+Reproduce
+build-pets.py and recolour.json in this folder rebuild all five GLBs from the
+archive with Blender 4.2 (the bpy module); the command is in the script header.
+Copies of the GLBs live in apps/tawkathon-native/assets/pets for the native game.

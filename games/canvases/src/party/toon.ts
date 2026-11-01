@@ -20,3 +20,7 @@ function ramp() {
 /** The three-step shading every party character is drawn with. */
 export const toon = (color: string) =>
   new THREE.MeshToonMaterial({ color, gradientMap: ramp() });
+
+/** Toon shading over a painted texture, for authored models such as the pets. */
+export const toonTextured = (map: THREE.Texture | null) =>
+  new THREE.MeshToonMaterial({ map, gradientMap: ramp() });

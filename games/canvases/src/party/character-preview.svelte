@@ -9,9 +9,10 @@
   import {bodyWidth} from './costumes/body-build';
   import {focusBounds, type FocusSlot} from './costumes/framing';
   import type {FaceReaction} from './reactions/face';
+  import {buildPet, type PetRig} from './pets/pet-model';
 
-  /** `compact` drops the caption and fills its box, for a profile card; `stage` backs a compact camera off so the whole platform shows; `paused` holds a still frame instead of animating; `focus` frames a compact view on where an item is worn; `playing` puts a controller in their hands; `bag` false leaves the carried bag off; `platform` false drops the round base for a stand drawn around it; `reaction` holds that face; `hoverReaction` makes the look's own reaction when the pointer comes over, and `reacting` when it turns true. */
-  let { character, others = [], compact = false, pose = 'idle', stage = false, paused = false, focus = null, playing = false, bag = true, platform = true, reaction = null, hoverReaction = false, reacting = false }: { character: CharacterDef | null; others?: {name:string;character:CharacterDef}[]; compact?: boolean; pose?: Pose; stage?: boolean; paused?: boolean; focus?: FocusSlot | null; playing?: boolean; bag?: boolean; platform?: boolean; reaction?: FaceReaction | null; hoverReaction?: boolean; reacting?: boolean } = $props();
+  /** `compact` drops the caption and fills its box, for a profile card; `stage` backs a compact camera off so the whole platform shows; `paused` holds a still frame instead of animating; `focus` frames a compact view on where an item is worn; `playing` puts a controller in their hands; `bag` false leaves the carried bag off; `platform` false drops the round base for a stand drawn around it; `reaction` holds that face; `hoverReaction` makes the look's own reaction when the pointer comes over, and `reacting` when it turns true; `pet` is the id of the pet standing at their feet. */
+  let { character, others = [], compact = false, pose = 'idle', stage = false, paused = false, focus = null, playing = false, bag = true, platform = true, reaction = null, hoverReaction = false, reacting = false, pet = null }: { character: CharacterDef | null; others?: {name:string;character:CharacterDef}[]; compact?: boolean; pose?: Pose; stage?: boolean; paused?: boolean; focus?: FocusSlot | null; playing?: boolean; bag?: boolean; platform?: boolean; reaction?: FaceReaction | null; hoverReaction?: boolean; reacting?: boolean; pet?: string | null } = $props();
   let platformMeshes: THREE.Object3D[] = [];
   $effect(() => {
     const show = platform;
@@ -30,6 +31,8 @@
   let unhang: (() => void) | null = null;
   let peerRigs = new Map<string, { appearance: string; rig: CharacterRig }>();
   let refit: (() => void) | null = null;
+  let companion: PetRig | null = null;
+  let companionId: string | null = null;
   let stillDrawn = false;
   // A close-up of a worn item leaves the bag off; at the side it would cover legs and feet.
   const carry = (group: THREE.Group, def: CharacterDef) => focus || !bag ? null : hangBag(group, buildBag(def.costume?.bag), 1.1);
@@ -84,6 +87,24 @@
     peerRigs.forEach((peer, identity) => { if (!retained.has(identity)) peer.rig.dispose(); });
     peerRigs = retained;
     refit?.();
+  });
+
+  // A close-up of a worn item has no room for it.
+  $effect(() => {
+    const wanted = ready && character && !focus ? pet : null;
+    untrack(() => {
+      if (wanted === companionId) return;
+      companion?.dispose(); companion = null; companionId = wanted;
+      if (wanted) {
+        companion = buildPet(wanted);
+        // At the platform's front edge on the side away from the bag, turned partly to its owner.
+        companion.group.rotation.y = -0.45;
+        scene.add(companion.group);
+        void companion.ready.then(() => refit?.());
+      }
+      stillDrawn = false;
+      refit?.();
+    });
   });
 
   $effect(() => {
@@ -156,6 +177,10 @@
         // Fit the head, body, and carried bag together, including narrow editor columns.
         const area = focus ? focusBounds(rig.group, focus) : null;
         const bounds = area ?? new THREE.Box3().setFromObject(rig.group);
+        if (companion && !area) {
+          companion.group.position.set(rig.group.position.x + 0.62, 0, 0.42);
+          bounds.union(new THREE.Box3().setFromObject(companion.group, true));
+        }
         if (stage && !area) bounds.union(new THREE.Box3().setFromObject(base));
         const size = bounds.getSize(new THREE.Vector3());
         const center = bounds.getCenter(new THREE.Vector3());
@@ -190,6 +215,10 @@
         controller?.update(still ? 0 : now / 1000);
         peers.forEach((peer,index)=>{peer.group.rotation.y=0.15;peer.animate('idle',still?0:now/1000+index*0.2,0)});
       }
+      if (companion && rig) {
+        companion.group.position.set(rig.group.position.x + 0.62, 0, 0.42);
+        companion.animate(still ? 0 : now / 1000, shown === 'cheer');
+      }
       renderer.render(scene, camera);
       stillDrawn = true;
     };
@@ -200,6 +229,7 @@
       seen.disconnect();
       controller?.dispose(); controller = null;
       refit=null;
+      companion?.dispose(); companion = null; companionId = null;
       rig?.dispose(); rig = null; heroKey = ''; unhang?.(); unhang = null;
       peerRigs.forEach(peer => peer.rig.dispose()); peerRigs.clear(); peers = [];
       base.geometry.dispose();

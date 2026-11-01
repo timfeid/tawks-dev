@@ -1,0 +1,13 @@
+[
+  ["alice", "pet-puddle"],
+  ["bob", "pet-fizz"],
+  ["carol", "pet-mochi"],
+  ["erin", "pet-sprout"],
+  ["frank", "pet-ember"],
+  ["USR-01K3KYMAXFHCHBJHRH9Z8XABDA", "pet-ember"],
+  ["USR-01K3KYMAXFHCHBJHRH9Z8XABDB", "pet-sprout"],
+  ["USR-01K3KYMAXFHCHBJHRH9Z8XABDC", "pet-fizz"],
+  ["USR-01K3KYMAXFHCHBJHRH9Z8XABDE", "pet-mochi"],
+  ["", "pet-ember"],
+  ["ünïcode-ü", "pet-ember"]
+]
