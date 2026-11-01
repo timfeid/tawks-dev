@@ -36,6 +36,20 @@
   let refit: (() => void) | null = null;
   let companion: PetRig | null = null;
   let companionKey = '';
+  const PET_SIDE = 0.62;
+  const PET_FRONT = 0.42;
+  let petSide = PET_SIDE;
+
+  /** Moves the pet out from its owner until its wings clear the body; the owner's idle sway needs the extra gap. */
+  function placePet() {
+    if (!companion || !rig) return;
+    const owner = new THREE.Box3().setFromObject(rig.group, true);
+    companion.group.position.set(rig.group.position.x, 0, PET_FRONT);
+    const pet = new THREE.Box3().setFromObject(companion.group, true);
+    const overlaps = !owner.isEmpty() && !pet.isEmpty() && pet.min.z < owner.max.z && pet.min.y < owner.max.y;
+    petSide = overlaps ? Math.max(PET_SIDE, owner.max.x - pet.min.x + 0.06) : PET_SIDE;
+    companion.group.position.x = rig.group.position.x + petSide;
+  }
   let stillDrawn = false;
   let view: THREE.PerspectiveCamera | null = null;
   // Keeps drawing while a move plays, even in a paused preview.
@@ -203,9 +217,9 @@
       renderer.setSize(width, height, false);
       camera.aspect = width / Math.max(height, 1);
       const tangent = Math.tan(THREE.MathUtils.degToRad(35 / 2));
+      placePet();
       if (compact && rig) {
         // Fit the head, body, and carried bag together, including narrow editor columns.
-        if (companion) companion.group.position.set(rig.group.position.x + 0.62, 0, 0.42);
         const petArea = focus === 'pet' && companion ? new THREE.Box3().setFromObject(companion.group, true) : null;
         const area = petArea && !petArea.isEmpty() ? petArea.expandByScalar(0.2) : focus && focus !== 'pet' ? focusBounds(rig.group, focus) : null;
         const bounds = area ?? new THREE.Box3().setFromObject(rig.group);
@@ -246,7 +260,7 @@
         peers.forEach((peer,index)=>{peer.group.rotation.y=0.15;peer.animate('idle',still?0:now/1000+index*0.2,0)});
       }
       if (companion && rig) {
-        companion.group.position.set(rig.group.position.x + 0.62, 0, 0.42);
+        companion.group.position.set(rig.group.position.x + petSide, 0, PET_FRONT);
         companion.animate(still ? 0 : now / 1000, shown === 'cheer');
       }
       renderer.render(scene, camera);
