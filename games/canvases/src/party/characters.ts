@@ -123,7 +123,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     const hand = mesh(new THREE.SphereGeometry(0.085, 12, 10), materials.white, shoulder);
     hand.position.y = -ARM_REACH;
     shoulder.rotation.z = side * 0.35;
-    limbs.push({arm, ends: [hand]});
+    limbs.push({arm, ends: [hand], sleeves: []});
     return shoulder;
   });
 
@@ -147,12 +147,13 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     const shirt=shirtMesh(new THREE.SphereGeometry(0.445,24,16,0,Math.PI*2,0,2.25),fabric,bodyShape);
     shirt.scale.set(1,1.08,0.97);shirt.position.y=0.55;
     if(garment)jerseyLining.add(shirt);
-    for(const shoulder of arms) {
+    arms.forEach((shoulder,i)=>{
       const hockey=garment;
-      const sleeve=shirtMesh(new THREE.CapsuleGeometry(hockey?0.088:0.095,hockey?0.12:costume.shirt==='shirt-tee'?0.08:0.18,4,10),fabric,shoulder);
-      sleeve.position.y=hockey?-0.10:costume.shirt==='shirt-tee'?-0.04:-0.12;
+      const sleeve=shirtMesh(new THREE.CapsuleGeometry(hockey?0.088:0.095,hockey?0.2:costume.shirt==='shirt-tee'?0.08:0.18,4,10),fabric,shoulder);
+      sleeve.position.y=hockey?-0.14:costume.shirt==='shirt-tee'?-0.04:-0.12;
+      limbs[i].sleeves.push({mesh:sleeve,y:sleeve.position.y});
       if(hockey)jerseyLining.add(sleeve);
-    }
+    });
     const trim=design?cloth(design.hem_stripes?.[0]?.color??design.trim??design.body):materials.accent;
     const hem=shirtMesh(new THREE.TorusGeometry(0.35,0.028,6,32),trim,bodyShape);
     hem.rotation.x=Math.PI/2;hem.position.y=0.262;hem.scale.y=0.97;
@@ -494,7 +495,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   return { group, animate, dispose, ready, setBodyWidth, react };
 }
 
-type Limb = {arm: THREE.Mesh; ends: THREE.Object3D[]};
+type Limb = {arm: THREE.Mesh; ends: THREE.Object3D[]; sleeves: {mesh: THREE.Mesh; y: number}[]};
 const PALM = new THREE.Vector3(0, -0.025, -0.02), PALM_OUT = 0.035;
 const ARM_REACH = 0.3, DOWN = new THREE.Vector3(0, -1, 0), grip = new THREE.Vector3();
 /** A cartoon reach: the arm stretches along itself and the hand moves out, rather than scaling the hand too. */
@@ -503,6 +504,10 @@ function stretch(limb: Limb, length: number) {
   limb.arm.scale.y = k;
   limb.arm.position.y = -0.14 * k;
   for (const end of limb.ends) end.position.y = -length;
+  for (const sleeve of limb.sleeves) {
+    sleeve.mesh.scale.y = k;
+    sleeve.mesh.position.y = sleeve.y * k;
+  }
 }
 
 const WAIST_RADIUS=0.428, WAIST_ARC=1.65, WAIST_STRETCH=1.08;
