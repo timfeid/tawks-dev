@@ -18,8 +18,14 @@
     closeButton?: boolean;
     children: Snippet;
   } = $props();
-  const classes =
-    ' overflow-y-auto md:overflow-y-hidden bg-background max-h-3/4 md:!h-auto w-screen data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] fixed top-[env(safe-area-inset-top)] md:left-[50%] md:top-[50%] z-50 flex flex-col  w-full md:max-w-3xl md:translate-x-[-50%] md:translate-y-[-50%] gap-4 md:overflow-hidden   shadow-lg duration-200 focus:outline-0 sm:rounded-lg';
+  const classes = [
+    'fixed z-50 flex flex-col gap-4 bg-background shadow-lg duration-200 focus:outline-0',
+    'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+    'left-0 top-[env(safe-area-inset-top)] w-full max-h-3/4 overflow-y-auto rounded-lg',
+    'max-md:!max-h-none max-md:!max-w-none max-md:!w-full max-md:!rounded-none',
+    'md:left-[50%] md:top-[50%] md:!h-auto md:max-w-3xl md:translate-x-[-50%] md:translate-y-[-50%] md:overflow-hidden',
+    'md:data-[state=closed]:zoom-out-95 md:data-[state=open]:zoom-in-95 md:data-[state=closed]:slide-out-to-left-1/2 md:data-[state=closed]:slide-out-to-top-[48%] md:data-[state=open]:slide-in-from-left-1/2 md:data-[state=open]:slide-in-from-top-[48%]',
+  ].join(' ');
 
   /** Opening lands in the first text field, if there is one; otherwise nothing is focused, so no button lights up. */
   function focusTextField(event: Event) {
