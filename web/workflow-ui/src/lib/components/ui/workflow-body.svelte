@@ -10,7 +10,12 @@
   import { needsPageTitle } from '../../page-title';
   import DockTabs from './dock-tabs.svelte';
 
-  let { workflow, title, tabs = [] }: { workflow: WorkflowResource; title?: Snippet; tabs?: any[] } = $props();
+  let {
+    workflow,
+    title,
+    header,
+    tabs = [],
+  }: { workflow: WorkflowResource; title?: Snippet; header?: Snippet; tabs?: any[] } = $props();
 
   const provider = getContext<WorkflowStateProvider | undefined>('workflow-provider');
 
@@ -24,7 +29,7 @@
     title ? workflow.visuals.find((visual) => visual && 'Page' in visual.display)?.id : undefined,
   );
 
-  // The first thing drawn below any sticky bars carries the tabs on a wide screen.
+  // The tabs get a row of their own above the first view, the same for a page, a chat or a game, so switching tabs never moves them.
   let firstMain = $derived(
     tabs.length
       ? workflow.visuals.find((visual) => visual && !('Sticky' in visual.display) && !('Modal' in visual.display) && !('Notification' in visual.display) && !('Unknown' in visual.display))?.id
@@ -67,10 +72,12 @@
     />
   {/if}
 
-  {#if visual.id === firstMain && !('Page' in visual.display)}
-    <div class={look.dock.above}>
-      <div class={look.dock.top}><DockTabs {workflow} visuals={tabs} layout="wide" /></div>
-    </div>
+  {#if visual.id === firstMain}
+    {#if header}
+      {#if !('Chat' in visual.display)}{@render header()}{/if}
+    {:else}
+      <div class={look.dock.above}><DockTabs {workflow} visuals={tabs} /></div>
+    {/if}
   {/if}
 
   {#if 'Chat' in visual.display && provider?.customComponents?.Chat}
@@ -103,26 +110,19 @@
           atFoot(index) && look.pageEnd,
           look.backdrop[visual.display.Page.backdrop ?? 'Default'],
           look.typeface[visual.display.Page.typeface ?? 'Default'],
-          (visual.display.Page.center || endsWithBottomTabs(visual.display.Page.content)) && 'min-h-full',
+          (visual.display.Page.center || endsWithBottomTabs(visual.display.Page.content)) && (firstMain ? 'flex-1' : 'min-h-full'),
           visual.display.Page.center && 'justify-center',
         ]}
       >
-        {#if headed}
-          <div class={[hostTitle || ownTitle ? look.dock.head : look.dock.headBare, hostTitle && look.pageTitle]}>
-            {#if hostTitle && title}
-              <div class="min-w-0">{@render title()}</div>
-            {:else if ownTitle}
-              {@const group = titleRow(visual.display.Page.content[0])}
-              <div class={group ? look.dock.titleGroup : 'min-w-0'}>
-                {#each group ?? [visual.display.Page.content[0]] as display, index (displayKey(display, index))}
-                  <WorkflowDisplay from="body-page" {workflow} {display} inputs={workflow.responses} />
-                {/each}
-              </div>
-            {/if}
-            <div class={look.dock.top}><DockTabs {workflow} visuals={tabs} layout="wide" /></div>
-          </div>
-        {:else if hostTitle && title}
+        {#if hostTitle && title}
           <div class={look.pageTitle}>{@render title()}</div>
+        {:else if ownTitle}
+          {@const group = titleRow(visual.display.Page.content[0])}
+          <div class={group ? look.dock.titleGroup : 'min-w-0'}>
+            {#each group ?? [visual.display.Page.content[0]] as display, index (displayKey(display, index))}
+              <WorkflowDisplay from="body-page" {workflow} {display} inputs={workflow.responses} />
+            {/each}
+          </div>
         {/if}
         {#each ownTitle ? visual.display.Page.content.slice(1) : visual.display.Page.content as display, index (displayKey(display, index))}
           <WorkflowDisplay from="body-page" {workflow} {display} inputs={workflow.responses} />

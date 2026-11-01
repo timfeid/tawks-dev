@@ -7,12 +7,10 @@
   let {
     workflow,
     visuals,
-    tabs = [],
     actions = [],
   }: {
     workflow: WorkflowResource;
     visuals: any[];
-    tabs?: any[];
     actions?: any[];
   } = $props();
 
@@ -27,7 +25,7 @@
   }
 </script>
 
-{#if visuals.length || tabs.length || actions.length}
+{#if visuals.length || actions.length}
   <div class={[look.dock.shell, actions.length && look.dock.floating]}>
     {#if visuals.length}
       <div class="pointer-events-auto flex">
@@ -40,6 +38,6 @@
         {/each}
       </div>
     {/if}
-    <WorkflowDock {workflow} {tabs} {actions} />
+    <WorkflowDock {workflow} {actions} />
   </div>
 {/if}

@@ -172,7 +172,7 @@ state?: string | null } } |
  */
 { Notice: { tone: string; icon: string | null; title: string | null; body: string; actions: WorkflowDisplay[] } } | 
 /**
- * Switches between views; `Bottom` sits fixed at the foot of the page.
+ * Switches between views. A workflow's sections belong in a `Top` sticky visual, the app's one tab bar; in a page it switches that page's content.
  */
 { TabBar: { style: TabStyle; tabs: Tab[] } } | 
 /**

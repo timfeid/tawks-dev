@@ -17,6 +17,7 @@ import type {
   Tone,
   Typeface,
 } from '@tawks/workflow-types';
+import { tabsLook } from '@tawks/ui/tabs/look.js';
 import { interpolate } from './utils';
 
 /**
@@ -314,43 +315,20 @@ export const page: Record<PageWidth, string> = {
 export const pageTitle = '-mb-4 sm:-mb-5';
 
 /**
- * A page's tabs and buttons. On a wide screen the tabs sit at the top right of
- * the page, on its title's line, and only buttons float at the bottom; on a
- * phone both dock to the bottom edge as a row of footer buttons.
+ * A page's tabs and buttons. The tabs sit centered in a row of their own above
+ * the first view, the same for a page, a chat or a game, unless the host app
+ * puts them in its own header. Buttons float at the bottom on a wide screen
+ * and dock to the bottom edge on a phone.
  */
 export const dock = {
   shell: 'pointer-events-none sticky bottom-0 z-20 flex flex-col',
   floating: 'md:pb-4',
-  bar: 'pointer-events-auto flex items-center gap-2 border-t border-foreground/10 bg-background/95 px-2 pt-1 pb-2 backdrop-blur md:mx-auto md:mb-4 md:w-fit md:max-w-[calc(100%-2rem)] md:rounded-full md:border md:p-1.5 md:shadow-2xl',
-  phoneOnly: 'md:hidden',
-  phoneTabs: 'flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] md:hidden',
-  actions: 'ml-auto flex shrink-0 items-center gap-2 md:ml-0',
-  /** The tabs at the top right of a page on a wide screen. */
-  top: 'ml-auto hidden min-w-0 shrink-0 items-center gap-1 overflow-x-auto rounded-full border border-foreground/10 bg-foreground/[0.03] p-1 [scrollbar-width:none] md:flex',
+  bar: 'pointer-events-auto flex items-center justify-end gap-2 border-t border-foreground/10 bg-background/95 px-2 pt-1 pb-2 backdrop-blur md:mx-auto md:mb-4 md:w-fit md:max-w-[calc(100%-2rem)] md:rounded-full md:border md:p-1.5 md:shadow-2xl',
+  actions: 'flex shrink-0 items-center gap-2',
+  /** The tabs' row, centered on the whole area so a narrow page, a wide one and a chat all put them in one place. */
+  above: 'flex min-w-0 shrink-0 flex-wrap items-center justify-center gap-2 px-4 pt-4 sm:px-6 sm:pt-6',
   /** A title with its main button: side by side on a wide screen, the button under the title on a phone. */
   titleGroup: 'flex min-w-0 flex-col items-start gap-3 md:flex-row md:items-center md:gap-3 md:whitespace-nowrap',
-  /** The row they share with the page's title. */
-  head: 'flex flex-wrap items-center justify-between gap-x-3 gap-y-3',
-  /** The same row when the page has no title of its own: tabs only, so nothing on a phone. */
-  headBare: 'hidden items-center justify-end md:flex',
-  /** Above a view that is not a page, such as a chat. */
-  above: 'hidden justify-end px-4 pt-4 sm:px-6 sm:pt-6 md:flex',
-}
-
-/** Tabs in the dock, whatever style the workflow gave them: segments on a wide screen, footer buttons on a phone. */
-export const dockTabs: Record<'wide' | 'phone', { bar: string; tab: string; on: string; off: string }> = {
-  wide: {
-    bar: 'flex shrink-0 gap-1',
-    tab: 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors',
-    on: 'bg-primary text-primary-foreground',
-    off: 'text-muted-foreground hover:text-foreground',
-  },
-  phone: {
-    bar: 'flex flex-1 gap-1',
-    tab: 'flex min-h-11 min-w-16 flex-1 shrink-0 flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-semibold tracking-wide whitespace-nowrap uppercase transition-colors hover:bg-foreground/5',
-    on: 'text-primary',
-    off: 'text-muted-foreground',
-  },
 };
 
 /** Sets the font `themed` text uses on a page. The fonts are loaded by the app. */
@@ -432,27 +410,15 @@ export const thumb = 'size-20 shrink-0 rounded-xl bg-foreground/5 object-cover s
 
 export const iconTile = 'flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary';
 
+/** Every tab bar is the app's one glass pill; `Bottom` keeps it at the foot of the page. */
 export const tabs: Record<TabStyle, { bar: string; tab: string; on: string; off: string }> = {
-  Bottom: {
-    bar: 'sticky bottom-0 z-20 mt-auto flex border-t border-foreground/10 bg-background/95 px-2 pt-1 pb-2 backdrop-blur',
-    tab: 'flex flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-semibold tracking-wide uppercase transition-colors hover:bg-foreground/5',
-    on: 'text-primary',
-    off: 'text-muted-foreground',
-  },
-  // The rule under the tabs is an inset shadow, not a border the tabs overlap: an overlap overflows the bar and a scrolling bar then shows a scrollbar.
-  Underline: {
-    bar: 'flex gap-5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] shadow-[inset_0_-1px_0_color-mix(in_oklab,var(--color-foreground)_10%,transparent)]',
-    tab: 'flex shrink-0 items-center gap-1.5 border-b-2 px-0.5 pb-2.5 text-sm font-semibold transition-colors',
-    on: 'border-primary text-foreground',
-    off: 'border-transparent text-muted-foreground hover:text-foreground',
-  },
-  Segmented: {
-    bar: 'inline-flex gap-1 self-start rounded-full border border-foreground/10 bg-foreground/[0.03] p-1',
-    tab: 'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors',
-    on: 'bg-primary text-primary-foreground',
-    off: 'text-muted-foreground hover:text-foreground',
-  },
+  Bottom: { ...tabsLook, bar: `${tabsLook.bar} sticky bottom-2 z-20 mt-auto self-center` },
+  Underline: { ...tabsLook, bar: `${tabsLook.bar} self-start` },
+  Segmented: { ...tabsLook, bar: `${tabsLook.bar} self-start` },
 };
+
+/** A workflow's own tabs, in their row above the page or in the host's header. */
+export const dockedTabs = tabsLook;
 
 /** Quick picks in one strip, drawn like segmented tabs but with none current. */
 export const buttonGroup = {

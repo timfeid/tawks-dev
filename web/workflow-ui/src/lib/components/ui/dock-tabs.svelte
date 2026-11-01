@@ -3,13 +3,9 @@
   import { setContext } from 'svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
 
-  let {
-    workflow,
-    visuals,
-    layout,
-  }: { workflow: WorkflowResource; visuals: any[]; layout: 'wide' | 'phone' } = $props();
+  let { workflow, visuals }: { workflow: WorkflowResource; visuals: any[] } = $props();
 
-  setContext('dock-tabs', layout);
+  setContext('dock-tabs', true);
 
   function displayKey(display: any, index: number) {
     const typeKey =

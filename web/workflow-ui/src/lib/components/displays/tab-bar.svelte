@@ -8,9 +8,8 @@
 
   let { display, inputs, workflow }: Props = $props();
   let bar = $derived(typeof display.type !== 'string' && 'TabBar' in display.type ? display.type.TabBar : null);
-  const docked = getContext<'wide' | 'phone' | undefined>('dock-tabs');
-  let style = $derived(docked ? look.dockTabs[docked] : look.tabs[bar?.style ?? 'Underline']);
-  let big = $derived(docked === 'phone' || (!docked && bar?.style === 'Bottom'));
+  const docked = getContext<boolean | undefined>('dock-tabs');
+  let style = $derived(docked ? look.dockedTabs : look.tabs[bar?.style ?? 'Underline']);
   const press = pressable(() => ({ workflow, inputs }));
   let active = $derived(bar ? bar.tabs.findIndex((tab) => evaluateCondition(tab.active, inputs)) : -1);
 
@@ -43,12 +42,12 @@
       {@const reachable = on || (active < 0 && index === 0)}
       {#if href}
         <a {href} role="tab" aria-selected={on} tabindex={reachable ? 0 : -1} class={[style.tab, on ? style.on : style.off]} aria-current={on ? 'page' : undefined}>
-          {#if Icon}<Icon class={big ? 'size-6' : 'size-4'} />{/if}
+          {#if Icon}<Icon />{/if}
           {interpolate(inputs, tab.label)}
         </a>
       {:else}
         <button type="button" role="tab" aria-selected={on} tabindex={reachable ? 0 : -1} class={[style.tab, on ? style.on : style.off]} aria-current={on ? 'page' : undefined} onclick={() => press.runLatest(on ? null : tab.act)}>
-          {#if Icon}<Icon class={big ? 'size-6' : 'size-4'} />{/if}
+          {#if Icon}<Icon />{/if}
           {interpolate(inputs, tab.label)}
         </button>
       {/if}

@@ -880,7 +880,7 @@ pub enum DisplayType {
         body: String,
         actions: Vec<WorkflowDisplay>,
     },
-    /// Switches between views; `Bottom` sits fixed at the foot of the page.
+    /// Switches between views. A workflow's sections belong in a `Top` sticky visual, the app's one tab bar; in a page it switches that page's content.
     TabBar {
         style: TabStyle,
         tabs: Vec<Tab>,

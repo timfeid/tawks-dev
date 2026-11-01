@@ -9,6 +9,7 @@
   import WorkflowBody from './workflow-body.svelte';
   import WorkflowFooter from './workflow-footer.svelte';
   import WorkflowDock from './workflow-dock.svelte';
+  import DockTabs from './dock-tabs.svelte';
   import ContextBridge from './context-bridge.svelte';
   import type { WorkflowStateProvider } from '../../workflow';
 
@@ -18,6 +19,8 @@
     provider,
     onTitlebarUpdate,
     dockHost,
+    tabsHost,
+    header,
     followChildren = true,
     title,
   }: {
@@ -27,6 +30,10 @@
     onTitlebarUpdate?: (snippet: Snippet) => void;
     /** Where the host floats the page's tabs and buttons; without one they sit at the foot of the shell. */
     dockHost?: { show: (dock: Snippet) => void; hide: (dock: Snippet) => void };
+    /** Where the host draws the page's tabs, such as its own header row; without one they get a row above the page. */
+    tabsHost?: { show: (tabs: Snippet) => void; hide: (tabs: Snippet) => void };
+    /** The host's header row, drawn above the first view unless that view is a chat, whose own header carries it. */
+    header?: Snippet;
     followChildren?: boolean;
     /** The host's name for the page, shown above it unless the page opens with its own title. */
     title?: Snippet;
@@ -103,7 +110,8 @@
     ),
   );
 
-  let hasDock = $derived(tabVisuals.length > 0 || toolbarVisuals.length > 0);
+  let hasDock = $derived(toolbarVisuals.length > 0);
+  let hasTabs = $derived(tabVisuals.length > 0);
 
   $effect(() => {
     if (!dockHost || !hasDock) return;
@@ -111,11 +119,24 @@
     host.show(floatingDock);
     return () => host.hide(floatingDock);
   });
+
+  $effect(() => {
+    if (!tabsHost || !hasTabs) return;
+    const host = tabsHost;
+    host.show(hostedTabs);
+    return () => host.hide(hostedTabs);
+  });
 </script>
+
+{#snippet hostedTabs()}
+  <ContextBridge {provider}>
+    <DockTabs workflow={viewWorkflow} visuals={tabVisuals} />
+  </ContextBridge>
+{/snippet}
 
 {#snippet floatingDock()}
   <ContextBridge {provider}>
-    <WorkflowDock workflow={viewWorkflow} tabs={tabVisuals} actions={toolbarVisuals} />
+    <WorkflowDock workflow={viewWorkflow} actions={toolbarVisuals} />
   </ContextBridge>
 {/snippet}
 
@@ -135,14 +156,13 @@
       {#if replacing}
         <WorkflowBody workflow={{ ...viewWorkflow, visuals: [] }} />
       {:else}
-        <WorkflowBody workflow={viewWorkflow} {title} tabs={tabVisuals} />
+        <WorkflowBody workflow={viewWorkflow} {title} header={tabsHost ? header : undefined} tabs={tabsHost && !header ? [] : tabVisuals} />
       {/if}
     </div>
 
     <WorkflowFooter
       workflow={viewWorkflow}
       visuals={stickyFooterVisuals}
-      tabs={dockHost ? [] : tabVisuals}
       actions={dockHost ? [] : toolbarVisuals}
     />
   {/key}
