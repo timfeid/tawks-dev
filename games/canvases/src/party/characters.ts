@@ -5,7 +5,8 @@ import { loadCustomModel } from './models/custom-model-rig';
 import { resolveCatalogModel } from './models/catalog';
 import { attachJersey } from './costumes/jersey';
 import { jerseyAtlas, jerseyDesign } from './costumes/pucklab-jersey';
-import {attachPumpkin}from'./costumes/pumpkin';
+import {attachHead}from'./costumes/seasonal-heads';
+import {toon}from'./toon';
 import {bodyWidth}from'./costumes/body-build';
 import {GRIPS,heldPoint}from'./controller';
 import {HOLIDAY_HATS}from'./costumes/selection';
@@ -31,20 +32,6 @@ export type CharacterOptions = {
   /** Make the look's reaction when the pose turns to a cheer. Previews leave it to hovering. */
   reactOnCheer?: boolean;
 };
-
-let toonRamp: THREE.DataTexture | null = null;
-
-function ramp() {
-  if (!toonRamp) {
-    toonRamp = new THREE.DataTexture(new Uint8Array([90, 90, 90, 255, 175, 175, 175, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
-    toonRamp.minFilter = THREE.NearestFilter;
-    toonRamp.magFilter = THREE.NearestFilter;
-    toonRamp.needsUpdate = true;
-  }
-  return toonRamp;
-}
-
-const toon = (color: string) => new THREE.MeshToonMaterial({ color, gradientMap: ramp() });
 
 /**
  * Builds a party character from its roster entry: a round body, big eyes and
@@ -111,7 +98,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   const face=new THREE.Group();head.add(face);
   let faces:Face[]=[buildFace(face,materials,mesh,paint)];
 
-  const pumpkin=def.costume?.head==='head-pumpkin'?attachPumpkin(head,.94):null;
+  const swapped=attachHead(def.costume?.head,head);
 
   const limbs: Limb[] = [];
   const arms = [-1, 1].map((side) => {
@@ -218,7 +205,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
       }
     });
   }
-  // Extras sit on the round head; once the bigger pumpkin is on, they move out to its face and below its chin.
+  // Extras sit on the round head; once another head is on, they move out to its face (and below the pumpkin's chin).
   const extras=new THREE.Group();extras.name='worn-head-extras';
   const neckwear=new THREE.Group();neckwear.name='worn-neck-extras';
   head.add(extras);bodyShape.add(neckwear);
@@ -272,7 +259,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   }
   // Under the chin, where the round head no longer covers the body, and clear of a shirt's front.
   if(extrasWorn.has('extra-bowtie')||extrasWorn.has('extra-medal'))neckwear.position.set(0,0.74,costume?.shirt?0.45:0.42);
-  // Worn like a hat, so they follow the headwear onto the pumpkin and move to an imported model's head with the other extras.
+  // Worn like a hat, so they follow the headwear onto a swapped head and move to an imported model's head with the other extras.
   const holidayHead=new THREE.Group();holidayHead.name='worn-holiday-head';headwear.add(holidayHead);
   if(holidayHat)addHolidayHat(holidayHat,holidayHead,mesh,cloth);
   if(extrasWorn.has('extra-antlers'))addAntlers(holidayHead,mesh,cloth);
@@ -292,7 +279,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     fitScarf(width);
     torso.add(scarf);
   }
-  // A head that cannot change its face (the pumpkin, an imported model) shows the reaction on a small round face popping up above it instead.
+  // A head that cannot change its face (a swapped head, an imported model) shows the reaction on a small round face popping up above it instead.
   let bubble:THREE.Group|null=null;
   const popAbove=(parent:THREE.Object3D,top:number)=>{
     bubble?.removeFromParent();
@@ -302,24 +289,34 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
     faces=[buildFace(bubble,materials,mesh,paint)];
   };
   const pending: Promise<unknown>[] = [];
-  pending.push(pumpkin?.ready.then(ready=>{
+  pending.push(swapped?.ready.then(ready=>{
     if(!ready)return;
     face.visible=false;
-    popAbove(head,pumpkin.size.y/2);
+    const size=swapped.size;
+    popAbove(head,swapped.top());
+    headwear.scale.set(size.x/.8,1,size.z/.8);
+    if(swapped.kind==='built') {
+      // Built heads keep the round head's footing, so the hats, extras and neckwear only move out to their bigger surface.
+      const rise=size.y/2-.4;
+      head.position.y+=rise;
+      headwear.position.y=rise;
+      extras.scale.setScalar(size.x/.8);
+      extras.position.z=(size.z-size.x)/2;
+      return;
+    }
     // The pumpkin is taller than the round head; centred where that head was, its narrow base sinks into the body and the body pokes through at the chin.
-    head.position.y+=Math.max(0,0.94-(head.position.y-pumpkin.size.y/2));
+    head.position.y+=Math.max(0,0.94-(head.position.y-size.y/2));
     // A dark core fills the hollow pumpkin, so its carved holes look dark rather than showing the body inside.
     const core=mesh(new THREE.SphereGeometry(1,16,12),materials.dark,head);
-    core.scale.set(pumpkin.size.x*.39,pumpkin.size.y*.44,pumpkin.size.z*.39);
-    headwear.scale.set(pumpkin.size.x/.8,1,pumpkin.size.z/.8);
-    headwear.position.y=pumpkin.size.y/2-.28;
+    core.scale.set(size.x*.39,size.y*.44,size.z*.39);
+    headwear.position.y=size.y/2-.28;
     headwear.traverse(part=>{const fit=part.userData.pumpkinFit as HatFit|undefined;if(fit){part.rotation.x=-fit.tilt;part.position.y=fit.lift;}});
     core.castShadow=false;
     // Scaled about the head's centre so the glasses and cigar meet the pumpkin's face
     // (a little in from its widest, between the ribs), not its inside.
-    extras.scale.setScalar(Math.max(1,pumpkin.size.z/2*0.95/0.4));
+    extras.scale.setScalar(Math.max(1,size.z/2*0.95/0.4));
     // The pumpkin hangs lower than the old head, so the bowtie drops to just under its chin.
-    const chin=head.position.y-pumpkin.size.y/2;
+    const chin=head.position.y-size.y/2;
     if(chin<0.98) {
       const y=Math.max(0.6,chin-0.07);
       // A shirt sits proud of the body, so the bowtie rests on the shirt's front instead of inside it.
@@ -346,7 +343,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   const catalogModel=costume?.model_id?resolveCatalogModel(costume.model_id):null;
   const model=catalogModel?Promise.resolve(catalogModel):costume?.model_id&&client?client.models.get(costume.model_id):null;
   if(model) {
-    pending.push(model.then(model=>loadCustomModel(model,abort.signal,costume?.head==='head-pumpkin',!!costume?.extras?.length)).then(async rig=>{
+    pending.push(model.then(model=>loadCustomModel(model,abort.signal,costume?.head??null,!!costume?.extras?.length)).then(async rig=>{
       if(disposed) {rig.dispose();return;}
       imported=rig;
       // Anything carried (a bag) stays; the built body goes.
@@ -492,7 +489,7 @@ export function buildCharacter(def: CharacterDef, {reactOnCheer = true}: Charact
   };
 
   const dispose = () => {
-    disposed=true;abort.abort();pumpkin?.dispose();disposeJersey?.();atlas?.release();imported?.dispose();
+    disposed=true;abort.abort();swapped?.dispose();disposeJersey?.();atlas?.release();imported?.dispose();
     geometries.forEach((g) => g.dispose());
     Object.values(materials).forEach((m) => m.dispose());
     extraMaterials.forEach((m) => m.dispose());
@@ -626,7 +623,7 @@ function addScarf(parent: THREE.Group, ring: number, mesh: MeshFactory, cloth: C
   }
 }
 type HatFit = { tilt: number; lift: number };
-/** On the round head a hat sits tipped back so its front rim clears the eyes and brows while the back still covers the head. The pumpkin's carved face sits lower, so it keeps `pumpkin`. */
+/** On the round head, and the built heads, a hat sits tipped back so its front rim clears the eyes and brows while the back still covers the head. The pumpkin's carved face sits lower, so it keeps `pumpkin`. */
 function tippedBack(parent: THREE.Group, round: HatFit, pumpkin: HatFit) {
   const hat = new THREE.Group();
   hat.rotation.x = -round.tilt;

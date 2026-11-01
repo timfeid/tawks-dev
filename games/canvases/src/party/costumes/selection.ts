@@ -1,4 +1,5 @@
 import type {Costume} from '../protocol';
+import seasonalHeads from './heads.json' with {type:'json'};
 
 export const CLOTHING_SLOTS=['hat','shirt','pants','shoes','gloves','extra','bag'] as const;
 /** The slots that hold one item; extras stack. */
@@ -13,8 +14,35 @@ export function toggleExtra(worn:readonly string[],id:string):string[] {
   return [...worn.filter(extra=>!(HOLIDAY_HATS.includes(id)&&HOLIDAY_HATS.includes(extra))),id];
 }
 
-/** Free for everyone; `null` is the round head. */
-export const HEADS=[{id:null,name:'Round'},{id:'head-pumpkin',name:'Pumpkin'}] as const;
+export type Head={id:string|null;name:string;from?:string;until?:string};
+/** Free for everyone; `null` is the round head. Seasonal heads can be put on from `from` to `until` (MM-DD, both whole days, US Eastern) each year. */
+export const HEADS:readonly Head[]=[{id:null,name:'Round'},...seasonalHeads];
+
+/** Month and day in US Eastern time, where the head seasons turn over. The server's wardrobe.rs agrees. */
+export function easternMonthDay(now:Date):string {
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const part=(type:string)=>parts.find(each=>each.type===type)!.value;
+  return `${part('month')}-${part('day')}`;
+}
+
+export function inSeason(head:Head,now=new Date()) {
+  if(!head.from||!head.until)return true;
+  const day=easternMonthDay(now);
+  return head.from<=head.until?head.from<=day&&day<=head.until:day>=head.from||day<=head.until;
+}
+
+/** The heads that can be picked now, with `worn` kept on offer after its season so it is never taken off for you. */
+export function headChoices(worn:string|null|undefined,now=new Date()):Head[] {
+  return HEADS.filter(head=>head.id===(worn??null)||inSeason(head,now));
+}
+
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/** "Until Nov 15" for a seasonal head, nothing for the round head. */
+export function seasonNote(head:Head) {
+  if(!head.until)return '';
+  const [month,day]=head.until.split('-').map(Number);
+  return `Until ${MONTHS[month-1]} ${day}`;
+}
 
 /** Whole characters use their authored appearance, independent of fitted clothes. */
 export function characterSelection(costume:Costume,modelId:string):Costume {

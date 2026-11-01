@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { HEAD_PROPORTIONS, swappedHeadWidth } from "./head-sizes";
 const frames = new WeakMap<THREE.Object3D, ReturnType<typeof buildFrame>>();
 export function headFrame(wrapper: THREE.Group, root: THREE.Object3D) {
   if (!frames.has(root)) frames.set(root, buildFrame(wrapper, root));
@@ -105,29 +106,20 @@ function buildFrame(wrapper: THREE.Group, root: THREE.Object3D) {
     },
   };
 }
-export function pumpkinWidth(size: THREE.Vector3) {
-  return THREE.MathUtils.clamp(
-    Math.max(size.x, size.z, size.y / 0.74) * 1.25,
-    0.7,
-    1.8,
-  );
-}
 export function attachModelExtras(
   wrapper: THREE.Group,
   root: THREE.Object3D,
-  pumpkin: boolean,
+  swapped: string | null,
 ) {
   const frame = headFrame(wrapper, root);
   if (!frame) return null;
-  const size = pumpkin
-    ? new THREE.Vector3(
-        pumpkinWidth(frame.size),
-        pumpkinWidth(frame.size) * 0.74,
-        pumpkinWidth(frame.size) * 0.934,
-      )
+  const width = swapped ? swappedHeadWidth(swapped, frame.size) : 0;
+  const proportions = swapped ? (HEAD_PROPORTIONS[swapped] ?? null) : null;
+  const size = proportions
+    ? new THREE.Vector3(width, width * proportions.y, width * proportions.z)
     : frame.size;
   const head = frame.anchor(
-    new THREE.Vector3(0, pumpkin ? 0 : -size.y * 0.08, 0),
+    new THREE.Vector3(0, proportions ? 0 : -size.y * 0.08, 0),
   );
   head.group.name = "model-head-extras";
   head.group.scale.set(size.x / 0.8, size.y / 0.8, size.z / 0.8);

@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import pumpkinUrl from "./models/pumpkin-head.glb?url";
 import { pumpkinFit } from "./pumpkin-fit";
-import { headFrame, pumpkinWidth } from "./head-frame";
 
 // A trusted, bundled CC0 KayKit mesh. Every clone shares source GPU resources;
 // disposing a character removes its clone without breaking everyone else.
@@ -69,27 +68,6 @@ export function attachPumpkin(parent: THREE.Object3D, width: number) {
     dispose() {
       disposed = true;
       group.removeFromParent();
-    },
-  };
-}
-
-/** Follows the actual evaluated head bone after the animation mixer, keeping
- * its bind orientation aligned with the game's +Z face direction. Unsupported
- * non-humanoid uploads keep their appearance rather than a floating pumpkin. */
-export function attachAnimatedPumpkin(
-  wrapper: THREE.Group,
-  root: THREE.Object3D,
-) {
-  const frame = headFrame(wrapper, root);
-  if (!frame) return { update() {}, dispose() {}, ready: Promise.resolve() };
-  const anchor = frame.anchor(),
-    pumpkin = attachPumpkin(anchor.group, pumpkinWidth(frame.size));
-  return {
-    update: anchor.update,
-    ready: pumpkin.ready.then(() => {}),
-    dispose() {
-      pumpkin.dispose();
-      anchor.dispose();
     },
   };
 }

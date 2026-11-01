@@ -29,7 +29,8 @@
     characterSelection,
     CLOTHING_SLOTS,
     SINGLE_SLOTS,
-    HEADS,
+    headChoices,
+    seasonNote,
     hasUnownedSelection,
     toggleExtra,
   } from "./selection";
@@ -55,6 +56,9 @@
   let draft = $state<Costume>({ color: "sunny" });
   let baseLook = $state<Costume>({ color: "sunny" });
   let owned = $state<string[]>([]);
+  /** The saved head stays on offer after its season, so the saved look can still be applied. */
+  let savedHead = $state<string | null>(null);
+  const heads = $derived(headChoices(savedHead));
   let clubJersey = $state<JerseyDesign | null>(null);
   let editorTab = $state("appearance");
   let slot = $state<"model" | (typeof CLOTHING_SLOTS)[number]>("model");
@@ -118,6 +122,7 @@
     )[id] ?? UserRound;
   function accept(wardrobe: Wardrobe) {
     owned = wardrobe.owned;
+    savedHead = wardrobe.set_up ? (wardrobe.costume.head ?? null) : null;
     clubJersey = wardrobe.jersey ?? null;
   }
   const wearing = (id: string | null) =>
@@ -290,14 +295,15 @@
 
         <div class="flex flex-col gap-2">
           <span class="text-sm font-medium text-neutral-300">Head</span>
-          <div class="flex gap-2" aria-label="Heads">
-            {#each HEADS as option (option.name)}
+          <div class="flex flex-wrap gap-2" aria-label="Heads">
+            {#each heads as option (option.name)}
               {@const on = (draft.head ?? null) === option.id}
               <button
                 class="rounded-full border px-3 py-1 text-sm transition-colors {on
                   ? 'border-primary bg-primary/10 text-white'
                   : 'border-white/10 text-neutral-400 hover:text-white'}"
                 aria-pressed={on}
+                title={seasonNote(option) || undefined}
                 disabled={busy}
                 onclick={() => {
                   draft = { ...draft, head: option.id };
@@ -307,6 +313,11 @@
               >
             {/each}
           </div>
+          {#if heads.some((option) => option.until)}<p
+              class="text-xs text-neutral-500"
+            >
+              Seasonal heads come and go. One you have on stays until you take it off.
+            </p>{/if}
         </div>
 
         <div class="flex flex-col gap-3">
