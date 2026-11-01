@@ -3,6 +3,8 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { toon, toonTextured } from '../toon';
 import { petById } from './catalog';
+import { stageScale, type PetMove } from './bond';
+import { MOVE_SECONDS, moveAt, moveClip } from './moves';
 import { buildGear } from './pet-gear';
 import type { PetItem, ShownPet } from './store';
 
@@ -19,6 +21,8 @@ export type PetRig = {
   group: THREE.Group;
   ready: Promise<void>;
   animate: (time: number, cheer?: boolean) => void;
+  /** Plays a trick, or a reaction to a pet or a poke, from the next frame. */
+  perform: (move: PetMove) => void;
   dispose: () => void;
 };
 
@@ -71,9 +75,17 @@ function wear(model: THREE.Object3D, rest: THREE.Object3D, item: PetItem | null,
 }
 
 /** `look` is the coat and gear it wears, from shownPet. */
-export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 'coat' | 'hat' | 'neck'> | null): PetRig {
+export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 'coat' | 'hat' | 'neck'> & { stage?: number } | null): PetRig {
   const group = new THREE.Group();
   group.name = `pet-${id}`;
+  const tall = height * stageScale(look?.stage);
+  // Moves turn and tip the pet about its middle, not its feet.
+  const pivot = new THREE.Group();
+  pivot.position.y = tall / 2;
+  group.add(pivot);
+  let hopClip: THREE.AnimationAction | null = null;
+  let move: { name: PetMove; at: number | null } | null = null;
+  let moving: THREE.AnimationAction | null = null;
   const materials: THREE.Material[] = [];
   const gear: { dispose(): void }[] = [];
   let mixer: THREE.AnimationMixer | null = null;
@@ -101,13 +113,15 @@ export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 
     idle = idleClip ? mixer.clipAction(idleClip).play() : null;
     const cheerClip = clip('Cheer');
     cheer = cheerClip ? mixer.clipAction(cheerClip) : null;
+    const hopped = clip('Hop');
+    hopClip = hopped ? mixer.clipAction(hopped) : null;
     mixer.setTime(0);
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model, true);
     const size = box.getSize(new THREE.Vector3());
-    const scale = height / Math.max(size.y, 1e-3);
+    const scale = tall / Math.max(size.y, 1e-3);
     model.scale.multiplyScalar(scale);
-    model.position.set(-(box.min.x + box.max.x) / 2 * scale, -box.min.y * scale, -(box.min.z + box.max.z) / 2 * scale);
+    model.position.set(-(box.min.x + box.max.x) / 2 * scale, -box.min.y * scale - tall / 2, -(box.min.z + box.max.z) / 2 * scale);
     const fit = petById(id)?.fit;
     if (fit && look) {
       gltf.scene.updateMatrixWorld(true);
@@ -117,7 +131,7 @@ export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 
         wear(model, gltf.scene, look.neck, fit.neck, new THREE.Vector3(wide, (wide + deep) / 2, deep)),
       ]) if (worn) gear.push(worn);
     }
-    group.add(model);
+    pivot.add(model);
   });
   let cheering = false;
   return {
@@ -125,12 +139,35 @@ export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 
     ready: ready.catch(() => {}),
     animate(time, wantCheer = false) {
       if (!mixer) return;
-      if (cheer && wantCheer !== cheering) {
+      if (move && move.at === null) move.at = time;
+      const t = move && move.at !== null ? time - move.at : 0;
+      if (move && t >= MOVE_SECONDS[move.name]) move = null;
+      const named = move ? moveClip(move.name) : null;
+      const wanted = named === 'Hop' ? (hopClip ?? cheer) : named === 'Cheer' ? cheer : null;
+      if (wanted !== moving) {
+        moving?.stop();
+        moving = wanted;
+        if (moving) {
+          idle?.stop();
+          cheer?.stop();
+          moving.play();
+        } else {
+          cheering = !wantCheer;
+        }
+      }
+      if (!moving && cheer && wantCheer !== cheering) {
         cheering = wantCheer;
         (wantCheer ? idle : cheer)?.stop();
         (wantCheer ? cheer : idle)?.play();
       }
+      const pose = move ? moveAt(move.name, t) : { lift: 0, spin: 0, flip: 0, squash: 0 };
+      pivot.position.y = tall / 2 + pose.lift * tall;
+      pivot.rotation.set(pose.flip, pose.spin, 0);
+      pivot.scale.set(1 + pose.squash / 2, 1 - pose.squash, 1 + pose.squash / 2);
       mixer.setTime(time);
+    },
+    perform(name) {
+      move = { name, at: null };
     },
     dispose() {
       disposed = true;

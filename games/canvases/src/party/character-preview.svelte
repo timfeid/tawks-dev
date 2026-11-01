@@ -11,9 +11,11 @@
   import type {FaceReaction} from './reactions/face';
   import {buildPet, type PetRig} from './pets/pet-model';
   import {shownPet, shownPetKey} from './pets/store';
+  import type {PetMove} from './pets/bond';
+  import {MOVE_SECONDS} from './pets/moves';
 
-  /** `compact` drops the caption and fills its box, for a profile card; `stage` backs a compact camera off so the whole platform shows; `paused` holds a still frame instead of animating; `focus` frames a compact view on where an item is worn; `playing` puts a controller in their hands; `bag` false leaves the carried bag off; `platform` false drops the round base for a stand drawn around it; `reaction` holds that face; `hoverReaction` makes the look's own reaction when the pointer comes over, and `reacting` when it turns true; `pet` is the id of the pet they hatched, standing at their feet unless their costume puts out another, and dressed as the costume says; `focus` of `pet` frames it. */
-  let { character, others = [], compact = false, pose = 'idle', stage = false, paused = false, focus = null, playing = false, bag = true, platform = true, reaction = null, hoverReaction = false, reacting = false, pet = null }: { character: CharacterDef | null; others?: {name:string;character:CharacterDef}[]; compact?: boolean; pose?: Pose; stage?: boolean; paused?: boolean; focus?: FocusSlot | null; playing?: boolean; bag?: boolean; platform?: boolean; reaction?: FaceReaction | null; hoverReaction?: boolean; reacting?: boolean; pet?: string | null } = $props();
+  /** `compact` drops the caption and fills its box, for a profile card; `stage` backs a compact camera off so the whole platform shows; `paused` holds a still frame instead of animating; `focus` frames a compact view on where an item is worn; `playing` puts a controller in their hands; `bag` false leaves the carried bag off; `platform` false drops the round base for a stand drawn around it; `reaction` holds that face; `hoverReaction` makes the look's own reaction when the pointer comes over, and `reacting` when it turns true; `pet` is the id of the pet they hatched, standing at their feet unless their costume puts out another, and dressed as the costume says; `focus` of `pet` frames it; a new `petMove.n` plays that move once, and `onpetclick` makes the pet clickable. */
+  let { character, others = [], compact = false, pose = 'idle', stage = false, paused = false, focus = null, playing = false, bag = true, platform = true, reaction = null, hoverReaction = false, reacting = false, pet = null, petMove = null, onpetclick = null }: { character: CharacterDef | null; others?: {name:string;character:CharacterDef}[]; compact?: boolean; pose?: Pose; stage?: boolean; paused?: boolean; focus?: FocusSlot | null; playing?: boolean; bag?: boolean; platform?: boolean; reaction?: FaceReaction | null; hoverReaction?: boolean; reacting?: boolean; pet?: string | null; petMove?: { move: PetMove; n: number } | null; onpetclick?: (() => void) | null } = $props();
   let platformMeshes: THREE.Object3D[] = [];
   $effect(() => {
     const show = platform;
@@ -35,6 +37,9 @@
   let companion: PetRig | null = null;
   let companionKey = '';
   let stillDrawn = false;
+  let view: THREE.PerspectiveCamera | null = null;
+  // Keeps drawing while a move plays, even in a paused preview.
+  let movingUntil = 0;
   // A close-up of a worn item leaves the bag off; at the side it would cover legs and feet.
   const carry = (group: THREE.Group, def: CharacterDef) => focus || !bag ? null : hangBag(group, buildBag(def.costume?.bag, def.costume?.bag ? def.costume.tints?.bag : null), 1.1);
 
@@ -115,6 +120,28 @@
     stillDrawn = false;
   });
 
+  let playedMove = 0;
+  $effect(() => {
+    const wanted = petMove;
+    if (!wanted || wanted.n === playedMove) return;
+    playedMove = wanted.n;
+    untrack(() => {
+      if (!companion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      companion.perform(wanted.move);
+      movingUntil = performance.now() + MOVE_SECONDS[wanted.move] * 1000;
+      stillDrawn = false;
+    });
+  });
+
+  function onPet(event: MouseEvent) {
+    if (!onpetclick || !companion || !view) return false;
+    const box = canvas.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((event.clientX - box.left) / box.width) * 2 - 1, -((event.clientY - box.top) / box.height) * 2 + 1), view);
+    const area = new THREE.Box3().setFromObject(companion.group, true);
+    return !area.isEmpty() && ray.ray.intersectsBox(area.expandByScalar(0.06));
+  }
+
   $effect(() => {
     if (!ready || !character) return;
     void heroKey;
@@ -155,6 +182,7 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 20);
+    view = camera;
     camera.position.set(0, 1.3, 4.4);
     camera.lookAt(0, 1, 0);
     scene.add(new THREE.HemisphereLight('#ffffff', '#64748b', 2.4));
@@ -206,8 +234,9 @@
     let frame = 0;
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
-      if ((paused || !visible) && stillDrawn) return;
-      still = reduced || paused;
+      const moving = now < movingUntil;
+      if ((paused || !visible) && stillDrawn && !moving) return;
+      still = reduced || (paused && !moving);
       const shown: Pose = playing && pose === 'idle' ? 'play' : pose;
       if (rig) {
         // Turned to their game while playing, rather than slowly looking around.
@@ -230,6 +259,7 @@
       seen.disconnect();
       controller?.dispose(); controller = null;
       refit=null;
+      view = null;
       companion?.dispose(); companion = null; companionKey = '';
       rig?.dispose(); rig = null; heroKey = ''; unhang?.(); unhang = null;
       peerRigs.forEach(peer => peer.rig.dispose()); peerRigs.clear(); peers = [];
@@ -245,7 +275,7 @@
 </script>
 
 <figure class:compact style="--character-color:{character?.body ?? '#fcd34d'}" aria-label="{compact ? 'Tawkathon character' : 'Your character'}: {character?.name ?? 'Choose a character'}" onpointerenter={() => hoverReaction && react(true)} onpointerleave={() => hoverReaction && react(false)}>
-  <canvas bind:this={canvas} aria-hidden="true"></canvas>
+  <canvas bind:this={canvas} aria-hidden="true" onpointermove={(event) => { if (onpetclick) canvas.style.cursor = onPet(event) ? 'pointer' : ''; }} onclick={(event) => { if (onPet(event)) { event.stopPropagation(); onpetclick?.(); } }}></canvas>
   {#if !compact}<figcaption><span>{others.length ? `YOU + ${others.length} IN YOUR PARTY` : 'YOUR LOOK'}</span><strong>{character?.name ?? 'Pick your character'}</strong></figcaption>{/if}
 </figure>
 

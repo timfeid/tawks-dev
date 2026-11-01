@@ -25,6 +25,7 @@ pub mod milestones;
 pub mod minecart;
 pub mod bout;
 pub mod paint_variant;
+pub mod pets;
 pub mod potato;
 pub mod protocol;
 pub mod race;

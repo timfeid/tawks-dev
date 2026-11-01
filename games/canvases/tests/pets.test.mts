@@ -69,3 +69,30 @@ test('seasonal pet gear follows the head seasons', () => {
   assert.equal(petSeasonNote(PET_ITEMS.find(item => item.id === 'pet-hat-party')!), '');
   assert.ok(PET_ITEMS.every(item => !item.description.includes('—') && !item.name.includes('—')));
 });
+
+import {PET_STAGES, PET_TRICKS, nextStage, stageFor, stageScale, tricksAt} from '../src/party/pets/bond.ts';
+import {MOVE_SECONDS, moveAt} from '../src/party/pets/moves.ts';
+
+test('a pet grows through its stages with bond and learns tricks as it does', () => {
+  assert.equal(stageFor(0), 0);
+  assert.equal(stageFor(PET_STAGES[1].bond - 1), 0);
+  assert.equal(stageFor(PET_STAGES[1].bond), 1);
+  assert.equal(stageFor(1e9), PET_STAGES.length - 1);
+  assert.equal(stageScale(null), 1);
+  assert.ok(stageScale(4) > stageScale(1));
+  assert.deepEqual(nextStage(0), { stage: PET_STAGES[1], needed: PET_STAGES[1].bond });
+  assert.equal(nextStage(1e9), null);
+  assert.deepEqual(tricksAt(0).map(trick => trick.id), ['dance', 'hop']);
+  assert.ok(tricksAt(PET_STAGES.length - 1).length === PET_TRICKS.length, 'every trick is learned by the last stage');
+});
+
+test('every move plays out and settles back where it started', () => {
+  for (const move of [...PET_TRICKS.map(trick => trick.id), 'pet', 'poke'] as const) {
+    const length = MOVE_SECONDS[move];
+    assert.ok(length > 0, move);
+    assert.deepEqual(moveAt(move, length), { lift: 0, spin: 0, flip: 0, squash: 0 }, `${move} ends at rest`);
+    const middle = moveAt(move, length / 3);
+    assert.ok(middle.lift !== 0 || middle.spin !== 0 || middle.flip !== 0 || middle.squash !== 0, `${move} moves`);
+  }
+  assert.ok(Math.abs(moveAt('spin', MOVE_SECONDS.spin - 1e-3).spin - Math.PI * 2) < 0.01, 'a spin goes all the way round');
+});

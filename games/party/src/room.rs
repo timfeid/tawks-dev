@@ -207,6 +207,8 @@ pub struct RoomView {
     pub host_id: Option<String>,
     pub phase: Phase,
     pub members: Vec<Member>,
+    /// Each seat's latest pet or poke.
+    pub pet_reacts: Vec<crate::pets::PetReact>,
     pub max_seats: usize,
     /// Present while a party is running.
     pub board: Option<BoardView>,
@@ -377,6 +379,7 @@ pub struct Room {
     teams: Vec<(u8, u8)>,
     /// When each seat last shouted something, so it cannot be spammed.
     taunted: std::collections::HashMap<u8, u64>,
+    pets: crate::pets::PetReacts,
     turn_idle: u32,
     /// Ticks since the current turn finished moving.
     turn_done: u32,
@@ -430,6 +433,7 @@ impl Room {
             bot_think: 0,
             teams: Vec::new(),
             taunted: std::collections::HashMap::new(),
+            pets: crate::pets::PetReacts::default(),
             turn_idle: 0,
             turn_done: 0,
             fuse_ticks: 0,
@@ -485,6 +489,7 @@ impl Room {
             host_id: self.host_id.clone(),
             phase: self.phase.clone(),
             members: self.members.clone(),
+            pet_reacts: self.pets.view(),
             max_seats: self.seat_cap(),
             board: self.board.as_ref().map(|board| board.view_for(seat)),
             feedback: self.feedback_for(seat),
@@ -1593,6 +1598,14 @@ impl Room {
         Ok(())
     }
 
+    /// True when the pet reacts; false while its last reaction is still playing.
+    pub fn pet_react(&mut self, user_id: &str, action: crate::pets::PetAction) -> Result<bool, RoomError> {
+        let seat = self.seat_of(user_id).ok_or(RoomError::WrongPhase)?;
+        let fresh = self.pets.react(seat, action, self.tick);
+        self.dirty |= fresh;
+        Ok(fresh)
+    }
+
     /// A shout from the sidelines. Anyone in the party can, whoever's turn
     /// it is, as long as they have not just shouted.
     pub fn taunt(&mut self, user_id: &str, taunt: Taunt) -> Result<(), RoomError> {
@@ -1702,6 +1715,7 @@ impl Room {
         crate::roster::validate_sandbox_costume(&costume, wardrobe).map_err(RoomError::InvalidCostume)?;
         let mut costume = costume;
         costume.jersey = wardrobe.and_then(|w| w.jersey.clone()).filter(|_| costume.shirt.as_deref() == Some(crate::roster::PUCKLAB_JERSEY));
+        (costume.pet.name, costume.pet.stage) = (None, None);
         let member = self.members.iter().find(|member| member.user_id == user_id).ok_or(RoomError::WrongPhase)?;
         let original = (user_id.to_string(), member.character.clone(), member.costume.clone());
         self.apply_costume(user_id, costume);

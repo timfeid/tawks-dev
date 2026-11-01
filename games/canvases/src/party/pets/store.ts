@@ -25,17 +25,17 @@ export function petItem(id: string | null | undefined): PetItem | null {
 }
 
 /** The pet drawn for someone: the one they adopted and put on, or the one they hatched, with what it wears. */
-export type ShownPet = { id: string; coat: PetItem | null; hat: PetItem | null; neck: PetItem | null };
+export type ShownPet = { id: string; coat: PetItem | null; hat: PetItem | null; neck: PetItem | null; stage: number };
 
 export function shownPet(hatched: string | null | undefined, look?: PetLook | null): ShownPet | null {
   const id = look?.id ?? hatched;
   if (!id) return null;
-  return { id, coat: petItem(look?.coat), hat: petItem(look?.hat), neck: petItem(look?.neck) };
+  return { id, coat: petItem(look?.coat), hat: petItem(look?.hat), neck: petItem(look?.neck), stage: look?.stage ?? 0 };
 }
 
 /** A stable key for a shown pet, so a preview rebuilds only when the look changes. */
 export function shownPetKey(pet: ShownPet | null) {
-  return pet ? [pet.id, pet.coat?.id, pet.hat?.id, pet.neck?.id].join('|') : '';
+  return pet ? [pet.id, pet.coat?.id, pet.hat?.id, pet.neck?.id, pet.stage].join('|') : '';
 }
 
 /** The look with `id` on. Choosing the hatched pet goes back to it. */

@@ -167,6 +167,10 @@ pub enum ClientMsg {
     Taunt {
         taunt: Taunt,
     },
+    /// Pet or poke your own pet; everyone in the room sees it react.
+    PetReact {
+        action: crate::pets::PetAction,
+    },
     ChooseBranch {
         node: u8,
     },

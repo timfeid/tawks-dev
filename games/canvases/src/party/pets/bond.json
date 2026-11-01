@@ -1,0 +1,22 @@
+{
+  "stages": [
+    { "id": "hatchling", "name": "Hatchling", "bond": 0, "scale": 1 },
+    { "id": "buddy", "name": "Buddy", "bond": 60, "scale": 1.06 },
+    { "id": "pal", "name": "Pal", "bond": 180, "scale": 1.12 },
+    { "id": "best-friend", "name": "Best friend", "bond": 400, "scale": 1.18 },
+    { "id": "legend", "name": "Legend", "bond": 800, "scale": 1.24 }
+  ],
+  "tricks": [
+    { "id": "dance", "name": "Happy dance", "stage": 0 },
+    { "id": "hop", "name": "Hop", "stage": 0 },
+    { "id": "spin", "name": "Spin", "stage": 1 },
+    { "id": "flip", "name": "Flip", "stage": 2 },
+    { "id": "show-off", "name": "Show off", "stage": 3 }
+  ],
+  "gains": [
+    { "source": "daily", "points": 10, "label": "Each daily game you finish" },
+    { "source": "tawkathon", "points": 25, "label": "A Tawkathon night with other people" },
+    { "source": "lobby", "points": 10, "label": "Time in a lobby with someone, once a day" },
+    { "source": "hello", "points": 2, "label": "Pet or poke it, once a day" }
+  ]
+}

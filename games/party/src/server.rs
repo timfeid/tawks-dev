@@ -156,6 +156,15 @@ impl PartyServer {
             });
         }
     }
+    fn pet_hello(&self, user: &str) {
+        let Some(web) = self.inner.wardrobe_web.read().ok().and_then(|web| web.clone()) else { return };
+        let user = user.to_string();
+        tokio::spawn(async move {
+            if let Err(error) = web.mutate::<_, bool>("party_pet_hello_for", &user).await {
+                warn!(%error, "a pet hello did not send");
+            }
+        });
+    }
     async fn wardrobe(&self, user: &str) -> Option<crate::roster::Wardrobe> {
         let web=self.inner.wardrobe_web.read().ok()?.clone()?;
         tokio::time::timeout(Duration::from_secs(3),web.query("party_wardrobe_for",&user)).await.ok()?.ok()
@@ -413,6 +422,8 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
     let mut events = Vec::new();
     let mut pending_feedback=std::collections::HashSet::new();
     let mut milestones = crate::milestones::MilestoneTracker::default();
+    // Tawks counts a pet's hello once a day; once per room is enough to ask.
+    let mut greeted = std::collections::HashSet::new();
 
     loop {
         tokio::select! {
@@ -578,6 +589,11 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                             ClientMsg::Dev { tool } => room.dev(&user_id, tool),
                             ClientMsg::Bet { coins } => room.bet(&user_id, coins),
                             ClientMsg::Taunt { taunt } => room.taunt(&user_id, taunt),
+                            ClientMsg::PetReact { action } => room.pet_react(&user_id, action).map(|fresh| {
+                                if fresh && !entry.guest && greeted.insert(user_id.clone()) {
+                                    server.pet_hello(&user_id);
+                                }
+                            }),
                             ClientMsg::ChooseBranch { node } => room.choose_branch(&user_id, node),
                             ClientMsg::EndTurn => room.end_turn(&user_id),
                             ClientMsg::AddBot => room.add_bot(&user_id),

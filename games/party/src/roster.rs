@@ -147,6 +147,9 @@ pub struct PetLook {
     #[serde(default, skip_serializing_if = "Option::is_none")] pub coat: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] pub hat: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] pub neck: Option<String>,
+    /// What its owner calls it, and its growth stage. Filled by Tawks.
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub stage: Option<u8>,
 }
 impl PetLook {
     pub fn is_plain(&self) -> bool { *self == Self::default() }
