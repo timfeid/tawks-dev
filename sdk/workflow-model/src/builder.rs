@@ -842,6 +842,8 @@ impl WorkflowDisplayBuilder {
             row,
             row_state: None,
             row_accent: None,
+            section_key: None,
+            section: Vec::new(),
         });
         self
     }

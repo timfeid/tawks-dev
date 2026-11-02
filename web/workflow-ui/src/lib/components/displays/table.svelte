@@ -58,22 +58,32 @@
       <tbody>
         {#each items as item}
           {@const scope = { ...inputs, [table.as]: item }}
-          {@const state = look.stateOf(table.row_state, scope)}
-          {@const accent = look.accentOf(table.row_accent, scope)}
-          <tr
-            class={['border-b border-foreground/10 last:border-b-0', state !== 'Default' && look.rowState[state]]}
-            style:background-color={accent ? look.accentFill(accent) : undefined}
-          >
-            {#each table.row as displayItem, index}
-              {@const header = headers[index]}
-              <td
-                class={['px-3 py-2 text-sm', header?.numeric && 'text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}
-                style:box-shadow={accent && index === 0 ? look.accentEdge(accent) : undefined}
-              >
-                <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
+          {#if table.section_key && interpolate(scope, table.section_key)}
+            <tr class="border-b border-foreground/10 bg-foreground/[0.03] last:border-b-0">
+              <td colspan={columnCount} class="px-3 py-2">
+                {#each table.section ?? [] as sectionItem}
+                  <WorkflowDisplay from="table" inputs={scope} {workflow} display={sectionItem} />
+                {/each}
               </td>
-            {/each}
-          </tr>
+            </tr>
+          {:else}
+            {@const state = look.stateOf(table.row_state, scope)}
+            {@const accent = look.accentOf(table.row_accent, scope)}
+            <tr
+              class={['border-b border-foreground/10 last:border-b-0', state !== 'Default' && look.rowState[state]]}
+              style:background-color={accent ? look.accentFill(accent) : undefined}
+            >
+              {#each table.row as displayItem, index}
+                {@const header = headers[index]}
+                <td
+                  class={['px-3 py-2 text-sm', header?.numeric && 'text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}
+                  style:box-shadow={accent && index === 0 ? look.accentEdge(accent) : undefined}
+                >
+                  <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
+                </td>
+              {/each}
+            </tr>
+          {/if}
         {/each}
       </tbody>
     </table>

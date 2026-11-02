@@ -78,7 +78,12 @@ row_state?: string | null;
  * Each row's wash, usually a `{key}` per item; rows it leaves
  * empty stay plain.
  */
-row_accent?: Accent | null } } | { Wysiwyg: { content_key: string } } | "MultimediaLobby" | { Video: { src: string; poster_src: string | null } } | 
+row_accent?: Accent | null;
+/**
+ * A `{key}` per item; items it fills in become section rows that
+ * draw `section` once across every column instead of the cells.
+ */
+section_key?: string | null; section?: WorkflowDisplay[] } } | { Wysiwyg: { content_key: string } } | "MultimediaLobby" | { Video: { src: string; poster_src: string | null } } | 
 /**
  * Plays the opening `seconds` of an audio file; `marks` are the
  * unlock points shown along the bar.

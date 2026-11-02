@@ -735,6 +735,12 @@ pub enum DisplayType {
         /// empty stay plain.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         row_accent: Option<Accent>,
+        /// A `{key}` per item; items it fills in become section rows that
+        /// draw `section` once across every column instead of the cells.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        section_key: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        section: Vec<WorkflowDisplay>,
     },
     Wysiwyg {
         content_key: String,

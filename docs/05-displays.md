@@ -649,12 +649,13 @@ Display conditions see responses only. Compute booleans in your bot and test the
 
 #### Table
 
-`Table { items_key, as, headers, row, row_state, row_accent }`, builder `.table(items_key, as, headers, row)`, then `.accent_from(..)` for `row_accent`. Build headers with `table_header(label, key, width, align)`.
+`Table { items_key, as, headers, row, row_state, row_accent, section_key, section }`, builder `.table(items_key, as, headers, row)`, then `.accent_from(..)` for `row_accent` and `.sections(key, children)` for `section_key` and `section`. Build headers with `table_header(label, key, width, align)`.
 
 - Reads: the array at `items_key`.
 - Renders a horizontally scrolling table. Each header shows its `label`, with `width` as its CSS width. A header with `numeric: true` lines its figures up and aligns them right, and one with `wide_only: true` leaves its column out on narrow screens.
 - Each item becomes a row with one cell per display in `row`, with the item in scope as `as`. `row_state` is a `{key}` template naming each row's [state](#tones-and-states), such as `"{p.state}"` to highlight the viewer's row.
 - `row_accent` washes each row in a colour, such as the team the viewer follows: `#rgb`, `#rrggbb`, or a `{key}` template like `"{p.accent}"` naming one per item. The page draws a faint wash of it with a bar along the row's start, so text stays readable. Anything else is refused when the workflow is registered, and a template that resolves to something other than a hex colour, or to nothing, leaves the row plain.
+- `section_key` splits one table into sections so its columns line up across them. It is a `{key}` template per item, like `"{p.section}"`. An item it fills in draws the `section` displays once across every column instead of the row's cells. Items it leaves empty, or that lack the key, are ordinary rows.
 
 ```display
 {

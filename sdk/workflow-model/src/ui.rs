@@ -613,6 +613,17 @@ impl WorkflowDisplay {
         self
     }
 
+    /// Splits a table into sections inside one grid, so columns line up
+    /// across them: items whose `key` (such as `"{r.section}"`) fills in draw
+    /// `children` once across every column instead of the row's cells.
+    pub fn sections(mut self, key: impl Into<String>, children: Vec<WorkflowDisplay>) -> Self {
+        if let DisplayType::Table { section_key, section, .. } = &mut self.r#type {
+            *section_key = Some(key.into());
+            *section = children;
+        }
+        self
+    }
+
     /// The icon of a feature, chip, notice, empty state or button.
     pub fn with_icon(mut self, name: impl Into<String>) -> Self {
         let name = Some(name.into());
@@ -1024,6 +1035,25 @@ mod tests {
         assert!(table.is_err());
         let plain = serde_json::to_value(list_row("Devils")).unwrap();
         assert!(plain["type"]["Row"].get("accent").is_none());
+    }
+
+    #[test]
+    fn a_table_carries_its_sections_and_older_tables_still_read() {
+        let table = crate::builder::WorkflowDisplayBuilder::new()
+            .table("rows", "r", vec![], vec![body("{r.team}")])
+            .build()
+            .sections("{r.section}", vec![subheading("{r.label}")]);
+        let value = serde_json::to_value(&table).unwrap();
+        assert_eq!(value["type"]["Table"]["section_key"], "{r.section}");
+        assert_eq!(value["type"]["Table"]["section"].as_array().unwrap().len(), 1);
+
+        let older = serde_json::from_value::<WorkflowDisplay>(json!({ "type": { "Table": {
+            "items_key": "rows", "as": "r", "headers": [], "row": []
+        } } }))
+        .unwrap();
+        assert!(matches!(&older.r#type, DisplayType::Table { section_key: None, section, .. } if section.is_empty()));
+        let plain = serde_json::to_value(&older).unwrap();
+        assert!(plain["type"]["Table"].get("section").is_none());
     }
 
     #[test]
