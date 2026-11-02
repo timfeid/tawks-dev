@@ -187,6 +187,27 @@ pub fn overlay(corner: Corner, content: Vec<WorkflowDisplay>) -> WorkflowDisplay
     display(DisplayType::Overlay { corner, content })
 }
 
+/// Whether this client's renderer is new enough for `DisplayType::Discussion`
+/// and `ButtonGroup`. Desktop builds bundle their renderer and stay behind the
+/// site until they update; only builds from `$client.renderer` on say so.
+fn renderer_is_current() -> NodeCondition {
+    NodeCondition::Or(vec![
+        NodeCondition::ResponseEquals { field: "$client.desktop".into(), value: serde_json::json!(false) },
+        NodeCondition::ResponseExists("$client.renderer".into()),
+    ])
+}
+
+/// Shows `content` to every client but desktop builds too old to draw it,
+/// which would put an "is drawn by tawks itself" box in its place.
+pub fn on_current_renderer(content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
+    when(renderer_is_current(), content)
+}
+
+/// What those older desktop builds show instead.
+pub fn on_older_renderer(content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
+    when(NodeCondition::Not(Box::new(renderer_is_current())), content)
+}
+
 /// Reactions and a comments button for the chat message whose chat and id
 /// `chat` and `message` resolve to; `reactions_key` and `comments_key` name
 /// what the page last knew. See `DisplayType::Discussion`.
@@ -1014,6 +1035,15 @@ mod tests {
             examples += 1;
         }
         assert!(examples > 10);
+    }
+
+    #[test]
+    fn current_and_older_renderers_get_one_side_each() {
+        let inputs = |client: serde_json::Value| std::collections::HashMap::from([("$client".to_string(), client)]);
+        let current = |client| crate::condition::eval_condition(&renderer_is_current(), &inputs(client), &Default::default());
+        assert!(current(json!({ "desktop": false })));
+        assert!(current(json!({ "desktop": true, "renderer": 2 })));
+        assert!(!current(json!({ "desktop": true })));
     }
 
     #[test]
