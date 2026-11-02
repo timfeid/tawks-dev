@@ -14,5 +14,10 @@
   { "id": "pet-neck-bowtie", "slot": "pet-neck", "style": "bowtie", "name": "Pet bow tie", "price": 2, "icon": "sparkles", "colors": ["#e0457a", "#b8325f"], "description": "A neat little bow tie." },
   { "id": "pet-neck-bandana", "slot": "pet-neck", "style": "bandana", "name": "Pet bandana", "price": 2, "icon": "star", "colors": ["#d62f3a", "#f8f8f8"], "description": "A red bandana knotted at the back." },
   { "id": "pet-neck-bell", "slot": "pet-neck", "style": "bell", "name": "Bell collar", "price": 2, "icon": "bell", "colors": ["#4d96ff", "#ffd23f"], "description": "A soft collar with a golden bell." },
-  { "id": "pet-neck-autumn", "slot": "pet-neck", "style": "scarf", "name": "Autumn scarf", "price": 2, "icon": "trees", "colors": ["#d9631e", "#ffd23f"], "from": "11-01", "until": "11-30", "description": "Warm stripes for the harvest. Sold and worn from November 1 to November 30 each year." }
+  { "id": "pet-neck-autumn", "slot": "pet-neck", "style": "scarf", "name": "Autumn scarf", "price": 2, "icon": "trees", "colors": ["#d9631e", "#ffd23f"], "from": "11-01", "until": "11-30", "description": "Warm stripes for the harvest. Sold and worn from November 1 to November 30 each year." },
+  { "id": "pet-fx-stardust", "slot": "pet-effect", "style": "stardust", "name": "Stardust trail", "price": 2, "icon": "sparkles", "description": "A trail of gold sparkles wherever your pet goes. Each pet wears its own effect." },
+  { "id": "pet-fx-bubbles", "slot": "pet-effect", "style": "bubbles", "name": "Bubble trail", "price": 2, "icon": "waves", "description": "Soap bubbles drift up behind your pet. Each pet wears its own effect." },
+  { "id": "pet-fx-hearts", "slot": "pet-effect", "style": "hearts", "name": "Heart aura", "price": 2, "icon": "heart", "description": "Little hearts float up around your pet. Each pet wears its own effect." },
+  { "id": "pet-fx-halo", "slot": "pet-effect", "style": "halo", "name": "Halo", "price": 2, "icon": "circle", "description": "A ring of soft light circles over your pet's head. Each pet wears its own effect." },
+  { "id": "pet-fx-puffs", "slot": "pet-effect", "style": "puffs", "name": "Puffy steps", "price": 2, "icon": "footprints", "description": "Small dust puffs at every step. Each pet wears its own effect." }
 ]

@@ -96,3 +96,41 @@ test('every move plays out and settles back where it started', () => {
   }
   assert.ok(Math.abs(moveAt('spin', MOVE_SECONDS.spin - 1e-3).spin - Math.PI * 2) < 0.01, 'a spin goes all the way round');
 });
+
+import {FX_BURSTS, FX_COSMETICS, FX_MAX, FxSim, ambienceFor, fade} from '../src/party/pets/fx-sim.ts';
+
+const seeded = (seed = 7) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) >>> 8) / 2 ** 24;
+
+test('every move, stage-up and bond gain has a burst that plays out', () => {
+  for (const name of ['pet', 'poke', 'dance', 'hop', 'spin', 'flip', 'show-off', 'stage-up', 'gain'] as const) {
+    const sim = new FxSim(seeded());
+    sim.burst(name);
+    let most = sim.particles.length;
+    for (let i = 0; i < 120; i++) { sim.step(1 / 30); most = Math.max(most, sim.particles.length); }
+    assert.ok(most > 0, `${name} makes particles`);
+    assert.equal(sim.particles.length, 0, `${name} ends`);
+  }
+});
+
+test('ambience grows with the stage, every store effect has particles, and the cap holds', () => {
+  assert.equal(ambienceFor(0, null).length, 0, 'a hatchling is plain');
+  assert.equal(ambienceFor(2, null).length, 0);
+  assert.ok(ambienceFor(3, null).length > 0 && ambienceFor(4, null).length > ambienceFor(3, null).length);
+  for (const item of PET_ITEMS.filter(item => item.slot === 'pet-effect')) assert.ok(FX_COSMETICS[item.style!]?.length, item.id);
+  const sim = new FxSim(seeded());
+  sim.setAmbient(ambienceFor(4, 'stardust'));
+  for (let i = 0; i < 300; i++) { sim.step(1 / 30, 1); if (i % 10 === 0) sim.burst('show-off'); }
+  assert.ok(sim.particles.length <= FX_MAX && sim.particles.length > 0);
+  assert.ok(sim.particles.every(p => fade(p) >= 0 && fade(p) <= 1));
+  assert.ok(Object.values(FX_BURSTS).flat().every(e => e.count && !e.rate), 'bursts count, ambience streams');
+});
+
+test('a pet effect goes on the pet that is out, and each pet keeps its own', () => {
+  let look = withPetItem({}, 'pet-fx-halo', 'pet-mochi');
+  assert.deepEqual(look.effects, { 'pet-mochi': 'pet-fx-halo' });
+  look = withPetItem(withPetItem(look, 'pet-fizz', 'pet-mochi'), 'pet-fx-hearts', 'pet-mochi');
+  assert.deepEqual(look.effects, { 'pet-mochi': 'pet-fx-halo', 'pet-fizz': 'pet-fx-hearts' });
+  assert.equal(shownPet('pet-mochi', look)!.effect, 'hearts');
+  assert.ok(wearsPetItem(look, 'pet-fx-hearts', 'pet-mochi') && !wearsPetItem(look, 'pet-fx-halo', 'pet-mochi'));
+  assert.equal(shownPet('pet-mochi', { ...look, id: null })!.effect, 'halo');
+});

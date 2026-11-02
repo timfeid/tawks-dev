@@ -1,0 +1,64 @@
+{
+  "max": 140,
+  "spriteScale": 1.8,
+  "bursts": {
+    "pet": [
+      {"glyph": "heart", "colors": ["#ff6f9f", "#ff9ec0", "#ffd1e1"], "count": 7, "life": [0.9, 1.3], "at": [0, 0.85, 0], "radius": 0.25, "speed": [0.35, 0.6], "dir": "up", "spread": 0.7, "gravity": 0.15, "drag": 1.2, "size": [0.16, 0.24], "grow": 1.1},
+      {"glyph": "sparkle", "colors": ["#fff3c4", "#ffffff"], "count": 5, "life": [0.5, 0.8], "at": [0, 0.7, 0], "radius": 0.4, "speed": [0.1, 0.3], "dir": "out", "size": [0.08, 0.13], "grow": 0.3}
+    ],
+    "poke": [
+      {"glyph": "bang", "colors": ["#ffd23f"], "count": 1, "life": [0.7, 0.7], "at": [0.2, 1.15, 0], "radius": 0, "speed": [0.25, 0.25], "dir": "up", "spread": 0, "drag": 3, "size": [0.3, 0.3], "grow": 1.2},
+      {"glyph": "dot", "colors": ["#f4f7ff", "#d6e6ff"], "count": 8, "life": [0.35, 0.55], "at": [0, 0.55, 0], "radius": 0.1, "speed": [0.8, 1.2], "dir": "ring", "drag": 4, "size": [0.1, 0.16], "grow": 1.8}
+    ],
+    "dance": [
+      {"glyph": "sparkle", "colors": ["#ffd23f", "#ff6f9f", "#4d96ff"], "count": 10, "life": [0.7, 1.1], "at": [0, 0.6, 0], "radius": 0.45, "speed": [0.15, 0.35], "dir": "up", "spread": 1.2, "size": [0.08, 0.14], "grow": 0.4}
+    ],
+    "hop": [
+      {"glyph": "dot", "colors": ["#f4f7ff", "#cfd8e3"], "count": 8, "life": [0.35, 0.5], "at": [0, 0.04, 0], "radius": 0.15, "speed": [0.6, 0.9], "dir": "ring", "drag": 4, "size": [0.1, 0.15], "grow": 2}
+    ],
+    "spin": [
+      {"glyph": "sparkle", "colors": ["#4d96ff", "#9ad0ff", "#ffffff"], "count": 16, "life": [0.6, 0.9], "at": [0, 0.5, 0], "radius": 0.55, "speed": [0.1, 0.2], "dir": "swirl", "spin": 7, "size": [0.08, 0.13], "grow": 0.4}
+    ],
+    "flip": [
+      {"glyph": "star", "colors": ["#ffd23f", "#fff3c4"], "count": 9, "life": [0.7, 1], "at": [0, 0.9, 0], "radius": 0.2, "speed": [0.6, 1], "dir": "out", "gravity": -0.8, "drag": 1, "size": [0.13, 0.2], "grow": 0.5}
+    ],
+    "show-off": [
+      {"glyph": "dot", "colors": ["#ff6f9f", "#ffd23f", "#62c370", "#4d96ff", "#9b5de5"], "count": 24, "life": [1.1, 1.6], "at": [0, 1, 0], "radius": 0.15, "speed": [0.8, 1.3], "dir": "up", "spread": 0.9, "gravity": -1.4, "drag": 0.8, "size": [0.07, 0.11], "grow": 1, "delay": 0.9},
+      {"glyph": "sparkle", "colors": ["#fff3c4"], "count": 8, "life": [0.6, 0.9], "at": [0, 0.5, 0], "radius": 0.55, "speed": [0.1, 0.2], "dir": "swirl", "spin": 6, "size": [0.08, 0.12], "grow": 0.4}
+    ],
+    "stage-up": [
+      {"glyph": "ring", "colors": ["#ffd23f"], "count": 1, "life": [0.9, 0.9], "at": [0, 0.03, 0], "radius": 0, "speed": [0, 0], "dir": "up", "flat": true, "size": [0.6, 0.6], "grow": 4},
+      {"glyph": "star", "colors": ["#ffd23f", "#fff3c4", "#ffffff"], "count": 18, "life": [0.9, 1.4], "at": [0, 0.5, 0], "radius": 0.2, "speed": [0.9, 1.5], "dir": "out", "gravity": -0.9, "drag": 1.2, "size": [0.12, 0.2], "grow": 0.4},
+      {"glyph": "sparkle", "colors": ["#ffffff", "#fff3c4"], "count": 12, "life": [1.2, 1.8], "at": [0, 0.2, 0], "radius": 0.5, "speed": [0.3, 0.6], "dir": "up", "spread": 0.3, "size": [0.08, 0.12], "grow": 0.3, "delay": 0.25}
+    ],
+    "gain": [
+      {"glyph": "sparkle", "colors": ["#ffd23f", "#ffffff"], "count": 6, "life": [0.6, 0.9], "at": [0, 1.1, 0], "radius": 0.25, "speed": [0.15, 0.3], "dir": "up", "spread": 1, "size": [0.08, 0.12], "grow": 0.3}
+    ]
+  },
+  "ambient": {
+    "3": [
+      {"glyph": "dot", "colors": ["#fff3c4", "#ffe58a"], "rate": 2.6, "life": [2.5, 3.5], "at": [0, 0.5, 0], "radius": 0.62, "speed": [0.03, 0.08], "dir": "up", "spread": 1.4, "size": [0.08, 0.12], "grow": 0.6, "alpha": 0.8, "shell": true}
+    ],
+    "4": [
+      {"glyph": "dot", "colors": ["#fff3c4", "#ffe58a"], "rate": 2.6, "life": [2.5, 3.5], "at": [0, 0.5, 0], "radius": 0.62, "speed": [0.03, 0.08], "dir": "up", "spread": 1.4, "size": [0.08, 0.12], "grow": 0.6, "alpha": 0.8, "shell": true},
+      {"glyph": "ring", "colors": ["#ffd23f"], "rate": 0.7, "life": [2.2, 2.2], "at": [0, 0.02, 0], "radius": 0, "speed": [0, 0], "dir": "up", "flat": true, "size": [0.9, 0.9], "grow": 1.6, "alpha": 0.35}
+    ]
+  },
+  "cosmetics": {
+    "stardust": [
+      {"glyph": "sparkle", "colors": ["#ffd23f", "#fff3c4", "#ffffff"], "rate": 16, "move": true, "life": [0.6, 1], "at": [0, 0.4, -0.45], "radius": 0.3, "speed": [0.05, 0.15], "dir": "back", "gravity": 0.1, "size": [0.09, 0.14], "grow": 0.2}
+    ],
+    "bubbles": [
+      {"glyph": "bubble", "colors": ["#9ad0ff", "#d6e6ff"], "rate": 8, "move": true, "life": [1, 1.5], "at": [0, 0.45, -0.45], "radius": 0.3, "speed": [0.08, 0.18], "dir": "back", "gravity": 0.25, "size": [0.12, 0.18], "grow": 1.3, "alpha": 0.8}
+    ],
+    "hearts": [
+      {"glyph": "heart", "colors": ["#ff6f9f", "#ff9ec0"], "rate": 3, "life": [1.6, 2.2], "at": [0, 0.3, 0], "radius": 0.62, "speed": [0.12, 0.2], "dir": "up", "spread": 0.3, "size": [0.1, 0.14], "grow": 0.5, "alpha": 0.85, "shell": true}
+    ],
+    "halo": [
+      {"glyph": "dot", "colors": ["#ffffff", "#fff3c4"], "rate": 6, "life": [1.6, 1.6], "at": [0, 1.12, 0], "radius": 0, "speed": [0, 0], "dir": "orbit", "orbit": 0.28, "spin": 2.2, "size": [0.05, 0.07], "grow": 0.8}
+    ],
+    "puffs": [
+      {"glyph": "dot", "colors": ["#fbf6ee", "#ece3d2"], "rate": 5, "move": true, "life": [0.5, 0.7], "at": [0, 0.03, 0], "radius": 0.5, "speed": [0.1, 0.25], "dir": "ring", "drag": 3, "gravity": 0.2, "size": [0.14, 0.2], "grow": 1.8, "alpha": 0.95, "shell": true}
+    ]
+  }
+}

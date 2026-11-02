@@ -150,6 +150,8 @@ pub struct PetLook {
     /// What its owner calls it, and its growth stage. Filled by Tawks.
     #[serde(default, skip_serializing_if = "Option::is_none")] pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] pub stage: Option<u8>,
+    /// The pet effect each pet wears, by pet id. Checked by Tawks.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")] pub effects: std::collections::BTreeMap<String, String>,
 }
 impl PetLook {
     pub fn is_plain(&self) -> bool { *self == Self::default() }
@@ -218,6 +220,7 @@ pub fn validate_sandbox_costume(costume: &Costume, wardrobe: Option<&Wardrobe>) 
     if costume.extras.iter().enumerate().any(|(i, id)| costume.extras[..i].contains(id)) { return Err("Each extra goes on once."); }
     if costume.reaction.iter().chain(&costume.reaction_pool).any(|id| !reactions().iter().any(|reaction| reaction.id == *id)) { return Err("Choose a reaction from the catalog."); }
     if costume.pet.slots().any(|(slot, id)| !pet_items().iter().any(|item| item.id == id && item.slot == slot)) { return Err("Choose pet gear from the catalog."); }
+    if costume.pet.effects.values().any(|id| !pet_items().iter().any(|item| item.id == *id && item.slot == "pet-effect")) { return Err("Choose a pet effect from the catalog."); }
     if costume.tints.iter().any(|(slot, color)| !TINT_SLOTS.contains(&slot.as_str()) || !tint_palette().contains(color)) { return Err("Choose a colour from the palette."); }
     if let Some(id) = costume.model_id.as_deref() {
         // A bag is carried, not worn, so it goes with any character.

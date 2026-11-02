@@ -151,10 +151,11 @@ fn a_pet_look_rides_along_with_the_costume_and_only_catalog_gear_previews() {
     assert!(validate_sandbox_costume(&look, None).is_ok());
     for item in pet_items() {
         let mut pet = PetLook::default();
-        *match item.slot.as_str() { "pet" => &mut pet.id, "pet-coat" => &mut pet.coat, "pet-hat" => &mut pet.hat, _ => &mut pet.neck } = Some(item.id.clone());
+        if item.slot == "pet-effect" { pet.effects.insert("pet-fizz".into(), item.id.clone()); }
+        else { *match item.slot.as_str() { "pet" => &mut pet.id, "pet-coat" => &mut pet.coat, "pet-hat" => &mut pet.hat, _ => &mut pet.neck } = Some(item.id.clone()); }
         assert!(validate_sandbox_costume(&Costume { color: "clover".into(), pet, ..Costume::default() }, None).is_ok(), "{}", item.id);
     }
-    for pet in [PetLook { hat: Some("hat-cap".into()), ..PetLook::default() }, PetLook { neck: Some("pet-hat-party".into()), ..PetLook::default() }, PetLook { id: Some("pet-dragon".into()), ..PetLook::default() }] {
+    for pet in [PetLook { hat: Some("hat-cap".into()), ..PetLook::default() }, PetLook { neck: Some("pet-hat-party".into()), ..PetLook::default() }, PetLook { id: Some("pet-dragon".into()), ..PetLook::default() }, PetLook { effects: [("pet-fizz".to_string(), "pet-hat-party".to_string())].into(), ..PetLook::default() }] {
         assert!(validate_sandbox_costume(&Costume { color: "clover".into(), pet, ..Costume::default() }, None).is_err());
     }
 }

@@ -14,8 +14,8 @@
   import type {PetMove} from './pets/bond';
   import {MOVE_SECONDS} from './pets/moves';
 
-  /** `compact` drops the caption and fills its box, for a profile card; `stage` backs a compact camera off so the whole platform shows; `paused` holds a still frame instead of animating; `focus` frames a compact view on where an item is worn; `playing` puts a controller in their hands; `bag` false leaves the carried bag off; `platform` false drops the round base for a stand drawn around it; `reaction` holds that face; `hoverReaction` makes the look's own reaction when the pointer comes over, and `reacting` when it turns true; `pet` is the id of the pet they hatched, standing at their feet unless their costume puts out another, and dressed as the costume says; `focus` of `pet` frames it; a new `petMove.n` plays that move once, and `onpetclick` makes the pet clickable. */
-  let { character, others = [], compact = false, pose = 'idle', stage = false, paused = false, focus = null, playing = false, bag = true, platform = true, reaction = null, hoverReaction = false, reacting = false, pet = null, petMove = null, onpetclick = null }: { character: CharacterDef | null; others?: {name:string;character:CharacterDef}[]; compact?: boolean; pose?: Pose; stage?: boolean; paused?: boolean; focus?: FocusSlot | null; playing?: boolean; bag?: boolean; platform?: boolean; reaction?: FaceReaction | null; hoverReaction?: boolean; reacting?: boolean; pet?: string | null; petMove?: { move: PetMove; n: number } | null; onpetclick?: (() => void) | null } = $props();
+  /** `compact` drops the caption and fills its box, for a profile card; `stage` backs a compact camera off so the whole platform shows; `paused` holds a still frame instead of animating; `focus` frames a compact view on where an item is worn; `playing` puts a controller in their hands; `bag` false leaves the carried bag off; `platform` false drops the round base for a stand drawn around it; `reaction` holds that face; `hoverReaction` makes the look's own reaction when the pointer comes over, and `reacting` when it turns true; `pet` is the id of the pet they hatched, standing at their feet unless their costume puts out another, and dressed as the costume says; `focus` of `pet` frames it; a new `petMove.n` plays that move once, and `onpetclick` makes the pet clickable; a new `petCelebrate.n` shows a stage reached or bond gained; `effects` false, a paused preview and reduced motion leave every pet particle off. */
+  let { character, others = [], compact = false, pose = 'idle', stage = false, paused = false, focus = null, playing = false, bag = true, platform = true, reaction = null, hoverReaction = false, reacting = false, pet = null, petMove = null, onpetclick = null, petCelebrate = null, effects = true }: { character: CharacterDef | null; others?: {name:string;character:CharacterDef}[]; compact?: boolean; pose?: Pose; stage?: boolean; paused?: boolean; focus?: FocusSlot | null; playing?: boolean; bag?: boolean; platform?: boolean; reaction?: FaceReaction | null; hoverReaction?: boolean; reacting?: boolean; pet?: string | null; petMove?: { move: PetMove; n: number } | null; onpetclick?: (() => void) | null; petCelebrate?: { kind: 'stage-up' | 'gain'; points?: number; n: number } | null; effects?: boolean } = $props();
   let platformMeshes: THREE.Object3D[] = [];
   $effect(() => {
     const show = platform;
@@ -112,12 +112,13 @@
   // A close-up of a worn item has no room for it.
   $effect(() => {
     const wanted = ready && character && (!focus || focus === 'pet') ? shownPet(pet, character.costume?.pet) : null;
-    const key = shownPetKey(wanted);
+    const particles = effects && !paused && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const key = `${shownPetKey(wanted)}|${particles}`;
     untrack(() => {
       if (key === companionKey) return;
       companion?.dispose(); companion = null; companionKey = key;
       if (wanted) {
-        companion = buildPet(wanted.id, undefined, wanted);
+        companion = buildPet(wanted.id, undefined, wanted, { fx: particles });
         // At the platform's front edge on the side away from the bag, turned partly to its owner.
         companion.group.rotation.y = -0.45;
         scene.add(companion.group);
@@ -143,6 +144,18 @@
       if (!companion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       companion.perform(wanted.move);
       movingUntil = performance.now() + MOVE_SECONDS[wanted.move] * 1000;
+      stillDrawn = false;
+    });
+  });
+
+  let celebrated = 0;
+  $effect(() => {
+    const wanted = petCelebrate;
+    if (!wanted || wanted.n === celebrated) return;
+    celebrated = wanted.n;
+    untrack(() => {
+      companion?.celebrate(wanted.kind, wanted.points);
+      movingUntil = performance.now() + 1800;
       stillDrawn = false;
     });
   });

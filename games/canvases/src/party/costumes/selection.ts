@@ -24,6 +24,7 @@ export function takeOff(costume:Costume,id:string):Costume {
   if(costume.shirt===id&&'jersey' in costume)look.jersey=null;
   if(look.extras?.includes(id))look.extras=look.extras.filter(extra=>extra!==id);
   if(look.pet&&Object.values(look.pet).includes(id))look.pet=Object.fromEntries(Object.entries(look.pet).map(([field,worn])=>[field,worn===id?null:worn]));
+  if(look.pet?.effects&&Object.values(look.pet.effects).includes(id))look.pet={...look.pet,effects:Object.fromEntries(Object.entries(look.pet.effects).filter(([,worn])=>worn!==id))};
   return look;
 }
 
@@ -73,6 +74,6 @@ export function withTint(costume:Costume,slot:TintSlot,color:string|null):Costum
 export function hasUnownedSelection(costume:Costume,owned:readonly string[],catalogIds:readonly string[]) {
   if(costume.model_id&&catalogIds.includes(costume.model_id)&&!owned.includes(costume.model_id))return true;
   const pet=costume.pet;
-  const petGear=[pet?.id,pet?.coat,pet?.hat,pet?.neck].filter((id):id is string=>!!id);
+  const petGear=[pet?.id,pet?.coat,pet?.hat,pet?.neck,...Object.values(pet?.effects??{})].filter((id):id is string=>!!id);
   return SINGLE_SLOTS.some(slot=>!!costume[slot]&&!owned.includes(costume[slot]!))||(costume.extras??[]).some(id=>!owned.includes(id))||(!!costume.reaction&&!owned.includes(costume.reaction))||petGear.some(id=>!owned.includes(id));
 }

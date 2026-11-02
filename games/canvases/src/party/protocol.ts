@@ -28,7 +28,7 @@ export type Costume = {
 export type TintSlot = 'hat' | 'shirt' | 'pants' | 'shoes' | 'gloves' | 'bag' | 'extra';
 
 /** What the pet wears; `id` is an adopted pet shown in place of the hatched one. */
-export type PetLook = { id?: string | null; coat?: string | null; hat?: string | null; neck?: string | null; /** What its owner calls it. Set by Tawks. */ name?: string | null; /** Its growth stage, an index into pets/bond.json. Set by Tawks. */ stage?: number | null };
+export type PetLook = { id?: string | null; coat?: string | null; hat?: string | null; neck?: string | null; /** What its owner calls it. Set by Tawks. */ name?: string | null; /** Its growth stage, an index into pets/bond.json. Set by Tawks. */ stage?: number | null; /** The pet effect each pet wears, by pet id. */ effects?: Partial<Record<string, string>> | null };
 
 export type JerseyStripe = {
   pattern: 'single' | 'double' | 'triple' | 'bold' | 'thick_thin' | 'thin_thick_thin';

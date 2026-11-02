@@ -6,6 +6,7 @@ import { petById } from './catalog';
 import { stageScale, type PetMove } from './bond';
 import { MOVE_SECONDS, moveAt, moveClip } from './moves';
 import { buildGear } from './pet-gear';
+import { PetFx } from './pet-fx';
 import type { PetItem, ShownPet } from './store';
 
 const files = import.meta.glob('./models/*.glb', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -21,8 +22,10 @@ export type PetRig = {
   group: THREE.Group;
   ready: Promise<void>;
   animate: (time: number, cheer?: boolean) => void;
-  /** Plays a trick, or a reaction to a pet or a poke, from the next frame. */
+  /** Plays a trick, or a reaction to a pet or a poke, from the next frame, with its burst. */
   perform: (move: PetMove) => void;
+  /** A stage reached, or bond gained, shown in particles over the pet. */
+  celebrate: (kind: 'stage-up' | 'gain', points?: number) => void;
   dispose: () => void;
 };
 
@@ -74,8 +77,16 @@ function wear(model: THREE.Object3D, rest: THREE.Object3D, item: PetItem | null,
   return gear;
 }
 
-/** `look` is the coat and gear it wears, from shownPet. */
-export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 'coat' | 'hat' | 'neck'> & { stage?: number } | null): PetRig {
+/** How much simulated time a fresh pet's ambience starts with, so a still frame already shows it. */
+const WARM_UP = 1.5;
+
+/** `look` is the coat and gear it wears and its stage and effect, from shownPet. `fx` false leaves every particle off, for reduced motion, performance mode and guests. */
+export function buildPet(
+  id: string,
+  height = PET_HEIGHT,
+  look?: (Pick<ShownPet, 'coat' | 'hat' | 'neck'> & { stage?: number; effect?: string | null }) | null,
+  { fx: particles = true }: { fx?: boolean } = {},
+): PetRig {
   const group = new THREE.Group();
   group.name = `pet-${id}`;
   const tall = height * stageScale(look?.stage);
@@ -83,6 +94,12 @@ export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 
   const pivot = new THREE.Group();
   pivot.position.y = tall / 2;
   group.add(pivot);
+  const fx = particles && typeof document !== 'undefined' ? new PetFx(tall) : null;
+  if (fx) {
+    fx.setAmbience(look?.stage ?? 0, look?.effect);
+    group.add(fx.group);
+  }
+  let lastTime: number | null = null;
   let hopClip: THREE.AnimationAction | null = null;
   let move: { name: PetMove; at: number | null } | null = null;
   let moving: THREE.AnimationAction | null = null;
@@ -138,6 +155,11 @@ export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 
     group,
     ready: ready.catch(() => {}),
     animate(time, wantCheer = false) {
+      if (fx) {
+        if (lastTime === null) for (let warm = 0; warm < WARM_UP; warm += 1 / 30) fx.update(1 / 30);
+        else fx.update(Math.min(Math.max(time - lastTime, 0), 0.1));
+        lastTime = time;
+      }
       if (!mixer) return;
       if (move && move.at === null) move.at = time;
       const t = move && move.at !== null ? time - move.at : 0;
@@ -168,9 +190,15 @@ export function buildPet(id: string, height = PET_HEIGHT, look?: Pick<ShownPet, 
     },
     perform(name) {
       move = { name, at: null };
+      fx?.burst(name);
+    },
+    celebrate(kind, points = 0) {
+      if (kind === 'stage-up') fx?.burst('stage-up');
+      else fx?.gain(points);
     },
     dispose() {
       disposed = true;
+      fx?.dispose();
       mixer?.stopAllAction();
       gear.forEach((worn) => worn.dispose());
       group.removeFromParent();
