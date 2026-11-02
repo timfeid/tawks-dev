@@ -982,7 +982,7 @@ Display conditions see responses only. Compute booleans in your bot and test the
 
 #### Loader
 
-`Loader`, builder `.loader()`. Shows "Loading..." after a 250 ms delay, so quick loads never flash it. `loading(title)` is the block for a page waiting on its data.
+`Loader`, builder `.loader()`. Shows the ghost loader after a half second delay, so quick loads never flash it. `loading(title)` is the block for a page waiting on its data.
 
 #### Tooltip
 

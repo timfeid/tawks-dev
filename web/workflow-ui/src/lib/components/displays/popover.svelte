@@ -20,7 +20,7 @@
     if ('Popover' in display.type) return display.type.Popover;
   });
 
-  let triggerRef = $state<HTMLButtonElement>(null!);
+  let triggerRef = $state<HTMLElement>(null!);
 
   // Action to listen for the bubbling close event
   function closeListener(node: HTMLElement) {
@@ -48,9 +48,17 @@
       toast.error('no action');
       return;
     }
-    if (provider.processAction) {
-        await provider.processAction(workflow.instance_id, action, {});
-    }
+    // Opening and closing are best effort: a race with the search on its way
+    // only loses a refresh, and the next keystroke makes up for it.
+    await provider.processAction?.(workflow.instance_id, action, {}).catch((error) => console.warn(error));
+  }
+
+  /** Through its input event, so the form forgets the last search and the same words can search again. */
+  function clearField() {
+    const field = triggerRef?.querySelector('input');
+    if (!field?.value) return;
+    field.value = '';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   async function openChanged(v: boolean) {
@@ -68,6 +76,7 @@
       return;
     }
 
+    clearField();
     if (popover.closed_server_action_id) {
       await submitServerAction(popover.closed_server_action_id);
     }
@@ -85,9 +94,26 @@
         }
       }}
     >
-      {#each popover.trigger as childDisplay}
-        <WorkflowDisplay {workflow} display={childDisplay} {inputs} />
-      {/each}
+      {#snippet child({ props })}
+        <!-- A div, because a field inside a button can't be focused in every browser. -->
+        {@const { role: _role, tabindex: _tabindex, onkeydown: _onkeydown, type: _type, ...trigger } = props}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          {...trigger}
+          class={popover?.width === 'Fill' ? 'min-w-0 flex-1' : ''}
+          oninput={(event) => {
+            // Typing into a field that took focus without a click still shows its results.
+            if (!open && (event.target as HTMLInputElement).value) {
+              open = true;
+              openChanged(true);
+            }
+          }}
+        >
+          {#each popover.trigger as childDisplay}
+            <WorkflowDisplay {workflow} display={childDisplay} {inputs} />
+          {/each}
+        </div>
+      {/snippet}
     </Popover.Trigger>
 
     <Popover.Content

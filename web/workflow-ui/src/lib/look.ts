@@ -259,7 +259,8 @@ export function panel(t: Tone): string {
   return `rounded-2xl border p-4 sm:p-5 ${toneSoft(t)}`;
 }
 
-const button = 'inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors';
+// overflow-wrap: a page's break-anywhere must not split a button's label mid-word, as in "Searc h".
+const button = 'inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors pointer-coarse:min-h-11 [overflow-wrap:normal]';
 
 export const link: Record<LinkStyle, string> = {
   Plain: '',
@@ -283,7 +284,8 @@ export const action: Record<ActionLook, string> = {
   Secondary: `${button} border border-foreground/20 text-foreground hover:bg-foreground/5`,
   Ghost: `${button} text-muted-foreground hover:bg-foreground/5 hover:text-foreground`,
   Danger: `${button} bg-red-500/90 text-white hover:bg-red-500`,
-  Icon: 'inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-foreground/15 text-foreground transition-colors hover:bg-foreground/5',
+  // The extra layer makes a 44px target on touch without changing how big it looks next to a field.
+  Icon: 'relative inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-foreground/15 text-foreground transition-colors hover:bg-foreground/5 pointer-coarse:after:absolute pointer-coarse:after:-inset-1',
   Link: 'inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground',
 };
 
@@ -325,7 +327,7 @@ export const dock = {
   shell: 'pointer-events-none sticky bottom-0 z-20 flex flex-col',
   floating: 'md:pb-4',
   bar: 'pointer-events-auto flex items-center justify-end gap-2 border-t border-foreground/10 bg-background/95 px-2 pt-1 pb-2 backdrop-blur md:mx-auto md:mb-4 md:w-fit md:max-w-[calc(100%-2rem)] md:rounded-full md:border md:p-1.5 md:shadow-2xl',
-  actions: 'flex shrink-0 items-center gap-2',
+  actions: 'flex min-w-0 items-center gap-2',
   /** The tabs' row, centered on the whole area so a narrow page, a wide one and a chat all put them in one place. */
   above: 'flex min-w-0 shrink-0 flex-wrap items-center justify-center gap-2 px-4 pt-4 sm:px-6 sm:pt-6',
   /** A title with its main button: side by side on a wide screen, the button under the title on a phone. */
@@ -374,6 +376,7 @@ export function columns(n: number, fixed: boolean): string {
   if (n === 2) return 'grid-cols-1 @lg:grid-cols-2';
   if (n === 3) return 'grid-cols-1 @lg:grid-cols-2 @3xl:grid-cols-3';
   if (n === 4) return 'grid-cols-2 @3xl:grid-cols-4';
+  if (n === 5) return 'grid-cols-2 @lg:grid-cols-3 @2xl:grid-cols-4 @4xl:grid-cols-5';
   return 'grid-cols-4 @2xl:grid-cols-8';
 }
 

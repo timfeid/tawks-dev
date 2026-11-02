@@ -14,6 +14,19 @@
   const formSubmit = getContext<(() => void) | undefined>('form-submit');
   let disabled = $derived(press.pending || press.disabled(action?.act));
 
+  // A form clears its fields as it sends, so a second press would send them empty.
+  let sentJustNow = false;
+  function holdSecondSubmit(event: MouseEvent) {
+    if (!action?.submit) return;
+    if (sentJustNow) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    sentJustNow = true;
+    setTimeout(() => (sentJustNow = false), 1000);
+  }
+
   function onclick(event: MouseEvent) {
     if (!action) return;
     if (action.submit && formSubmit) {
@@ -36,6 +49,7 @@
     title={action.look === 'Icon' ? label : undefined}
     aria-busy={press.pending}
     {disabled}
+    onclickcapture={holdSecondSubmit}
     {onclick}
   >
     {#if Icon}<Icon class="size-4 shrink-0" />{/if}

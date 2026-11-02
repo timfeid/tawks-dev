@@ -16,8 +16,8 @@
   <div class="flex min-w-0 flex-col gap-1.5">
     {#if meter.label || meter.value}
       <div class="flex items-baseline justify-between gap-3 text-xs">
-        <span class="text-muted-foreground">{meter.label ? interpolate(inputs, meter.label) : ''}</span>
-        {#if meter.value}<span class="font-semibold text-foreground tabular-nums">{interpolate(inputs, meter.value)}</span>{/if}
+        <span class="min-w-0 truncate text-muted-foreground">{meter.label ? interpolate(inputs, meter.label) : ''}</span>
+        {#if meter.value}<span class="shrink-0 font-semibold whitespace-nowrap text-foreground tabular-nums">{interpolate(inputs, meter.value)}</span>{/if}
       </div>
     {/if}
     <div class="h-1.5 overflow-hidden rounded-full bg-foreground/10">

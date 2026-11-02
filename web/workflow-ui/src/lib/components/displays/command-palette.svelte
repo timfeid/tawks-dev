@@ -25,7 +25,6 @@
   });
 
   function handleSelect(item: any) {
-    console.log('selected item', item);
     buttonClicked?.();
 
     // 2. Dispatch a bubbling event to tell any parent Popover to close
@@ -50,7 +49,6 @@
         root.querySelectorAll('[data-command-item]'),
       ).filter((item) => item.getAttribute('data-hidden') !== 'true');
 
-      console.log('selected', selected, visibleItems[0]);
       if (selected && visibleItems[0] === selected) {
         e.preventDefault();
         e.stopPropagation();
@@ -105,7 +103,7 @@
                 </div>
               {/if}
 
-              <span class="truncate">{item.label}</span>
+              <span class="line-clamp-2 [overflow-wrap:anywhere]">{item.label}</span>
 
               {#if item.keywords && item.keywords.length > 0}
                 <span class="hidden">{item.keywords.join(' ')}</span>
