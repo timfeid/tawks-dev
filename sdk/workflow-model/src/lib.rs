@@ -1007,11 +1007,16 @@ pub enum DisplayType {
         content: Vec<WorkflowDisplay>,
     },
     /// A band in `color` with `image` large and faint in its corner, washed
-    /// dark so `content` reads over it.
+    /// dark so `content` reads over it. With `photo`, the band is a wide
+    /// picture instead, with `credit` under it in small print.
     Backdrop {
         color: String,
         image: String,
         content: Vec<WorkflowDisplay>,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        photo: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        credit: String,
     },
     /// A month, seven days to a row under the weekday names. Each item of
     /// `items_key` is one cell: `day`, and optionally `outside` (true for days

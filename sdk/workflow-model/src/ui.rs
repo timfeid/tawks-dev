@@ -421,7 +421,31 @@ pub fn logo(src: impl Into<String>, alt: impl Into<String>, size: Size) -> Workf
 }
 
 pub fn backdrop(color: impl Into<String>, image: impl Into<String>, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
-    display(DisplayType::Backdrop { color: color.into(), image: image.into(), content })
+    display(DisplayType::Backdrop {
+        color: color.into(),
+        image: image.into(),
+        content,
+        photo: String::new(),
+        credit: String::new(),
+    })
+}
+
+/// A backdrop that turns into a wide photo band, credited, when `photo`
+/// interpolates to a picture; otherwise the plain band.
+pub fn photo_backdrop(
+    color: impl Into<String>,
+    image: impl Into<String>,
+    photo: impl Into<String>,
+    credit: impl Into<String>,
+    content: Vec<WorkflowDisplay>,
+) -> WorkflowDisplay {
+    display(DisplayType::Backdrop {
+        color: color.into(),
+        image: image.into(),
+        content,
+        photo: photo.into(),
+        credit: credit.into(),
+    })
 }
 
 pub fn calendar(items_key: impl Into<String>) -> WorkflowDisplay {

@@ -251,9 +251,10 @@ tint?: string; caption_placement?: CaptionPlacement } } |
 { Overlay: { corner: Corner; content: WorkflowDisplay[] } } | 
 /**
  * A band in `color` with `image` large and faint in its corner, washed
- * dark so `content` reads over it.
+ * dark so `content` reads over it. With `photo`, the band is a wide
+ * picture instead, with `credit` under it in small print.
  */
-{ Backdrop: { color: string; image: string; content: WorkflowDisplay[] } } | 
+{ Backdrop: { color: string; image: string; content: WorkflowDisplay[]; photo: string; credit: string } } | 
 /**
  * A month, seven days to a row under the weekday names. Each item of
  * `items_key` is one cell: `day`, and optionally `outside` (true for days
