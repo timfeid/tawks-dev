@@ -7,90 +7,45 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
+use crate::bout::{Bout, Contestant, Input, Skill};
 use crate::fpmove::{self, Block, Body, EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS};
-use crate::bout::{Contestant, Input, Bout, Skill};
 
 pub const ARENA_HALF: f32 = 26.0;
 pub const MAX_HP: i16 = 150;
 pub const SHOT_DAMAGE: i16 = 25;
 pub const SHOT_RANGE: f32 = 60.0;
 pub const FIRE_COOLDOWN: f32 = 0.28;
+/// Paintballs travel quickly, but far shots need a little elevation.
+pub const PAINTBALL_SPEED: f32 = 48.0;
+pub const PAINTBALL_GRAVITY: f32 = 9.8;
 pub const RESPAWN_SECONDS: f32 = 2.5;
 pub const ROUND_SECONDS: f32 = 90.0;
 
 const BOT_REACTION: f32 = 0.38;
 
-/// A big open yard: a stepped platform in the middle, long walls with gaps,
-/// crates and pillars, laid out the same way whichever corner you spawn in.
+/// Mirrored speedball lanes with inflatable bunkers and open flanks.
 pub fn arena() -> Vec<Block> {
-    let mut blocks = vec![Block {
-        x: 0.0,
-        z: 0.0,
-        hx: 5.0,
-        hz: 5.0,
-        top: 1.6,
-        bottom: 0.0,
-    }];
-    // Steps up onto the middle platform, low enough to hop.
-    for (x, z) in [(8.0, 0.0), (-8.0, 0.0), (0.0, 8.0), (0.0, -8.0)] {
+    let mut blocks = Vec::new();
+    let mut bunker = |x, z, hx, hz, top| {
         blocks.push(Block {
             x,
             z,
-            hx: 1.8,
-            hz: 1.8,
-            top: 0.8,
+            hx,
+            hz,
+            top,
             bottom: 0.0,
-        });
-    }
-    for (sx, sz) in [(1.0f32, 1.0f32), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
-        blocks.push(Block {
-            x: 14.0 * sx,
-            z: 14.0 * sz,
-            hx: 1.8,
-            hz: 1.8,
-            top: 2.4,
-            bottom: 0.0,
-        });
-        blocks.push(Block {
-            x: 21.0 * sx,
-            z: 8.5 * sz,
-            hx: 1.0,
-            hz: 5.0,
-            top: 1.7,
-            bottom: 0.0,
-        });
-        blocks.push(Block {
-            x: 8.5 * sx,
-            z: 21.0 * sz,
-            hx: 5.0,
-            hz: 1.0,
-            top: 1.7,
-            bottom: 0.0,
-        });
-        blocks.push(Block {
-            x: 10.5 * sx,
-            z: 6.0 * sz,
-            hx: 1.5,
-            hz: 1.5,
-            top: 0.9,
-            bottom: 0.0,
-        });
-        blocks.push(Block {
-            x: 19.0 * sx,
-            z: 19.0 * sz,
-            hx: 0.9,
-            hz: 0.9,
-            top: 3.2,
-            bottom: 0.0,
-        });
-        blocks.push(Block {
-            x: 23.0 * sx,
-            z: 0.0,
-            hx: 1.2,
-            hz: 2.4,
-            top: 1.2,
-            bottom: 0.0,
-        });
+        })
+    };
+    // Midfield X and mirrored wing bunkers. Gaps allow both lanes to flank.
+    bunker(0.0, 0.0, 1.8, 1.8, 2.2);
+    for sign in [-1.0f32, 1.0] {
+        bunker(0.0, sign * 9.5, 2.8, 0.9, 1.5);
+        for wing in [-1.0f32, 1.0] {
+            bunker(wing * 9.0, sign * 6.0, 1.1, 2.5, 2.0);
+            bunker(wing * 16.5, sign * 13.0, 1.6, 1.6, 1.65);
+            bunker(wing * 9.5, sign * 19.5, 2.1, 0.85, 1.4);
+            bunker(wing * 20.5, sign * 2.0, 0.8, 2.6, 1.8);
+        }
     }
     blocks
 }
@@ -101,7 +56,13 @@ pub fn arena() -> Vec<Block> {
 pub fn stretch(blocks: Vec<Block>, size: f32) -> Vec<Block> {
     blocks
         .into_iter()
-        .map(|b| Block { x: b.x * size, z: b.z * size, hx: b.hx * size, hz: b.hz * size, ..b })
+        .map(|b| Block {
+            x: b.x * size,
+            z: b.z * size,
+            hx: b.hx * size,
+            hz: b.hz * size,
+            ..b
+        })
         .collect()
 }
 
@@ -175,11 +136,27 @@ const STEP_RUN: f32 = 0.45;
 
 impl Timberline {
     fn solid(&mut self, x: f32, z: f32, hx: f32, hz: f32, top: f32, kind: &'static str) {
-        self.blocks.push(Block { x, z, hx, hz, top, bottom: 0.0 });
+        self.blocks.push(Block {
+            x,
+            z,
+            hx,
+            hz,
+            top,
+            bottom: 0.0,
+        });
         self.kinds.push(kind);
     }
 
-    fn floating(&mut self, x: f32, z: f32, hx: f32, hz: f32, bottom: f32, top: f32, kind: &'static str) {
+    fn floating(
+        &mut self,
+        x: f32,
+        z: f32,
+        hx: f32,
+        hz: f32,
+        bottom: f32,
+        top: f32,
+        kind: &'static str,
+    ) {
         self.blocks.push(Block::floating(x, z, hx, hz, bottom, top));
         self.kinds.push(kind);
     }
@@ -187,7 +164,15 @@ impl Timberline {
     /// Stairs climbing to `top`, ending against an edge at `edge` on one axis.
     /// `outward` is the direction the stairs run away from that edge; risers
     /// are low enough to walk up without jumping.
-    fn stairs(&mut self, along_x: bool, edge: f32, outward: f32, across: f32, half_width: f32, top: f32) {
+    fn stairs(
+        &mut self,
+        along_x: bool,
+        edge: f32,
+        outward: f32,
+        across: f32,
+        half_width: f32,
+        top: f32,
+    ) {
         let steps = (top / STEP_RISE).round() as usize;
         for i in 1..=steps {
             let height = STEP_RISE * i as f32;
@@ -215,7 +200,11 @@ impl Timberline {
     /// rocks and logs grow across the floor; stairs keep their steps and the
     /// trees keep their size, they just stand further apart.
     pub fn build_for(size: f32) -> Self {
-        let mut map = Timberline { blocks: Vec::new(), kinds: Vec::new(), spawns: Vec::new() };
+        let mut map = Timberline {
+            blocks: Vec::new(),
+            kinds: Vec::new(),
+            spawns: Vec::new(),
+        };
         // Everything below is placed once for the north half and mirrored
         // through the centre for the south.
         for sign in [-1.0f32, 1.0] {
@@ -225,10 +214,21 @@ impl Timberline {
             let (x, z) = m(0.0, -21.5);
             map.solid(x, z, 14.0 * size, 4.5 * size, RIDGE_TOP, "earth");
             for across in [-9.5f32, 9.5] {
-                map.stairs(false, -17.0 * sign * size, sign, across * sign * size, 1.2, RIDGE_TOP);
+                map.stairs(
+                    false,
+                    -17.0 * sign * size,
+                    sign,
+                    across * sign * size,
+                    1.2,
+                    RIDGE_TOP,
+                );
             }
             // Rocks on the ridge to duck behind.
-            for (rx, rz, hx, hz) in [(-5.5, -19.6, 1.3, 0.7), (4.0, -23.5, 1.0, 1.0), (12.0, -19.5, 0.8, 1.2)] {
+            for (rx, rz, hx, hz) in [
+                (-5.5, -19.6, 1.3, 0.7),
+                (4.0, -23.5, 1.0, 1.0),
+                (12.0, -19.5, 0.8, 1.2),
+            ] {
                 let (x, z) = m(rx, rz);
                 map.solid(x, z, hx * size, hz * size, RIDGE_TOP + 1.05, "rock");
             }
@@ -249,7 +249,14 @@ impl Timberline {
             }
 
             // The woods on this side's flank.
-            for (tx, tz) in [(-20.5, -9.0), (-23.0, -1.5), (-18.5, 5.5), (-22.5, 11.5), (-15.5, -4.0), (-7.0, 12.5)] {
+            for (tx, tz) in [
+                (-20.5, -9.0),
+                (-23.0, -1.5),
+                (-18.5, 5.5),
+                (-22.5, 11.5),
+                (-15.5, -4.0),
+                (-7.0, 12.5),
+            ] {
                 let (x, z) = m(tx, tz);
                 map.tree(x, z);
             }
@@ -295,7 +302,14 @@ pub fn ricochet_table() -> (Vec<Block>, Vec<(f32, f32)>) {
         (4.5, 15.0, 2.0, 2.0, 2.8),
         (0.0, 0.0, 2.3, 2.3, 1.1),
     ] {
-        blocks.push(Block { x, z, hx, hz, top, bottom: 0.0 });
+        blocks.push(Block {
+            x,
+            z,
+            hx,
+            hz,
+            top,
+            bottom: 0.0,
+        });
     }
     (
         blocks,
@@ -340,7 +354,14 @@ pub fn retake_site() -> Vec<Block> {
         (0.0, -22.0, 5.0, 1.2, 2.4),
     ]
     .into_iter()
-    .map(|(x, z, hx, hz, top)| Block { x, z, hx, hz, top, bottom: 0.0 })
+    .map(|(x, z, hx, hz, top)| Block {
+        x,
+        z,
+        hx,
+        hz,
+        top,
+        bottom: 0.0,
+    })
     .collect()
 }
 
@@ -462,7 +483,10 @@ impl PaintBlasters {
             player_damage: true,
             allow_movement: true,
             teams: HashMap::new(),
-            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
+            allies: contestants
+                .iter()
+                .filter_map(|c| c.ally.map(|ally| (c.seat, ally)))
+                .collect(),
             skills: contestants
                 .iter()
                 .map(|c| (c.seat, Skill(c.skill)))
@@ -609,7 +633,13 @@ impl PaintBlasters {
 
     /// A team game on its own map: one hit puts a player out until the mode
     /// brings them back with `place`, and the mode decides when it is over.
-    pub fn use_team_field(&mut self, blocks: Vec<Block>, kinds: Vec<&'static str>, half_x: f32, half_z: f32) {
+    pub fn use_team_field(
+        &mut self,
+        blocks: Vec<Block>,
+        kinds: Vec<&'static str>,
+        half_x: f32,
+        half_z: f32,
+    ) {
         self.blocks = blocks;
         self.block_kinds = kinds;
         self.half_x = half_x;
@@ -628,7 +658,15 @@ impl PaintBlasters {
     pub fn place(&mut self, seat: u8, x: f32, z: f32) {
         let y = ground_height(&self.blocks, x, z);
         if let Some(fighter) = self.fighters.iter_mut().find(|f| f.seat == seat) {
-            *fighter = Fighter { x, y, z, yaw: facing_center(x, z), kills: fighter.kills, deaths: fighter.deaths, ..blank(seat) };
+            *fighter = Fighter {
+                x,
+                y,
+                z,
+                yaw: facing_center(x, z),
+                kills: fighter.kills,
+                deaths: fighter.deaths,
+                ..blank(seat)
+            };
         }
     }
 
@@ -695,26 +733,32 @@ impl PaintBlasters {
         };
         let (ox, oy, oz) = shooter.eye();
         let (dx, dy, dz) = shooter.look();
-        let wall = self.wall_distance((ox, oy, oz), (dx, dy, dz));
-        // Target Frenzy uses the same authoritative blaster simulation, but
-        // shots pass through other contestants so the round stays about aim.
-        let hit = if self.player_damage {
-            self.first_target(seat, (ox, oy, oz), (dx, dy, dz), wall)
+        let (hit, endpoint, flight, gravity) = if self.player_damage {
+            let (hit, endpoint, flight) = self.paintball_path(seat, (ox, oy, oz), (dx, dy, dz));
+            (hit, endpoint, flight, PAINTBALL_GRAVITY)
         } else {
-            None
+            // Target Frenzy's wall targets score against a straight shot ray.
+            let distance = self.wall_distance((ox, oy, oz), (dx, dy, dz));
+            (
+                None,
+                (ox + dx * distance, oy + dy * distance, oz + dz * distance),
+                distance / PAINTBALL_SPEED,
+                0.0,
+            )
         };
-        let range = hit.map(|(_, t)| t).unwrap_or(wall.min(self.shot_range));
         events.push(json!({
             "kind": "shot",
             "seat": seat,
             "from": [round(ox), round(oy), round(oz)],
-            "to": [round(ox + dx * range), round(oy + dy * range), round(oz + dz * range)],
+            "to": [round(endpoint.0), round(endpoint.1), round(endpoint.2)],
+            "flight": round(flight),
+            "gravity": gravity,
             "hit": hit.is_some(),
         }));
-        let Some((target_seat, travel)) = hit else {
+        let Some(target_seat) = hit else {
             return;
         };
-        let (hx, hy, hz) = (ox + dx * travel, oy + dy * travel, oz + dz * travel);
+        let (hx, hy, hz) = endpoint;
         let mut down = false;
         if let Some(target) = self.fighters.iter_mut().find(|f| f.seat == target_seat) {
             target.hp -= self.damage;
@@ -744,6 +788,64 @@ impl PaintBlasters {
         }
     }
 
+    /// Sweep short straight segments along the ballistic path. The same
+    /// collision point is sent to clients for the visible flying paintball.
+    fn paintball_path(
+        &self,
+        seat: u8,
+        origin: (f32, f32, f32),
+        direction: (f32, f32, f32),
+    ) -> (Option<u8>, (f32, f32, f32), f32) {
+        let at = |travel: f32| {
+            let seconds = travel / PAINTBALL_SPEED;
+            (
+                origin.0 + direction.0 * travel,
+                origin.1 + direction.1 * travel - 0.5 * PAINTBALL_GRAVITY * seconds * seconds,
+                origin.2 + direction.2 * travel,
+            )
+        };
+        let mut travel = 0.0;
+        while travel < self.shot_range {
+            let next = (travel + 0.5).min(self.shot_range);
+            let start = at(travel);
+            let end = at(next);
+            let delta = (end.0 - start.0, end.1 - start.1, end.2 - start.2);
+            let length = (delta.0 * delta.0 + delta.1 * delta.1 + delta.2 * delta.2).sqrt();
+            let ray = (delta.0 / length, delta.1 / length, delta.2 / length);
+            let wall = self.wall_distance(start, ray).min(length);
+            // Target Frenzy shares the blaster, but contestants cannot be hit.
+            if self.player_damage {
+                if let Some((target, distance)) = self.first_target(seat, start, ray, wall) {
+                    let fraction = distance / length;
+                    let hit = (
+                        start.0 + delta.0 * fraction,
+                        start.1 + delta.1 * fraction,
+                        start.2 + delta.2 * fraction,
+                    );
+                    return (
+                        Some(target),
+                        hit,
+                        (travel + (next - travel) * fraction) / PAINTBALL_SPEED,
+                    );
+                }
+            }
+            if wall < length - 0.0001 {
+                let fraction = wall / length;
+                return (
+                    None,
+                    (
+                        start.0 + delta.0 * fraction,
+                        start.1 + delta.1 * fraction,
+                        start.2 + delta.2 * fraction,
+                    ),
+                    (travel + (next - travel) * fraction) / PAINTBALL_SPEED,
+                );
+            }
+            travel = next;
+        }
+        (None, at(self.shot_range), self.shot_range / PAINTBALL_SPEED)
+    }
+
     /// How far a shot travels before a block or a wall stops it.
     fn wall_distance(&self, origin: (f32, f32, f32), dir: (f32, f32, f32)) -> f32 {
         fpmove::clear_distance(
@@ -768,7 +870,12 @@ impl PaintBlasters {
             .iter()
             .filter(|f| f.seat != seat && f.alive())
             .filter(|f| self.team_of(seat).is_none() || self.team_of(seat) != self.team_of(f.seat))
-            .filter(|f| !crate::bout::allied(self.allies.get(&seat).copied(), self.allies.get(&f.seat).copied()))
+            .filter(|f| {
+                !crate::bout::allied(
+                    self.allies.get(&seat).copied(),
+                    self.allies.get(&f.seat).copied(),
+                )
+            })
             .filter_map(|f| {
                 fpmove::ray_player(origin, dir, (f.x, f.y, f.z), PLAYER_RADIUS, f.height())
                     .map(|t| (f.seat, t))
@@ -971,7 +1078,9 @@ impl Bout for PaintBlasters {
             let distance = (dx * dx + dz * dz).sqrt().max(0.01);
             let visible = me.alive() && self.can_see(&me, &target);
             let want_yaw = (-dx).atan2(-dz) + brain.aim_error.0;
-            let rise = (target.y + PLAYER_HEIGHT * 0.55) - (me.y + EYE_HEIGHT);
+            let flight = distance / PAINTBALL_SPEED;
+            let rise = (target.y + PLAYER_HEIGHT * 0.55) - (me.y + EYE_HEIGHT)
+                + 0.5 * PAINTBALL_GRAVITY * flight * flight;
             let want_pitch = (rise / distance).atan() + brain.aim_error.1;
             // Swing toward the mark rather than snapping onto it.
             let track = self.skill(seat).tracking();
@@ -1066,17 +1175,66 @@ mod tests {
         let four = PaintBlasters::new(&players(4), 1);
         assert_eq!(four.half_x, ARENA_HALF, "four play it as built");
         assert_eq!(four.blocks.len(), arena().len());
-        assert!(four.blocks.iter().zip(arena()).all(|(a, b)| a.x == b.x && a.hx == b.hx));
+        assert!(
+            four.blocks
+                .iter()
+                .zip(arena())
+                .all(|(a, b)| a.x == b.x && a.hx == b.hx)
+        );
         assert_eq!((four.fighters[0].x, four.fighters[0].z), spawn_points()[0]);
 
         let eight = PaintBlasters::new(&players(8), 1);
         let grown = eight.half_x / ARENA_HALF;
-        assert!((grown - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
-        assert!((eight.blocks[0].hx / arena()[0].hx - grown).abs() < 1e-4, "the cover grows with it");
-        assert_eq!(eight.blocks[0].top, arena()[0].top, "but stays the same height");
-        assert!(eight.fighters.iter().all(|f| f.x.abs() < eight.half_x && f.z.abs() < eight.half_z));
-        assert_eq!(eight.setup()["half"], json!(eight.half_x), "and the client is told");
+        assert!(
+            (grown - 2f32.sqrt()).abs() < 1e-4,
+            "eight get the room of two fours"
+        );
+        assert!(
+            (eight.blocks[0].hx / arena()[0].hx - grown).abs() < 1e-4,
+            "the cover grows with it"
+        );
+        assert_eq!(
+            eight.blocks[0].top,
+            arena()[0].top,
+            "but stays the same height"
+        );
+        assert!(
+            eight
+                .fighters
+                .iter()
+                .all(|f| f.x.abs() < eight.half_x && f.z.abs() < eight.half_z)
+        );
+        assert_eq!(
+            eight.setup()["half"],
+            json!(eight.half_x),
+            "and the client is told"
+        );
         assert_eq!(eight.setup()["scale"], json!(eight.size));
+    }
+
+    #[test]
+    fn paintball_drops_and_reports_the_same_point_as_the_splat() {
+        let mut game = PaintBlasters::new(&players(2), 7);
+        game.blocks.clear();
+        game.fighters[0].x = 0.0;
+        game.fighters[0].z = 0.0;
+        game.fighters[0].yaw = 0.0;
+        game.fighters[0].pitch = 0.0;
+        game.fighters[1].x = 0.0;
+        game.fighters[1].z = -18.0;
+        let mut events = Vec::new();
+        game.fire(0, &mut events);
+        let shot = events.iter().find(|event| event["kind"] == "shot").unwrap();
+        let splat = events
+            .iter()
+            .find(|event| event["kind"] == "splat")
+            .unwrap();
+        assert_eq!(shot["hit"], true);
+        assert!(shot["flight"].as_f64().unwrap() > 0.3);
+        assert!(shot["to"][1].as_f64().unwrap() < EYE_HEIGHT as f64);
+        assert_eq!(shot["to"][0], splat["x"]);
+        assert_eq!(shot["to"][1], splat["y"]);
+        assert_eq!(shot["to"][2], splat["z"]);
     }
 
     #[test]

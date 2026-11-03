@@ -1,5 +1,5 @@
 //! Coin Scramble: coins rain onto the floor and everyone grabs what they can
-//! before the clock runs out. A shoulder charge shakes part of someone's purse
+//! before the clock runs out. A dive or punch shakes part of someone's purse
 //! loose for anybody to scoop up, and the last stretch rains coins worth five,
 //! so a purse filled early never settles it.
 
@@ -30,10 +30,13 @@ pub const LAST_GOLD_BY: f32 = ROUND_SECONDS - 4.0;
 pub const PICKUP_RANGE: f32 = 1.2;
 /// A coin at shoulder height is close enough to snatch out of the air.
 pub const CATCH_HEIGHT: f32 = 1.4;
-pub const CHARGE_SECONDS: f32 = 0.3;
+pub const CHARGE_SECONDS: f32 = 0.38;
 pub const CHARGE_COOLDOWN: f32 = 3.0;
-pub const CHARGE_SPEED: f32 = 2.5;
+pub const CHARGE_SPEED: f32 = 2.6;
 pub const CHARGE_RANGE: f32 = 1.35;
+pub const PUNCH_SECONDS: f32 = 0.18;
+pub const PUNCH_COOLDOWN: f32 = 1.25;
+pub const PUNCH_RANGE: f32 = 1.45;
 pub const KNOCKBACK: f32 = 11.0;
 /// A breather after a charge, so one rush cannot empty a purse.
 pub const SAFE_SECONDS: f32 = 2.0;
@@ -70,6 +73,10 @@ pub struct Scrambler {
     pub cooldown: f32,
     pub safe: f32,
     pub facing: f32,
+    pub punch: f32,
+    pub punch_cooldown: f32,
+    fire_held: bool,
+    dive_held: bool,
 }
 
 impl Scrambler {
@@ -115,10 +122,17 @@ impl CoinScramble {
                 cooldown: 0.0,
                 safe: 0.0,
                 facing: 0.0,
+                punch: 0.0,
+                punch_cooldown: 0.0,
+                fire_held: false,
+                dive_held: false,
             })
             .collect();
         CoinScramble {
-            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
+            allies: contestants
+                .iter()
+                .filter_map(|c| c.ally.map(|ally| (c.seat, ally)))
+                .collect(),
             players,
             coins: Vec::new(),
             time: 0.0,
@@ -221,7 +235,12 @@ impl CoinScramble {
                 .players
                 .iter()
                 .filter(|p| p.seat != seat && p.safe <= 0.0)
-                .filter(|p| !crate::bout::allied(self.allies.get(&seat).copied(), self.allies.get(&p.seat).copied()))
+                .filter(|p| {
+                    !crate::bout::allied(
+                        self.allies.get(&seat).copied(),
+                        self.allies.get(&p.seat).copied(),
+                    )
+                })
                 .map(|p| {
                     (
                         p.seat,
@@ -249,6 +268,56 @@ impl CoinScramble {
             }
             self.scatter(at, loose);
             events.push(json!({ "kind": "spill", "seat": mark, "by": seat, "coins": loose }));
+        }
+    }
+
+    fn resolve_punches(&mut self, events: &mut Vec<Value>) {
+        let punches: Vec<_> = self
+            .players
+            .iter()
+            .filter(|p| p.punch > 0.0)
+            .map(|p| (p.seat, p.run.x, p.run.z, p.facing))
+            .collect();
+        for (seat, x, z, facing) in punches {
+            let forward = (facing.sin(), facing.cos());
+            let target = self
+                .players
+                .iter()
+                .filter(|p| p.seat != seat && p.safe <= 0.0)
+                .filter(|p| {
+                    !crate::bout::allied(
+                        self.allies.get(&seat).copied(),
+                        self.allies.get(&p.seat).copied(),
+                    )
+                })
+                .filter_map(|p| {
+                    let dx = p.run.x - x;
+                    let dz = p.run.z - z;
+                    let distance = dx.hypot(dz);
+                    (distance <= PUNCH_RANGE + ground::RUNNER_RADIUS
+                        && dx * forward.0 + dz * forward.1 > distance * 0.45)
+                        .then_some((p.seat, distance))
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1));
+            let Some((mark, _)) = target else { continue };
+            let mut loose = 0;
+            let mut at = (0.0, 0.0);
+            if let Some(victim) = self.players.iter_mut().find(|p| p.seat == mark) {
+                loose = ((victim.purse as f32 * 0.18).ceil() as u32)
+                    .min(3)
+                    .min(victim.purse);
+                victim.purse -= loose;
+                victim.safe = 1.0;
+                victim.run.vx += forward.0 * 6.0;
+                victim.run.vz += forward.1 * 6.0;
+                at = (victim.run.x, victim.run.z);
+            }
+            if let Some(attacker) = self.players.iter_mut().find(|p| p.seat == seat) {
+                attacker.punch = 0.0;
+            }
+            self.scatter(at, loose);
+            events
+                .push(json!({"kind":"spill","seat":mark,"by":seat,"coins":loose,"attack":"punch"}));
         }
     }
 
@@ -335,7 +404,7 @@ impl Bout for CoinScramble {
     fn setup(&self) -> Value {
         json!({
             "game": "coins",
-            "rule": "Grab the coins as they land. Charge a rival to shake their coins loose.",
+            "rule": "Grab falling coins. Punch nearby rivals or dive to knock coins loose.",
             "radius": self.radius,
         })
     }
@@ -356,11 +425,21 @@ impl Bout for CoinScramble {
                 .unwrap_or_default();
             let player = &mut self.players[index];
             player.cooldown = (player.cooldown - dt).max(0.0);
+            player.punch_cooldown = (player.punch_cooldown - dt).max(0.0);
             player.safe = (player.safe - dt).max(0.0);
             player.charge = (player.charge - dt).max(0.0);
-            if input.fire && player.cooldown <= 0.0 && !player.charging() {
+            player.punch = (player.punch - dt).max(0.0);
+            if input.fire && !player.fire_held && player.punch_cooldown <= 0.0 && !player.charging()
+            {
+                player.punch = PUNCH_SECONDS;
+                player.punch_cooldown = PUNCH_COOLDOWN;
+                events.push(json!({"kind":"punch","seat":seat}));
+            }
+            player.fire_held = input.fire;
+            if input.jump && !player.dive_held && player.cooldown <= 0.0 && !player.charging() {
                 player.charge = CHARGE_SECONDS;
                 player.cooldown = CHARGE_COOLDOWN;
+                events.push(json!({"kind":"dive","seat":seat}));
                 let aim = if input.stick.x.abs() + input.stick.z.abs() > 0.1 {
                     input.stick
                 } else {
@@ -374,6 +453,7 @@ impl Bout for CoinScramble {
                 player.run.vx = aim.x / length * ground::RUN_SPEED * CHARGE_SPEED;
                 player.run.vz = aim.z / length * ground::RUN_SPEED * CHARGE_SPEED;
             }
+            player.dive_held = input.jump;
             let speed = if player.charging() {
                 ground::RUN_SPEED * CHARGE_SPEED
             } else {
@@ -403,6 +483,7 @@ impl Bout for CoinScramble {
         }
 
         self.resolve_charges(events);
+        self.resolve_punches(events);
         self.collect(events);
         self.settle();
     }
@@ -439,7 +520,7 @@ impl Bout for CoinScramble {
                     z: stick.z * skill.pace(),
                 }
                 .clamped(),
-                fire: away <= CHARGE_RANGE + 0.8
+                jump: away <= CHARGE_RANGE + 0.8
                     && self.rng.random_bool(0.01 + skill.level() as f64 * 0.06),
                 ..Default::default()
             };
@@ -495,6 +576,10 @@ impl Bout for CoinScramble {
                 "purse": p.purse,
                 "dashing": p.charging(),
                 "ready": p.cooldown <= 0.0,
+                "dive_cd": round(p.cooldown),
+                "punching": p.punch > 0.0,
+                "punch_ready": p.punch_cooldown <= 0.0,
+                "punch_cd": round(p.punch_cooldown),
                 "safe": p.safe > 0.0,
                 "out": false,
             })).collect::<Vec<_>>(),
@@ -522,9 +607,66 @@ mod tests {
         assert_eq!(four.floor_max, FLOOR_MAX);
         assert_eq!(four.gold_fall, GOLD_FALL);
         let eight = CoinScramble::new(&field(8), 1);
-        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
-        assert_eq!(eight.floor_max, FLOOR_MAX * 2, "and twice the coins can lie about");
-        assert!(eight.gold_fall < GOLD_FALL, "gold drifts down slower over the wider floor");
-        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
+        assert!(
+            (eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4,
+            "eight get the room of two fours"
+        );
+        assert_eq!(
+            eight.floor_max,
+            FLOOR_MAX * 2,
+            "and twice the coins can lie about"
+        );
+        assert!(
+            eight.gold_fall < GOLD_FALL,
+            "gold drifts down slower over the wider floor"
+        );
+        assert_eq!(
+            eight.setup()["radius"],
+            json!(eight.radius),
+            "and the client is told"
+        );
+    }
+
+    #[test]
+    fn punch_spills_nearby_rival_and_dive_requires_a_new_press() {
+        let mut game = CoinScramble::new(&field(2), 9);
+        game.players[0].run = Runner::at(0.0, 0.0);
+        game.players[1].run = Runner::at(0.0, 1.4);
+        game.players[1].purse = 10;
+        let mut events = Vec::new();
+        let punch = Input {
+            fire: true,
+            stick: Stick { x: 0.0, z: 1.0 },
+            ..Default::default()
+        };
+        game.step(&[(0, punch)], 0.016, &mut events);
+        assert!(events.iter().any(|event| event["kind"] == "punch"));
+        assert!(
+            events
+                .iter()
+                .any(|event| event["kind"] == "spill" && event["attack"] == "punch")
+        );
+        assert_eq!(game.players[1].purse, 8);
+
+        let dive = Input {
+            jump: true,
+            stick: Stick { x: 0.0, z: 1.0 },
+            ..Default::default()
+        };
+        events.clear();
+        game.step(&[(0, dive)], 0.016, &mut events);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event["kind"] == "dive")
+                .count(),
+            1
+        );
+        events.clear();
+        game.step(&[(0, dive)], CHARGE_COOLDOWN + 0.1, &mut events);
+        assert!(
+            !events.iter().any(|event| event["kind"] == "dive"),
+            "holding dive cannot repeat it"
+        );
     }
 }
