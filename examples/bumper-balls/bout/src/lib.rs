@@ -27,13 +27,12 @@ pub const ROUND_SECONDS: f32 = 60.0;
 pub const SHRINK_START_SECONDS: f32 = 25.0;
 pub const WATER_Y: f32 = -3.0;
 
-const ACCEL: f32 = 16.0;
-const MAX_SPEED: f32 = 7.0;
+const ACCEL: f32 = 10.5;
+const MAX_SPEED: f32 = 11.0;
 const COAST_DRAG: f32 = 1.4;
-const ROLL_DRAG: f32 = 0.3;
-const OVERSPEED_DRAG: f32 = 2.6;
-const RESTITUTION: f32 = 1.3;
-const MIN_BUMP_IMPULSE: f32 = 2.2;
+const ROLL_DRAG: f32 = 0.22;
+const OVERSPEED_DRAG: f32 = 2.0;
+const BUMP_EVENT_MIN_SPEED: f32 = 0.4;
 const BUMP_EVENT_COOLDOWN: f32 = 0.15;
 const GRAVITY: f32 = 22.0;
 const OUT_DEPTH: f32 = -9.0;
@@ -293,11 +292,16 @@ impl Bout for BumperBalls {
                     self.allies.get(&a.seat).copied(),
                     self.allies.get(&b.seat).copied(),
                 );
+                let closing_speed = (-approach).max(0.0);
                 let impulse = if partners {
                     // Partners only roll apart.
                     0.0
-                } else if approach < 0.0 {
-                    (-(1.0 + RESTITUTION) * approach / 2.0).max(MIN_BUMP_IMPULSE)
+                } else if closing_speed > 0.0 {
+                    // A slow touch yields; a fast, direct hit transfers momentum.
+                    // Only velocity toward the other ball counts, so glancing
+                    // contacts keep their sideways motion.
+                    let restitution = (0.45 + closing_speed / MAX_SPEED * 0.55).clamp(0.45, 1.0);
+                    (1.0 + restitution) * closing_speed * 0.5
                 } else {
                     0.0
                 };
@@ -316,13 +320,16 @@ impl Bout for BumperBalls {
                     b.vz += nz * impulse;
                 }
                 let pair = (a.seat.min(b.seat), a.seat.max(b.seat));
-                if impulse > 0.0 && self.cooldowns.get(&pair).copied().unwrap_or(0.0) <= 0.0 {
+                if closing_speed >= BUMP_EVENT_MIN_SPEED
+                    && impulse > 0.0
+                    && self.cooldowns.get(&pair).copied().unwrap_or(0.0) <= 0.0
+                {
                     self.cooldowns.insert(pair, BUMP_EVENT_COOLDOWN);
                     events.push(json!({
                         "kind": "bump",
                         "a": a.seat,
                         "b": b.seat,
-                        "strength": (impulse / MAX_SPEED).min(2.0),
+                        "strength": (closing_speed / MAX_SPEED).min(2.0),
                         "x": (a.x + b.x) / 2.0,
                         "z": (a.z + b.z) / 2.0,
                     }));
@@ -383,7 +390,13 @@ impl Bout for BumperBalls {
         }
         let from_center = (me.x * me.x + me.z * me.z).sqrt();
         let skill = self.skill(seat).level();
-        let stick = if from_center > radius * 0.74 {
+        let outward_speed = if from_center > 0.01 {
+            ((me.x * me.vx + me.z * me.vz) / from_center).max(0.0)
+        } else {
+            0.0
+        };
+        let stopping_distance = outward_speed * outward_speed / (2.0 * ACCEL);
+        let stick = if from_center + stopping_distance > radius - BALL_RADIUS - 0.3 {
             let lean = 1.0 / from_center.max(0.01);
             // Brake outward momentum as well as steering toward the middle.
             let brake = 0.22 * skill;
@@ -531,6 +544,69 @@ mod tests {
             game.balls[1].x - game.balls[0].x >= 1.69,
             "the balls do not overlap"
         );
+    }
+
+    #[test]
+    fn holding_a_direction_builds_speed_beyond_the_old_ceiling() {
+        let mut game = BumperBalls::new(&contestants(2, false), 21);
+        game.balls[0].x = 0.0;
+        game.balls[0].z = 0.0;
+        game.balls[1].x = -7.0;
+        game.balls[1].z = 0.0;
+        let push = [(0, Stick { x: 1.0, z: 0.0 })];
+        run(&mut game, 0.2, &push);
+        let early = game.balls[0].vx;
+        run(&mut game, 0.8, &push);
+        let built = game.balls[0].vx;
+        assert!(
+            early < 4.0,
+            "the ball should not instantly reach top speed: {early}"
+        );
+        assert!(
+            built > 7.0,
+            "holding the stick should pass the former limit: {built}"
+        );
+        assert!(
+            built <= MAX_SPEED + 0.2,
+            "movement remains bounded: {built}"
+        );
+    }
+
+    #[test]
+    fn closing_speed_sets_knockback_and_grazes_do_not_create_a_hard_hit() {
+        let impact = |speed: f32, sideways: bool| {
+            let mut game = BumperBalls::new(&contestants(2, false), 22);
+            game.balls[0].x = 0.0;
+            game.balls[0].z = 0.0;
+            game.balls[1].x = 1.6;
+            game.balls[1].z = 0.0;
+            if sideways {
+                game.balls[0].vz = speed;
+            } else {
+                game.balls[0].vx = speed;
+            }
+            let mut events = Vec::new();
+            game.step(&[], TICK_DT, &mut events);
+            (game.balls[1].vx, events)
+        };
+        let (soft, soft_events) = impact(1.0, false);
+        let (hard, hard_events) = impact(8.0, false);
+        assert!(
+            hard > soft * 5.0,
+            "speed must transfer through the collision: {soft}, {hard}"
+        );
+        let strength = |events: &[Value]| {
+            events.iter().find(|event| event["kind"] == "bump").unwrap()["strength"]
+                .as_f64()
+                .unwrap()
+        };
+        assert!(strength(&hard_events) > strength(&soft_events) * 5.0);
+        let (grazed, graze_events) = impact(8.0, true);
+        assert!(
+            grazed.abs() < 0.01,
+            "sideways motion should not launch the other ball"
+        );
+        assert!(!graze_events.iter().any(|event| event["kind"] == "bump"));
     }
 
     #[test]
