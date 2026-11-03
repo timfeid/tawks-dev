@@ -21,6 +21,8 @@
     Timer,
   } from "@lucide/svelte";
   import Handcuffs from "./cuffs.svelte";
+  import ArrestHud from "./arrest-hud.svelte";
+  import { myArrest, type TraceCursor } from "./arrest";
   import Joystick from "../joystick.svelte";
   import type { StickValue } from "../input";
   import type { CityView, Member, ClientMsg } from "../protocol";
@@ -35,6 +37,9 @@
     onsuction,
     touch = false,
     yaw = 0,
+    cursor,
+    onstruggle,
+    pad = false,
   }: {
     city: CityView;
     seat: number | null;
@@ -45,7 +50,11 @@
     onsuction: (held: boolean) => void;
     touch?: boolean;
     yaw?: number;
+    cursor: TraceCursor;
+    onstruggle: () => void;
+    pad?: boolean;
   } = $props();
+  const held = $derived(myArrest(city, seat));
   let help = $state(false);
   let lesson = $state(0);
   const mine = $derived(city.actors.find((a) => a.seat === seat));
@@ -63,6 +72,9 @@
       : (mine?.cuffed ?? 0),
   );
   const target = $derived(
+    (held?.officer && held.arrest.stage === "escort" && mine?.car
+      ? { label: "PATROL CAR", x: mine.car[0], z: mine.car[1], progress: 0 }
+      : null) ??
     city.targets.find((t) =>
       mine?.carrying ? t.label === "ESCAPE VAN" : t.label.startsWith("JAIL"),
     ) ??
@@ -98,12 +110,14 @@
   const hint = $derived(
     mine?.jailed
       ? "Teammates can rescue you. Bail is counting down."
+      : held
+        ? city.objective
       : city.job_wait > 0
         ? "Regroup. The next bank job opens shortly."
         : police
           ? mine?.driving
-            ? "Follow the blue street arrows. F to get out."
-            : "Hold E close to a robber. Use 2 to scan."
+            ? "Ram a robber to daze them. F to get out."
+            : "Hold E close to a robber to grab them. Use 2 to scan."
           : mine?.carrying
             ? "Take the bag to your van. Hold E to deliver."
             : city.power_seconds && city.power_seconds > 0
@@ -119,8 +133,8 @@
             icon: CarFront,
           },
           {
-            title: "Park. Pursue. Arrest.",
-            text: "WASD drives. Press F to get out, then hold E close to a robber to cuff them. Walk back to your car and press F to drive again.",
+            title: "Ram. Grab. Cuff. Drag.",
+            text: "Ram a robber to daze them. Press F to get out and hold E close by to grab. Trace the figure eight with the mouse or stick to cuff them, then drag them to your car.",
             icon: Handcuffs,
           },
           {
@@ -142,7 +156,7 @@
           },
           {
             title: "Keep the bags coming",
-            text: "Each delivered bag scores. Use 1 for smoke and 2 to scan. Hold E at jail to rescue a teammate; bail releases them after 18 seconds. Play six minutes, then a minigame.",
+            text: "Each delivered bag scores. If an officer grabs you, press E as the ring crosses the band to struggle free. Hold E at jail to rescue a teammate. Use 1 for smoke and 2 to scan.",
             icon: Truck,
           },
         ],
@@ -187,6 +201,14 @@
 
 <svelte:window onkeydown={key} />
 <div class="city-hud" aria-label="City Heist HUD" class:police>
+  {#if !briefing && !city.resolved}<ArrestHud
+      {city}
+      {seat}
+      {members}
+      {cursor}
+      {onstruggle}
+      {pad}
+    />{/if}
   <header>
     <div class="role">
       {#if police}<Shield size={20} />{:else}<Banknote size={20} />{/if}<b
@@ -221,6 +243,12 @@
       <strong
         >{mine?.jailed
           ? `Bail in ${Math.ceil(mine.jail_seconds)}s`
+          : held
+            ? held.officer
+              ? held.arrest.stage === "cuffing"
+                ? "Cuff the robber"
+                : "Drag them to your car"
+              : "Break free"
           : target
             ? name(target.label)
             : "Search the city"}</strong
@@ -373,11 +401,12 @@
       onpointerdown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         onhold(true);
+        if (city.tap) send({ type: "city_tap" });
       }}
       onpointerup={() => onhold(false)}
       onpointercancel={() => onhold(false)}
       ><Hand size={20} /><span
-        >{police ? "Arrest / recover" : "Hold to use"}</span
+        >{police ? "Grab / recover" : "Hold to use"}</span
       ><kbd>E</kbd></button
     >
     <button
@@ -519,9 +548,11 @@
         <dt>Hold E / A</dt>
         <dd>
           {police
-            ? "Arrest on foot, recover bags"
+            ? "Grab a robber on foot, recover bags"
             : "Use stations, rescue, deliver"}
         </dd>
+        <dt>{police ? "Mouse / stick / WASD" : "E / Space / A on the beat"}</dt>
+        <dd>{police ? "Trace the figure eight to cuff" : "Struggle when grabbed"}</dd>
         <dt>Hold right mouse / RT</dt>
         <dd>Vacuum the vault or bag</dd>
         <dt>1 / 2</dt>

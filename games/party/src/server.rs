@@ -411,6 +411,34 @@ fn snap_message(room: &Room, events: Vec<serde_json::Value>) -> Option<Message> 
     })
 }
 
+/// Sends everyone the bout. A bout that hides something gets each seat its
+/// own view, looked up by the user's seat even on a spectator socket so a
+/// player cannot watch their own game from the stands.
+fn send_snaps(room: &Room, conns: &HashMap<u64, Conn>, events: Vec<serde_json::Value>) {
+    let mut shared: Option<Option<Message>> = None;
+    let mut private: HashMap<Option<u8>, Message> = HashMap::new();
+    for conn in conns.values() {
+        let seat = room.seat_of(&conn.user_id);
+        let message = match room.private_snapshot(seat) {
+            Some(game) => private
+                .entry(seat)
+                .or_insert_with(|| {
+                    encode(&ServerMsg::Snap {
+                        tick: room.tick,
+                        game,
+                        events: events.clone(),
+                    })
+                })
+                .clone(),
+            None => match shared.get_or_insert_with(|| snap_message(room, events.clone())) {
+                Some(message) => message.clone(),
+                None => continue,
+            },
+        };
+        let _ = conn.out.send(message);
+    }
+}
+
 async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::UnboundedReceiver<RoomCmd>) {
     info!(%match_id, "party room opened");
     let mut room = Room::new(match_id.clone(), rand::rng().random());
@@ -465,8 +493,8 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                         });
                         let seat = if entry.seated { room.seat_of(&entry.user_id) } else { None };
                         send_to(&entry, &ServerMsg::Room { room: room.view_for(seat), spectating: !entry.seated });
-                        if let Some(snap) = snap_message(&room, Vec::new()) {
-                            let _ = entry.out.send(snap);
+                        if let Some(game) = room.snapshot_for(room.seat_of(&entry.user_id)) {
+                            let _ = entry.out.send(encode(&ServerMsg::Snap { tick: room.tick, game, events: Vec::new() }));
                         }
                         if let Some((game, view)) = room.table_view(room.table_seat_of(&entry.user_id)) {
                             send_to(&entry, &ServerMsg::Table { game, view });
@@ -552,6 +580,16 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                             ClientMsg::CityAutomate{on}=>room.city_automate(&user_id,on),
                             ClientMsg::CityReady=>room.city_ready(&user_id),
                             ClientMsg::CityVehicle=>room.city_vehicle(&user_id),
+                            ClientMsg::CityResetCar=>room.city_reset_car(&user_id),
+                            ClientMsg::CityTrace{x,y}=>room.city_trace(&user_id,x,y),
+                            ClientMsg::CityStruggle=>room.city_struggle(&user_id),
+                            ClientMsg::CityItem{act,yaw}=>room.city_item(&user_id,act,yaw),
+                            ClientMsg::CityDodge{yaw}=>room.city_dodge(&user_id,yaw),
+                            ClientMsg::CityTakedown{yaw}=>room.city_takedown(&user_id,yaw),
+                            ClientMsg::CityCallout{yaw}=>room.city_callout(&user_id,yaw),
+                            ClientMsg::CityClarity{held}=>room.city_clarity(&user_id,held),
+                            ClientMsg::CityCheck{input}=>room.city_check(&user_id,input),
+                            ClientMsg::CitySlip{input}=>room.city_slip(&user_id,input),
                             ClientMsg::ChooseMature { on } => room.choose_mature(&user_id, on),
                             ClientMsg::ChoosePairs { on } => room.choose_pairs(&user_id, on),
                             ClientMsg::Ready => room.ready(&user_id),
@@ -566,7 +604,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                             ClientMsg::PassItems => room.pass_items(&user_id),
                             ClientMsg::Roll => room.roll(&user_id),
                             ClientMsg::Shop { item, upgrade } => room.shop(&user_id, item, upgrade),
-                            ClientMsg::FireCannon { power } => room.fire(&user_id, power),
+                            ClientMsg::FireCannon { power, stop } => room.fire(&user_id, power, stop),
                             ClientMsg::Lob { yaw, pitch, power } => room.lob(&user_id, yaw, pitch, power),
                             ClientMsg::Swing { yaw, stop } => room.swing(&user_id, yaw, stop),
                             ClientMsg::Check { stop } => room.check(&user_id, stop),
@@ -587,6 +625,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                                 }
                             },
                             ClientMsg::Dev { tool } => room.dev(&user_id, tool),
+                            ClientMsg::StartCitySandbox { police } => room.start_city_sandbox(&user_id, police),
                             ClientMsg::Bet { coins } => room.bet(&user_id, coins),
                             ClientMsg::Taunt { taunt } => room.taunt(&user_id, taunt),
                             ClientMsg::PetReact { action } => room.pet_react(&user_id, action).map(|fresh| {
@@ -658,11 +697,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                 }
                 let live = room.phase != Phase::Lobby;
                 if (live && room.tick % SNAPSHOT_EVERY_TICKS == 0) || (!live && (dirty || room.tick % 30 == 0)) {
-                    if let Some(snap) = snap_message(&room, std::mem::take(&mut events)) {
-                        for entry in conns.values() {
-                            let _ = entry.out.send(snap.clone());
-                        }
-                    }
+                    send_snaps(&room, &conns, std::mem::take(&mut events));
                 }
 
                 if conns.values().all(|c| c.spectator) {

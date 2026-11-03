@@ -1,5 +1,5 @@
-//! Balloon Brawl: three balloons each, tied to your back. Dash into someone to
-//! burst one of theirs. Lose all three and you are out of the brawl.
+//! Balloon Brawl: four balloons each, tied to your back. Dash into someone to
+//! burst one of theirs. Lose all four and you are out of the brawl.
 
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
@@ -182,7 +182,7 @@ impl Bout for BalloonBrawl {
     fn setup(&self) -> Value {
         json!({
             "game": "balloon",
-            "rule": "Dash into a rival to burst a balloon. Lose all three and you are out.",
+            "rule": "Dash into a rival to burst a balloon. Lose all four and you are out.",
             "half": self.half,
             "balloons": BALLOONS,
         })
@@ -265,6 +265,12 @@ impl Bout for BalloonBrawl {
             .players
             .iter()
             .filter(|p| p.playing() && p.seat != seat)
+            .filter(|p| {
+                !crate::bout::allied(
+                    self.allies.get(&seat).copied(),
+                    self.allies.get(&p.seat).copied(),
+                )
+            })
             .min_by(|a, b| {
                 me.run
                     .distance_to(a.run.x, a.run.z)
@@ -344,5 +350,21 @@ mod tests {
             "and start further apart"
         );
         assert_eq!(eight.setup()["half"], json!(eight.half), "and the client is told");
+    }
+
+    #[test]
+    fn bots_chase_rivals_instead_of_their_partner() {
+        let mut field = [
+            Contestant::bot(0, 1.0),
+            Contestant::bot(1, 0.4),
+            Contestant::bot(2, 0.4),
+        ];
+        field[0].ally = Some(1);
+        field[1].ally = Some(1);
+        let mut game = BalloonBrawl::new(&field, 7);
+        game.players[0].run = Runner::at(0.0, 0.0);
+        game.players[1].run = Runner::at(-1.0, 0.0);
+        game.players[2].run = Runner::at(3.0, 0.0);
+        assert!(game.bot_input(0, 1.0 / 60.0).stick.x > 0.0);
     }
 }

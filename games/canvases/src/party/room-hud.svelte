@@ -395,6 +395,45 @@
       window.removeEventListener('keydown', onKey);
     };
   });
+  // The cannon's fuse: the same sweeping needle, stopped to fire. The middle
+  // flies exactly the charge; the further out, the more the shot strays.
+  let fuseNeedle = $state(0);
+  let fuseSent = false;
+  const loading = $derived(myTurn && board?.turn.step === 'cannon' ? board.turn : null);
+  const loadingKey = $derived(loading ? JSON.stringify([room?.match_id, board?.round, board?.turn_seat]) : null);
+  const fireCannon = () => {
+    if (!loading || fuseSent || board?.candy_van) return;
+    fuseSent = true;
+    send({ type: 'fire_cannon', power: charge, stop: fuseNeedle });
+  };
+  $effect(() => {
+    if (!loadingKey) return;
+    fuseSent = false;
+    let previous = performance.now(), seconds = 0, frame = 0, padDown = false;
+    const tick = () => {
+      const now = performance.now();
+      if (!board?.candy_van) seconds += (now - previous) / 1000;
+      previous = now;
+      const phase = (seconds % 0.9) / 0.45;
+      if (!fuseSent) fuseNeedle = phase < 1 ? phase : 2 - phase;
+      const pressed = !isGameplayTyping() && !!gamepad()?.buttons[settings().pad.action]?.pressed;
+      if (!board?.candy_van && pressed && !padDown) fireCannon();
+      padDown = pressed;
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    const onKey = (event: KeyboardEvent) => {
+      if (board?.candy_van || !bound('action', event.code) || event.repeat) return;
+      if (event.isComposing || isGameplayTyping(event.target)) return;
+      event.preventDefault();
+      fireCannon();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', onKey);
+    };
+  });
   const CHECK_PROMPTS: Partial<Record<Item, string>> = {
     medkit: 'A perfect stop heals you to full; good, two hearts; weak, one.',
     shield: 'Good or better raises the shield; perfect pays 3 coins too.',
@@ -936,7 +975,7 @@
           {@const max = board.turn.max}
           <div class="text-sm font-bold">Into the cannon. How hard?</div>
           <div class="mt-1 text-xs text-white/70">
-            It lands within a couple of spaces of the charge, so aiming at the chest is a gamble.
+            Pick the charge, then fire with the fuse needle in the middle to fly exactly that far. The further out, the more it strays.
           </div>
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <input
@@ -947,11 +986,19 @@
               class="h-2 w-48 cursor-pointer appearance-none rounded-full bg-white/15 accent-orange-400"
             />
             <span class="w-24 text-sm font-bold tabular-nums text-orange-300">{charge} spaces</span>
+          </div>
+          <div class="mt-3 flex items-center gap-3">
+            <div class="relative h-5 flex-1 overflow-hidden rounded-full bg-white/10" aria-label="Cannon fuse timing">
+              <div class="absolute inset-y-0 left-[7.5%] right-[7.5%] bg-slate-400/30"></div>
+              <div class="absolute inset-y-0 left-[25%] right-[25%] bg-orange-400/50"></div>
+              <div class="absolute inset-y-0 left-[42.5%] right-[42.5%] bg-amber-300"></div>
+              <div class="absolute inset-y-[-2px] w-1 -translate-x-1/2 rounded bg-white shadow" style="left:{fuseNeedle * 100}%"></div>
+            </div>
             <button
-              class="ml-auto flex items-center gap-1.5 rounded-xl bg-orange-400 px-4 py-2 text-sm font-bold text-slate-900 hover:bg-orange-300"
-              onclick={() => send({ type: 'fire_cannon', power: charge })}
+              class="flex items-center gap-1.5 rounded-xl bg-orange-400 px-4 py-2 text-sm font-bold text-slate-900 hover:bg-orange-300"
+              onclick={fireCannon}
             >
-              Fire
+              Fire <span class="text-xs font-normal opacity-70">Space</span>
             </button>
           </div>
         {:else if board.turn.step === 'shop'}

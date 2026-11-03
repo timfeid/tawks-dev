@@ -63,6 +63,8 @@ export class BattleField {
   private sparkMap = sparkTexture();
   private roster = new Map<string, CharacterDef>();
   shake = 0;
+  private coreTimer = -1;
+  private coreSeen = 0;
 
   constructor(scene: THREE.Scene) {
     this.group.name = 'party-battle';
@@ -305,7 +307,17 @@ export class BattleField {
     } else if (event.kind === 'splinter' || event.kind === 'ricochet') {
       this.spark(new THREE.Vector3(event.x, 0.9, event.z), '#ffe7a3');
     } else if (event.kind === 'strike_core') {
-      this.spark(new THREE.Vector3(event.x, 1.8, event.z), this.colorOf(event.seat, members));
+      for (let i = 0; i < 6; i++)
+        this.spark(
+          new THREE.Vector3(event.x, 1.8, event.z).add(
+            new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5).multiplyScalar(2),
+          ),
+          i % 2 ? '#fffbe6' : this.colorOf(event.seat, members),
+        );
+      this.shake = Math.max(this.shake, 0.15);
+    } else if (event.kind === 'glance') {
+      const at = this.raiders.get(event.seat)?.rig.group.position;
+      if (at) this.spark(new THREE.Vector3(at.x, 1.2, at.z), '#9aa3ad');
     } else if (event.kind === 'strike') {
       this.shake = 0.35;
       for (let i = 0; i < 10; i++) {
@@ -350,10 +362,20 @@ export class BattleField {
       this.titan.rotation.y = titan.facing;
       const core = this.titan.userData.core as THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshStandardMaterial>;
       const open = titan.state === 'winded';
-      core.material.emissiveIntensity = open ? 1.6 : 0.25;
-      core.material.color.set(open ? '#ffe066' : '#8d6e3f');
+      // The open core throbs on the server's beat; a strike at the peak is a
+      // critical. Snapshots step the timer, so advance it locally between them.
+      if (titan.timer !== this.coreTimer) {
+        this.coreTimer = titan.timer;
+        this.coreSeen = time;
+      }
+      const period = titan.core_period ?? 0.8,
+        window = titan.core_window ?? 0.15;
+      const phase = (((3 - titan.timer + (time - this.coreSeen)) / period) % 1 + 1) % 1;
+      const peak = open ? Math.max(0, 1 - Math.abs(phase - 0.5) / window) : 0;
+      core.material.emissiveIntensity = open ? 1.2 + peak * 2.4 : 0.25;
+      core.material.color.set(!open ? '#8d6e3f' : peak > 0 ? '#fffbe6' : '#ffe066');
       core.rotation.y = time * 1.4;
-      core.scale.setScalar(open ? 1.25 + Math.sin(time * 6) * 0.1 : 0.9);
+      core.scale.setScalar(open ? 1.05 + peak * 0.6 : 0.9);
       const cap = this.titan.userData.cap as THREE.Mesh;
       // Keep the opening/core and raiders readable under the large cap.
       const capMaterial=cap.material as THREE.MeshStandardMaterial;

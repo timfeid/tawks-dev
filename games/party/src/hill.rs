@@ -241,8 +241,7 @@ impl Bout for KingOfTheHill {
         else {
             return Input::default();
         };
-        // Head for the middle, or for whoever is holding it when close enough
-        // to shove them off instead.
+        // Find a holder to pressure if the summit is occupied.
         let summit = self.summit();
         let holder = self
             .climbers
@@ -258,9 +257,22 @@ impl Bout for KingOfTheHill {
                 da.total_cmp(&db)
             })
             .cloned();
+        // Skilled bots hold separate summit lanes instead of chasing the
+        // current holder into a pileup that shoves everyone downhill.
+        let slot = self
+            .climbers
+            .iter()
+            .position(|climber| climber.seat == seat)
+            .unwrap_or(0);
+        let angle = std::f32::consts::TAU * slot as f32 / self.climbers.len().max(1) as f32;
+        let safe = (angle.cos() * summit * 0.55, angle.sin() * summit * 0.55);
+        let discipline = ((me.skill - 0.25) / 0.65).clamp(0.0, 1.0);
         let (tx, tz) = match holder {
-            Some(other) => (other.x, other.z),
-            None => (0.0, 0.0),
+            Some(other) => (
+                other.x * (1.0 - discipline) + safe.0 * discipline,
+                other.z * (1.0 - discipline) + safe.1 * discipline,
+            ),
+            None => (safe.0 * discipline, safe.1 * discipline),
         };
         let dx = tx - me.x;
         let dz = tz - me.z;
@@ -312,18 +324,36 @@ mod tests {
     #[test]
     fn a_bigger_field_gets_a_bigger_hill() {
         let four = KingOfTheHill::new(&field(4), 1);
-        assert_eq!(four.setup(), json!({ "game": KEY, "radius": RADIUS, "peak": PEAK, "summit": SUMMIT }), "four play it as built");
+        assert_eq!(
+            four.setup(),
+            json!({ "game": KEY, "radius": RADIUS, "peak": PEAK, "summit": SUMMIT }),
+            "four play it as built"
+        );
         assert!((four.climbers[0].x - (RADIUS - 2.0)).abs() < 1e-4);
         let eight = KingOfTheHill::new(&field(8), 1);
         let grown = 2f32.sqrt();
-        assert!((eight.radius() / RADIUS - grown).abs() < 1e-4, "eight get the room of two fours");
-        assert!((eight.summit() / SUMMIT - grown).abs() < 1e-4, "and a wider summit to fight over");
-        assert!((eight.climbers[0].x - (RADIUS * grown - 2.0)).abs() < 1e-3, "starting at the new rim");
+        assert!(
+            (eight.radius() / RADIUS - grown).abs() < 1e-4,
+            "eight get the room of two fours"
+        );
+        assert!(
+            (eight.summit() / SUMMIT - grown).abs() < 1e-4,
+            "and a wider summit to fight over"
+        );
+        assert!(
+            (eight.climbers[0].x - (RADIUS * grown - 2.0)).abs() < 1e-3,
+            "starting at the new rim"
+        );
         // The slope is just as steep, so climbing it feels the same.
-        let halfway = |game: &KingOfTheHill| ground(game.radius() / 2.0, 0.0, game.size) / game.radius();
+        let halfway =
+            |game: &KingOfTheHill| ground(game.radius() / 2.0, 0.0, game.size) / game.radius();
         assert!((halfway(&eight) - halfway(&four)).abs() < 1e-4);
         let setup = eight.setup();
-        assert_eq!(setup["radius"], json!(eight.radius()), "and the client is told");
+        assert_eq!(
+            setup["radius"],
+            json!(eight.radius()),
+            "and the client is told"
+        );
         assert_eq!(setup["summit"], json!(eight.summit()));
         assert_eq!(setup["peak"], json!(PEAK * eight.size));
     }

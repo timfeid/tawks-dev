@@ -1731,6 +1731,31 @@ fn a_cannon_throws_you_up_the_lap_give_or_take() {
 }
 
 #[test]
+fn a_well_timed_fuse_flies_true_and_a_botched_one_strays_further() {
+    let mut strays = std::collections::HashSet::new();
+    for seed in 0..30 {
+        for (stop, most) in [(0.5, 0), (0.0, CANNON_SCATTER + 1)] {
+            let mut board = Board::new(&seats(2), 3, seed);
+            let seat = board.turn_seat();
+            let cannon = board_space_of(SpaceKind::Cannon);
+            board.place_for_test(seat, cannon, 30);
+            board.land_for_test(seat);
+            board.fire_timed(seat, 8, stop).unwrap();
+            let shot = board.view().log.iter().find(|e| e["kind"] == "cannon").cloned().unwrap();
+            let off = (shot["flew"].as_i64().unwrap() - 8).unsigned_abs() as u8;
+            assert!(off <= most, "stop {stop} strayed {off}");
+            if stop == 0.0 {
+                strays.insert(off);
+                assert_eq!(shot["quality"], "fail");
+            } else {
+                assert_eq!(shot["quality"], "perfect");
+            }
+        }
+    }
+    assert!(strays.contains(&(CANNON_SCATTER + 1)), "a botched fuse can overshoot past an untimed shot");
+}
+
+#[test]
 fn a_cannon_will_not_fire_harder_than_it_can() {
     let mut board = Board::new(&seats(2), 3, 3);
     let seat = board.turn_seat();
@@ -2483,7 +2508,7 @@ fn every_registered_minigame_has_a_live_bot_simulation_and_result() {
     // fails one test instead of silently shipping a dead selection.
     assert_eq!(
         BOUTS.len(),
-        26,
+        62,
         "the registry holds every implemented bout"
     );
     for (index, key) in BOUTS.iter().map(|spec| spec.key).enumerate() {
@@ -3177,8 +3202,25 @@ fn the_titan_only_takes_hits_while_it_is_winded() {
     game.raiders[0].cooldown = 0.0;
     // They may have been floored while waiting for the opening.
     game.raiders[0].down_for = 0.0;
+    // A swing off the core's throb glances off.
+    while game.on_beat() {
+        game.step(&[], TICK_DT, &mut events);
+    }
     game.step(&[(0, swing)], TICK_DT, &mut events);
-    assert!(game.health < TITAN_HEALTH, "the core took a hit");
+    assert_eq!(game.health, TITAN_HEALTH, "an off-beat swing glances off");
+    assert!(events.iter().any(|e| e["kind"] == "glance"));
+    game.raiders[0].cooldown = 0.0;
+    while !game.on_beat() {
+        game.step(&[], TICK_DT, &mut events);
+    }
+    game.raiders[0].run = crate::ground::Runner::at(game.x, game.z + TITAN_RADIUS + 1.0);
+    game.raiders[0].down_for = 0.0;
+    game.step(&[(0, swing)], TICK_DT, &mut events);
+    assert_eq!(
+        game.health,
+        TITAN_HEALTH - crate::titan::CRITICAL_DAMAGE,
+        "a strike on the throb is a critical"
+    );
     assert!(
         events
             .iter()

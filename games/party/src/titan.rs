@@ -6,8 +6,8 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
+use crate::bout::{Bout, Contestant, Input, Skill, Stick};
 use crate::ground::{self, Runner};
-use crate::bout::{Contestant, Input, Bout, Skill, Stick};
 
 pub const ARENA_RADIUS: f32 = 18.0;
 pub const TITAN_RADIUS: f32 = 3.2;
@@ -18,6 +18,12 @@ pub const DOWN_SECONDS: f32 = 2.5;
 pub const ROUND_SECONDS: f32 = 100.0;
 /// How long the core stays open after an attack.
 pub const WINDED_SECONDS: f32 = 3.0;
+/// The open core throbs on a beat; a strike on the throb is a critical.
+pub const CORE_PERIOD: f32 = 0.8;
+pub const CORE_WINDOW: f32 = 0.15;
+pub const CRITICAL_DAMAGE: i32 = 2;
+/// An off-beat swing glances off and leaves the raider off balance.
+pub const GLANCE_COOLDOWN: f32 = 0.9;
 const SLAM_RADIUS: f32 = 9.5;
 const SWEEP_RANGE: f32 = 8.0;
 const CHARGE_SPEED: f32 = 11.0;
@@ -97,6 +103,8 @@ pub struct TitanSiege {
     size: f32,
     rng: StdRng,
     skills: std::collections::HashMap<u8, Skill>,
+    target_offset: usize,
+    bot_last_swing: std::collections::HashMap<u8, f32>,
     placements: Option<Vec<Vec<u8>>>,
 }
 
@@ -107,7 +115,9 @@ impl TitanSiege {
         // Twice the raiders would fell it twice as fast, so it gets the
         // health of one titan per four of them and the siege runs as long.
         let max_health = crate::bout::crowd_count(TITAN_HEALTH as usize, contestants.len()) as i32;
-        let spread = ground::ring(contestants.len().max(1), radius * 0.7, 0.4);
+        let mut placement_rng = StdRng::seed_from_u64(seed ^ 0x71_7A_4E);
+        let turn = placement_rng.random_range(0.0..std::f32::consts::TAU);
+        let spread = ground::ring(contestants.len().max(1), radius * 0.7, turn);
         let raiders = contestants
             .iter()
             .enumerate()
@@ -120,6 +130,7 @@ impl TitanSiege {
                 cooldown: 0.0,
             })
             .collect();
+        let target_offset = placement_rng.random_range(0..contestants.len().max(1));
         TitanSiege {
             raiders,
             x: 0.0,
@@ -138,6 +149,8 @@ impl TitanSiege {
                 .iter()
                 .map(|c| (c.seat, Skill(c.skill)))
                 .collect(),
+            target_offset,
+            bot_last_swing: Default::default(),
             placements: None,
         }
     }
@@ -151,13 +164,35 @@ impl TitanSiege {
         self.state == Move::Winded
     }
 
+    /// Where the open core is in its throb, 0 to 1 with the peak at a half.
+    pub fn core_phase(&self, earlier: f32) -> f32 {
+        ((WINDED_SECONDS - self.timer - earlier) / CORE_PERIOD).rem_euclid(1.0)
+    }
+
+    /// On the throb now, or within the last 150 ms of network delay.
+    pub fn on_beat(&self) -> bool {
+        (0..=3).any(|i| (self.core_phase(0.05 * i as f32) - 0.5).abs() <= CORE_WINDOW)
+    }
+
     fn nearest_raider(&self) -> Option<&Raider> {
-        self.raiders.iter().filter(|r| r.up()).min_by(|a, b| {
-            let near = |r: &Raider| (r.run.x - self.x).powi(2) + (r.run.z - self.z).powi(2);
-            near(a)
-                .partial_cmp(&near(b))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        let count = self.raiders.len();
+        self.raiders
+            .iter()
+            .enumerate()
+            .filter(|(_, raider)| raider.up())
+            .min_by(|(ai, a), (bi, b)| {
+                let near = |r: &Raider| (r.run.x - self.x).powi(2) + (r.run.z - self.z).powi(2);
+                let (ad, bd) = (near(a), near(b));
+                // The starting ring is equidistant; give each seat a fair
+                // chance to be the first target instead of always picking 0.
+                if (ad - bd).abs() < 0.01 {
+                    let rank = |i: usize| (i + count - self.target_offset) % count;
+                    rank(*ai).cmp(&rank(*bi))
+                } else {
+                    ad.total_cmp(&bd)
+                }
+            })
+            .map(|(_, raider)| raider)
     }
 
     fn knock_down(&mut self, seat: u8, how: &str, events: &mut Vec<Value>) {
@@ -337,7 +372,7 @@ impl Bout for TitanSiege {
     fn setup(&self) -> Value {
         json!({
             "game": "titan",
-            "rule": "Dodge the wind-up, then strike the core while the titan is winded.",
+            "rule": "Dodge the wind-up, then strike the core on its throb while the titan is winded.",
             "radius": self.radius,
             "titan": TITAN_RADIUS,
             "health": self.max_health,
@@ -352,6 +387,7 @@ impl Bout for TitanSiege {
         self.time += dt;
 
         let core_open = self.open();
+        let on_beat = core_open && self.on_beat();
         let radius = self.radius;
         let (titan_x, titan_z) = (self.x, self.z);
         for index in 0..self.raiders.len() {
@@ -374,17 +410,21 @@ impl Bout for TitanSiege {
 
             // Strike the core: close enough, swinging, and the titan is winded.
             let close = raider.run.distance_to(titan_x, titan_z) <= TITAN_RADIUS + CORE_RANGE;
-            if input.fire && raider.cooldown <= 0.0 && close && core_open {
+            if input.fire && raider.cooldown <= 0.0 && close && core_open && !on_beat {
+                raider.cooldown = GLANCE_COOLDOWN;
+                events.push(json!({ "kind": "glance", "seat": seat }));
+            } else if input.fire && raider.cooldown <= 0.0 && close && core_open {
                 raider.cooldown = STRIKE_COOLDOWN;
                 raider.hits += 1;
                 let (rx, rz) = (raider.run.x, raider.run.z);
-                self.health = (self.health - 1).max(0);
+                self.health = (self.health - CRITICAL_DAMAGE).max(0);
                 events.push(json!({
                     "kind": "strike_core",
                     "seat": seat,
                     "x": rx,
                     "z": rz,
                     "left": self.health,
+                    "critical": true,
                 }));
                 if self.health == 0 {
                     events.push(json!({ "kind": "titan_down" }));
@@ -464,12 +504,24 @@ impl Bout for TitanSiege {
                 }
             }
         };
+        let skill = self.skill(seat);
+        let on_throb = (self.core_phase(0.0) - 0.5).abs() <= CORE_WINDOW * 0.6;
+        // One decision per throb gives a missed beat a real cost.
+        let can_try = self.open()
+            && away <= TITAN_RADIUS + CORE_RANGE
+            && me.cooldown <= 0.0
+            && on_throb
+            && self.time - self.bot_last_swing.get(&seat).copied().unwrap_or(-10.0)
+                >= CORE_PERIOD * 0.75;
+        if can_try {
+            self.bot_last_swing.insert(seat, self.time);
+        }
         Input {
             stick: stick.clamped(),
-            fire: self.open()
-                && away <= TITAN_RADIUS + CORE_RANGE
-                && me.cooldown <= 0.0
-                && !self.rng.random_bool(self.skill(seat).hesitation()),
+            fire: can_try
+                && !self
+                    .rng
+                    .random_bool(((1.0 - skill.level()) * 1.5).min(0.7) as f64),
             ..Default::default()
         }
     }
@@ -495,6 +547,9 @@ impl Bout for TitanSiege {
                 "attack": self.attack.name(),
                 "timer": round(self.timer.max(0.0)),
                 "radius": TITAN_RADIUS,
+                "core_phase": round(if self.open() { self.core_phase(0.0) } else { 0.0 }),
+                "core_period": CORE_PERIOD,
+                "core_window": CORE_WINDOW,
             },
             "players": self.raiders.iter().map(|r| json!({
                 "seat": r.seat,
@@ -524,16 +579,49 @@ mod tests {
     }
 
     #[test]
+    fn opening_target_is_shared_across_seats() {
+        let mut starts = [0; 4];
+        for seed in 0..128 {
+            let game = TitanSiege::new(&raiders(4), seed);
+            let target = game.nearest_raider().expect("a raider").seat;
+            starts[target as usize] += 1;
+        }
+        assert!(
+            starts.iter().all(|count| (15..=50).contains(count)),
+            "{starts:?}"
+        );
+    }
+
+    #[test]
     fn a_bigger_siege_gets_a_wider_yard_and_a_tougher_titan() {
         let four = TitanSiege::new(&raiders(4), 1);
         assert_eq!(four.radius, ARENA_RADIUS, "four play it as built");
         assert_eq!(four.health, TITAN_HEALTH);
         let eight = TitanSiege::new(&raiders(8), 1);
-        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
-        assert_eq!(eight.health, TITAN_HEALTH * 2, "and twice the titan to chop down");
-        assert!(eight.raiders.iter().any(|r| r.run.distance_to(0.0, 0.0) > ARENA_RADIUS * 0.75));
-        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
+        assert!(
+            (eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4,
+            "eight get the room of two fours"
+        );
+        assert_eq!(
+            eight.health,
+            TITAN_HEALTH * 2,
+            "and twice the titan to chop down"
+        );
+        assert!(
+            eight
+                .raiders
+                .iter()
+                .any(|r| r.run.distance_to(0.0, 0.0) > ARENA_RADIUS * 0.75)
+        );
+        assert_eq!(
+            eight.setup()["radius"],
+            json!(eight.radius),
+            "and the client is told"
+        );
         assert_eq!(eight.setup()["health"], json!(TITAN_HEALTH * 2));
-        assert_eq!(eight.snapshot()["titan"]["max_health"], json!(TITAN_HEALTH * 2));
+        assert_eq!(
+            eight.snapshot()["titan"]["max_health"],
+            json!(TITAN_HEALTH * 2)
+        );
     }
 }

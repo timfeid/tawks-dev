@@ -259,6 +259,13 @@ impl Timberline {
             }
         }
 
+        // The first four seats should use both halves of the mirrored map.
+        let spawns = std::mem::take(&mut map.spawns);
+        let half = spawns.len() / 2;
+        map.spawns = (0..half)
+            .flat_map(|index| [spawns[index], spawns[index + half]])
+            .collect();
+
         // The lookout in the middle, with stairs up from east and west.
         map.solid(0.0, 0.0, 2.5 * size, 2.5 * size, RIDGE_TOP, "wood");
         map.stairs(true, 2.5 * size, 1.0, 0.0, 1.1, RIDGE_TOP);
@@ -1070,5 +1077,31 @@ mod tests {
         assert!(eight.fighters.iter().all(|f| f.x.abs() < eight.half_x && f.z.abs() < eight.half_z));
         assert_eq!(eight.setup()["half"], json!(eight.half_x), "and the client is told");
         assert_eq!(eight.setup()["scale"], json!(eight.size));
+    }
+
+    #[test]
+    fn timberline_seats_both_halves_of_the_map() {
+        let map = Timberline::build();
+        assert_eq!(map.spawns.len(), 8);
+        for pair in map.spawns.chunks_exact(2) {
+            assert!((pair[0].0 + pair[1].0).abs() < 1e-4);
+            assert!((pair[0].1 + pair[1].1).abs() < 1e-4);
+        }
+        let mut four = PaintBlasters::new(&players(4), 1);
+        four.use_popgun_knockout();
+        assert_eq!(
+            four.fighters
+                .iter()
+                .filter(|fighter| fighter.z < 0.0)
+                .count(),
+            2
+        );
+        assert_eq!(
+            four.fighters
+                .iter()
+                .filter(|fighter| fighter.z > 0.0)
+                .count(),
+            2
+        );
     }
 }

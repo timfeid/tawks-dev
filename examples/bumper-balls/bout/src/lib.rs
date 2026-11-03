@@ -125,7 +125,10 @@ impl BumperBalls {
             })
             .collect();
         BumperBalls {
-            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
+            allies: contestants
+                .iter()
+                .filter_map(|c| c.ally.map(|ally| (c.seat, ally)))
+                .collect(),
             balls,
             time: 0.0,
             radius: ARENA_RADIUS * crowd_scale(count),
@@ -151,7 +154,8 @@ impl BumperBalls {
         }
         let t = ((time - SHRINK_START_SECONDS) / (ROUND_SECONDS - SHRINK_START_SECONDS))
             .clamp(0.0, 1.0);
-        (ARENA_RADIUS + (ARENA_MIN_RADIUS - ARENA_RADIUS) * t) * self.size
+        // Crowded rounds need a wider start, but the same tight finish to avoid ties.
+        ARENA_RADIUS * self.size * (1.0 - t) + ARENA_MIN_RADIUS * t
     }
 
     fn ball(&self, seat: u8) -> Option<&Ball> {
@@ -207,7 +211,7 @@ impl Bout for BumperBalls {
         json!({
             "game": "bumper",
             "radius": ARENA_RADIUS * self.size,
-            "min_radius": ARENA_MIN_RADIUS * self.size,
+            "min_radius": ARENA_MIN_RADIUS,
         })
     }
 
@@ -285,7 +289,10 @@ impl Bout for BumperBalls {
                 let (nx, nz) = (dx / dist, dz / dist);
                 let push = (BALL_RADIUS * 2.0 - dist) / 2.0;
                 let approach = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
-                let partners = tawks_bout::allied(self.allies.get(&a.seat).copied(), self.allies.get(&b.seat).copied());
+                let partners = tawks_bout::allied(
+                    self.allies.get(&a.seat).copied(),
+                    self.allies.get(&b.seat).copied(),
+                );
                 let impulse = if partners {
                     // Partners only roll apart.
                     0.0
@@ -375,11 +382,17 @@ impl Bout for BumperBalls {
                 .map(|(_, s)| s);
         }
         let from_center = (me.x * me.x + me.z * me.z).sqrt();
+        let skill = self.skill(seat).level();
         let stick = if from_center > radius * 0.74 {
             let lean = 1.0 / from_center.max(0.01);
+            // Brake outward momentum as well as steering toward the middle.
+            let brake = 0.22 * skill;
+            let x = -me.x * lean - me.vx * brake;
+            let z = -me.z * lean - me.vz * brake;
+            let length = (x * x + z * z).sqrt().max(0.01);
             Stick {
-                x: -me.x * lean,
-                z: -me.z * lean,
+                x: x / length,
+                z: z / length,
             }
         } else if brain.idle_for > 0.0 {
             Stick::default()
@@ -403,6 +416,37 @@ impl Bout for BumperBalls {
                 x: -me.x * 0.1,
                 z: -me.z * 0.1,
             }
+        };
+        // Stronger riders balance their chase with braking and collision room.
+        let defend = ((skill - 0.4) / 0.6).clamp(0., 1.) * 0.4;
+        let stick = if defend > 0. && brain.idle_for <= 0. && from_center <= radius * 0.74 {
+            let mut safe_x = -me.x * 0.18 - me.vx * 0.25;
+            let mut safe_z = -me.z * 0.18 - me.vz * 0.25;
+            if let Some(threat) = opponents.iter().min_by(|a, b| {
+                let gap = |o: &Ball| (me.x - o.x - o.vx * 0.35).hypot(me.z - o.z - o.vz * 0.35);
+                gap(a).total_cmp(&gap(b))
+            }) {
+                let dx = me.x - threat.x - threat.vx * 0.35;
+                let dz = me.z - threat.z - threat.vz * 0.35;
+                let gap = dx.hypot(dz).max(0.01);
+                let avoid = ((4. - gap) / 4.).clamp(0., 1.) * 1.5;
+                safe_x += dx / gap * avoid;
+                safe_z += dz / gap * avoid;
+            }
+            let safe_len = safe_x.hypot(safe_z);
+            if safe_len > 0.01 {
+                let x = stick.x * (1. - defend) + safe_x / safe_len * defend;
+                let z = stick.z * (1. - defend) + safe_z / safe_len * defend;
+                let len = x.hypot(z).max(0.01);
+                Stick {
+                    x: x / len,
+                    z: z / len,
+                }
+            } else {
+                stick
+            }
+        } else {
+            stick
         };
         self.brains.insert(seat, brain);
         Input::from_stick(stick.clamped())
@@ -518,16 +562,33 @@ mod tests {
     }
 
     #[test]
-    fn a_bigger_field_gets_a_wider_platform() {
-        assert_eq!(BumperBalls::new(&contestants(4, false), 1).radius, ARENA_RADIUS, "four play it as built");
+    fn a_bigger_field_starts_wider_but_closes_to_a_decisive_radius() {
+        assert_eq!(
+            BumperBalls::new(&contestants(4, false), 1).radius,
+            ARENA_RADIUS,
+            "four play it as built"
+        );
         let (x, z) = spawn_point(0, 4);
-        assert!((x.hypot(z) - ARENA_RADIUS * 0.55).abs() < 1e-4, "and start where they did");
-        let mut eight = BumperBalls::new(&contestants(8, false), 1);
-        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
-        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
-        run(&mut eight, ROUND_SECONDS - 0.5, &[]);
-        let closed = eight.radius / ARENA_MIN_RADIUS;
-        assert!((closed - 2f32.sqrt()).abs() < 0.05, "it closes in to a wider ring too, {closed}");
+        assert!(
+            (x.hypot(z) - ARENA_RADIUS * 0.55).abs() < 1e-4,
+            "and start where they did"
+        );
+        let eight = BumperBalls::new(&contestants(8, false), 1);
+        assert!(
+            (eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4,
+            "eight get the room of two fours"
+        );
+        assert_eq!(
+            eight.setup()["radius"],
+            json!(eight.radius),
+            "and the client is told"
+        );
+        assert_eq!(eight.setup()["min_radius"], json!(ARENA_MIN_RADIUS));
+        let closed = eight.radius_at(ROUND_SECONDS);
+        assert!(
+            (closed - ARENA_MIN_RADIUS).abs() < 0.05,
+            "it closes to the same final radius as four, {closed}"
+        );
     }
 
     #[test]

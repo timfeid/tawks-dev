@@ -221,14 +221,16 @@ impl PaintPlaylist {
         // Their aim drifts around the target, they periodically hesitate, and
         // their side-step can put a prop between them and a shot.
         let sharpness = self.inner.skill_of(seat);
-        let phase=self.target_phases.get(&seat).copied().unwrap_or_default();
+        let phase = self.target_phases.get(&seat).copied().unwrap_or_default();
         let wobble = (self.time * 1.65 + phase).sin() * (1.4 - sharpness.level());
         let yaw = (-dx).atan2(-dz) + wobble * 0.006;
         let pitch = ((target.y - (me.y + 1.38)) / distance).atan()
             + (self.time * 1.07 + phase).cos() * 0.004;
-        // A relaxed bot hangs back before slapping the light.
+        // Bots vary in their usual reaction and hesitate differently per light.
+        let jitter = (phase.sin() + 1.0) * 0.125
+            + (phase + self.target_slot as f32 * 1.7).sin().abs() * 0.2;
         let firing =
-            (self.time * 4.1 + phase).sin() > 0.48 + (1.0 - sharpness.level()) * 0.42;
+            self.time - self.target_shown_at >= 0.15 + jitter + sharpness.reaction() * 0.55;
         let advance = if distance > 34.0 { -0.82 } else { -0.12 };
         Input {
             stick: Stick {
@@ -749,6 +751,17 @@ mod tests {
 
     fn half(game: &PaintPlaylist) -> f32 {
         game.setup()["half"].as_f64().unwrap() as f32
+    }
+
+    #[test]
+    fn target_bots_notice_each_new_light_at_their_own_pace() {
+        let contestants = [Contestant::bot(0, 1.0), Contestant::bot(1, 0.15)];
+        let mut game = PaintPlaylist::new(PaintVariant::TargetFrenzy, &contestants, 17);
+        game.target_phases.insert(0, 0.0);
+        game.target_phases.insert(1, 0.0);
+        game.time = 0.5;
+        assert!(game.target_input(0, 1.0 / 60.0).fire);
+        assert!(!game.target_input(1, 1.0 / 60.0).fire);
     }
 
     #[test]

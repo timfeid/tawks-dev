@@ -164,7 +164,7 @@ impl Board {
     pub(super) fn brace_walk(&mut self,seat:u8,on:bool)->Result<(),BoardError> {
         if seat==self.turn_seat() {return Err(BoardError::WrongStep);}
         let walk=self.walk.as_mut().ok_or(BoardError::WrongStep)?;
-        if on {walk.motor.braced.insert(seat);} else {walk.motor.braced.remove(&seat);}
+        if on {if walk.motor.braced.insert(seat) {walk.motor.dig_in(seat);}} else {walk.motor.braced.remove(&seat);}
         Ok(())
     }
 

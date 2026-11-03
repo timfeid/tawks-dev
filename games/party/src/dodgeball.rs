@@ -666,7 +666,9 @@ impl Bout for Dodgeball {
                     x: if brain.strafe >= 0.0 { 1.0 } else { -1.0 },
                     z: 0.0,
                 };
-                let catch_odds = 0.01 + self.skill(seat).level() as f64 * 0.05;
+                // The catch window is only a few frames, so timing skill
+                // needs a steep curve to separate reliable from lucky catches.
+                let catch_odds = 0.01 + self.skill(seat).level().powi(5) as f64 * 0.10;
                 if !holding && distance < CATCH_RANGE * 0.8 && self.rng.random_bool(catch_odds) {
                     input.fire = true;
                 }

@@ -35,6 +35,24 @@ const CAR_HALF_LENGTH: f32 = 0.8;
 // External vehicle footprints supply their center and axial samples, without
 // lateral expansion. Two 1.1-unit capsules plus a small bumper stand-off.
 const VEHICLE_CLEARANCE: f32 = 2.2 + 0.15;
+/// How close a patrol car with its lights on makes traffic pull over and stop.
+const YIELD_RANGE: f32 = 14.;
+/// How far a yielding car edges toward the curb.
+const PULL_OVER: f32 = 1.2;
+/// How long a car stuck against a patrol car waits before it gives way.
+const PINNED_SECONDS: f32 = 2.;
+/// How fast a patrol car pressing into a stuck car pushes it aside, in m/s.
+const NUDGE_SPEED: f32 = 2.5;
+
+fn in_junction(at: (f32, f32)) -> bool {
+    STREETS.iter().any(|x| (at.0 - x).abs() < 3.5) && STREETS.iter().any(|z| (at.1 - z).abs() < 3.5)
+}
+fn touching(car: &Car, obstacles: &[(f32, f32)]) -> bool {
+    let direction = (car.yaw.sin() * CAR_HALF_LENGTH, car.yaw.cos() * CAR_HALF_LENGTH);
+    let back = (car.at.0 - direction.0, car.at.1 - direction.1);
+    let front = (car.at.0 + direction.0, car.at.1 + direction.1);
+    obstacles.iter().any(|&point| segment_distance(point, back, front) < VEHICLE_CLEARANCE - 0.05)
+}
 
 fn avoids_vehicle_obstacles(car: &Car, travel: f32, obstacles: &[(f32, f32)]) -> bool {
     let direction = (car.yaw.sin(), car.yaw.cos());
@@ -127,6 +145,13 @@ pub(super) struct Car {
     yaw: f32,
     speed: f32,
     braking: bool,
+    shove: (f32, f32),
+    spin: f32,
+    stall: f32,
+    /// How long the car has sat still against a patrol car.
+    pinned: f32,
+    /// Taken off the streets by the sandbox's traffic setting.
+    parked: bool,
 }
 pub(super) struct Traffic {
     time: f32,
@@ -202,6 +227,11 @@ impl Traffic {
                     yaw,
                     speed: CAR_SPEED,
                     braking: false,
+                    shove: (0., 0.),
+                    spin: 0.,
+                    stall: 0.,
+                    pinned: 0.,
+                    parked: false,
                 }
             })
             .collect();
@@ -256,6 +286,7 @@ impl Board {
             cars: t
                 .cars
                 .iter()
+                .filter(|c| !c.parked)
                 .map(|c| TrafficCarView {
                     id: c.id,
                     x: c.at.0,
@@ -334,6 +365,156 @@ impl Board {
             swept_capsule_distance(relative_from,relative_to,patrol_axis,traffic_axis)<2.2
         })
     }
+    /// A patrol car at speed pushes the traffic in its way aside instead of
+    /// stopping dead. The shoved car stalls, then drifts back into its lane.
+    pub fn shove_traffic(&mut self, from: (f32, f32), to: (f32, f32), yaw: f32, speed: f32) -> u8 {
+        if self.map != Map::Frozen || ![from.0, from.1, to.0, to.1, yaw, speed].iter().all(|v| v.is_finite()) {
+            return 0;
+        }
+        let patrol_axis = (yaw.sin() * 0.9, yaw.cos() * 0.9);
+        let right = (yaw.cos(), -yaw.sin());
+        let mut shoved = 0;
+        for car in &mut self.traffic.cars {
+            let relative_from = (from.0 - car.old.0, from.1 - car.old.1);
+            let relative_to = (to.0 - car.at.0, to.1 - car.at.1);
+            if segment_distance((0., 0.), relative_from, relative_to) > CAR_HALF_LENGTH + 0.9 + 2.6 {
+                continue;
+            }
+            let traffic_axis = (car.yaw.sin() * CAR_HALF_LENGTH, car.yaw.cos() * CAR_HALF_LENGTH);
+            if swept_capsule_distance(relative_from, relative_to, patrol_axis, traffic_axis) >= 2.5 {
+                continue;
+            }
+            let lateral = (car.at.0 - to.0) * right.0 + (car.at.1 - to.1) * right.1;
+            let side = if lateral < 0. { -1. } else { 1. };
+            let room = (3.2 - car.shove.0.hypot(car.shove.1)).max(0.);
+            let push = (2.9 - lateral.abs()).clamp(0.6, 3.).min(room);
+            if push <= 0. {
+                continue;
+            }
+            let delta = (right.0 * side * push, right.1 * side * push);
+            car.shove = (car.shove.0 + delta.0, car.shove.1 + delta.1);
+            car.at = (car.at.0 + delta.0, car.at.1 + delta.1);
+            car.old = car.at;
+            car.stall = 1.6;
+            car.spin = side * (0.25 + speed * 0.03).min(0.7);
+            car.yaw += car.spin;
+            car.speed = 0.;
+            car.braking = true;
+            shoved += 1;
+        }
+        shoved
+    }
+    /// A car pinned against a patrol car for a while leaves for the farthest
+    /// clear stretch of its own loop, so a wedged patrol car always comes free.
+    fn give_way(&mut self, obstacles: &[(f32, f32)]) {
+        let pinned: Vec<usize> = (0..self.traffic.cars.len())
+            .filter(|&i| self.traffic.cars[i].pinned > PINNED_SECONDS)
+            .collect();
+        for index in pinned {
+            let car = self.traffic.cars[index].clone();
+            let perimeter = (car.loop_half + if car.reverse { 1.05 } else { -1.05 }) * 8.;
+            let clear = |along: f32| {
+                let (at, _) = car_at_on(along, car.reverse, car.loop_half);
+                let far_from_traffic = self.traffic.cars.iter().all(|other| {
+                    other.id == car.id || (other.at.0 - at.0).hypot(other.at.1 - at.1) > 9.
+                });
+                let far_from_patrol = obstacles
+                    .iter()
+                    .all(|point| (point.0 - at.0).hypot(point.1 - at.1) > 12.);
+                far_from_traffic && far_from_patrol
+            };
+            let Some(along) = (1..16)
+                .map(|step| car.along + perimeter * step as f32 / 16. * if step % 2 == 0 { 1. } else { -1. })
+                .map(|along| along.rem_euclid(perimeter))
+                .find(|along| clear(*along))
+            else {
+                continue;
+            };
+            let car = &mut self.traffic.cars[index];
+            car.along = along;
+            (car.at, car.yaw) = car_at_on(along, car.reverse, car.loop_half);
+            car.old = car.at;
+            car.shove = (0., 0.);
+            car.spin = 0.;
+            car.stall = 0.;
+            car.pinned = 0.;
+        }
+    }
+    /// The sandbox's traffic setting: 0 clears the streets, 1 leaves every
+    /// third car, 2 or more runs them all.
+    pub fn set_traffic_level(&mut self, level: u8) {
+        for car in &mut self.traffic.cars {
+            let keep = level >= 2 || (level == 1 && car.id % 3 == 0);
+            if keep && car.parked {
+                car.parked = false;
+                (car.at, car.yaw) = car_at_on(car.along, car.reverse, car.loop_half);
+                car.old = car.at;
+                car.shove = (0., 0.);
+                car.spin = 0.;
+                car.stall = 0.;
+            } else if !keep {
+                car.parked = true;
+                car.at = (9999., 9999.);
+                car.old = car.at;
+                car.speed = 0.;
+            }
+        }
+    }
+    /// Parks traffic car `id` at `at` facing `yaw` and holds it there for
+    /// `hold` seconds, for scripted reviews of a wedged patrol car.
+    #[cfg(any(test, feature = "qa"))]
+    pub fn qa_park_traffic(&mut self, id: u8, at: (f32, f32), yaw: f32, hold: f32) {
+        if let Some(car) = self.traffic.cars.iter_mut().find(|car| car.id == id) {
+            let (lane, lane_yaw) = car_at_on(car.along, car.reverse, car.loop_half);
+            car.shove = (at.0 - lane.0, at.1 - lane.1);
+            car.spin = yaw - lane_yaw;
+            car.at = at;
+            car.old = at;
+            car.yaw = yaw;
+            car.stall = hold;
+            car.speed = 0.;
+        }
+    }
+    /// The traffic car nearest `at`, its position and whether it is stopped.
+    #[cfg(any(test, feature = "qa"))]
+    pub fn qa_nearest_traffic(&self, at: (f32, f32)) -> Option<(u8, (f32, f32), f32)> {
+        self.traffic
+            .cars
+            .iter()
+            .map(|car| (car.id, car.at, (car.at.0 - at.0).hypot(car.at.1 - at.1)))
+            .min_by(|a, b| a.2.total_cmp(&b.2))
+    }
+    /// A patrol car pressing slowly into traffic it is stuck against pushes
+    /// that car aside at walking pace, where a fast one would shove it.
+    pub fn nudge_traffic(&mut self, from: (f32, f32), to: (f32, f32), yaw: f32, dt: f32) -> u8 {
+        if self.map != Map::Frozen || ![from.0, from.1, to.0, to.1, yaw, dt].iter().all(|v| v.is_finite()) {
+            return 0;
+        }
+        let patrol_axis = (yaw.sin() * 0.9, yaw.cos() * 0.9);
+        let mut nudged = 0;
+        for car in &mut self.traffic.cars {
+            let relative_from = (from.0 - car.old.0, from.1 - car.old.1);
+            let relative_to = (to.0 - car.at.0, to.1 - car.at.1);
+            let traffic_axis = (car.yaw.sin() * CAR_HALF_LENGTH, car.yaw.cos() * CAR_HALF_LENGTH);
+            if swept_capsule_distance(relative_from, relative_to, patrol_axis, traffic_axis) >= 2.3 {
+                continue;
+            }
+            let away = (car.at.0 - from.0, car.at.1 - from.1);
+            let length = away.0.hypot(away.1).max(0.001);
+            let step = NUDGE_SPEED * dt;
+            let delta = (away.0 / length * step, away.1 / length * step);
+            car.shove = (car.shove.0 + delta.0, car.shove.1 + delta.1);
+            car.at = (car.at.0 + delta.0, car.at.1 + delta.1);
+            car.old = car.at;
+            car.stall = car.stall.max(0.8);
+            car.speed = 0.;
+            car.braking = true;
+            // Pushing a car that cannot go anywhere still hurries it off.
+            car.pinned += dt;
+            nudged += 1;
+        }
+        nudged
+    }
     fn traffic_car_distance(&self, car: &Car, from: (f32, f32), to: (f32, f32)) -> f32 {
         let d = (car.yaw.sin() * CAR_HALF_LENGTH, car.yaw.cos() * CAR_HALF_LENGTH);
         let start = (car.old.0 - from.0 - d.0, car.old.1 - from.1 - d.1);
@@ -347,6 +528,13 @@ impl Board {
     /// Footprint points are unexpanded center/axial samples in world units.
     /// Existing callers without external vehicles keep using `traffic_tick`.
     pub fn traffic_tick_with_obstacles(&mut self, dt: f32, obstacles: &[(f32, f32)]) -> bool {
+        self.traffic_tick_city(dt, obstacles, &[])
+    }
+    /// As `traffic_tick_with_obstacles`, with patrol cars running their lights
+    /// at `sirens`: traffic near one pulls toward the curb and stops, except
+    /// inside a junction, which it clears first. A car left pinned against a
+    /// patrol car gives way by leaving for the far side of its loop.
+    pub fn traffic_tick_city(&mut self, dt: f32, obstacles: &[(f32, f32)], sirens: &[(f32, f32)]) -> bool {
         if self.map != Map::Frozen || !dt.is_finite() || dt <= 0. {
             return false;
         }
@@ -356,6 +544,12 @@ impl Board {
         let before:Vec<_>=self.traffic.cars.iter().map(|car|(car.id,car.along,car.reverse,car.loop_half)).collect();
         let mut events=Vec::new();let mut changed=false;
         for car in &mut self.traffic.cars {
+            if car.parked {
+                car.at = (9999., 9999.);
+                car.old = car.at;
+                car.speed = 0.;
+                continue;
+            }
             car.old=car.at;
             let forward=(car.yaw.sin(),car.yaw.cos());
             let axis=if forward.0.abs()>0.5 {"x"}else{"z"};
@@ -376,12 +570,39 @@ impl Board {
                 travel=travel.min((gap-4.2).max(0.));
             }
             if !obstacles.is_empty() { travel=vehicle_obstacle_limit(car,travel,dt,obstacles); }
+            let yielding = !in_junction(car.at)
+                && sirens.iter().any(|&(x, z)| (x - car.at.0).hypot(z - car.at.1) < YIELD_RANGE);
+            if yielding {
+                travel = 0.;
+                let right = (car.yaw.cos(), -car.yaw.sin());
+                let edged = car.shove.0 * right.0 + car.shove.1 * right.1;
+                let step = (PULL_OVER - edged).clamp(0., 1.5 * dt);
+                car.shove = (car.shove.0 + right.0 * step, car.shove.1 + right.1 * step);
+                car.stall = car.stall.max(0.3);
+            }
+            if travel < 0.001 && touching(car, obstacles) {
+                car.pinned += dt;
+            } else {
+                car.pinned = 0.;
+            }
+            if car.stall > 0. {
+                car.stall = (car.stall - dt).max(0.);
+                travel = 0.;
+            } else {
+                let settle = (-0.9 * dt).exp();
+                car.shove = (car.shove.0 * settle, car.shove.1 * settle);
+                if car.shove.0.hypot(car.shove.1) < 0.02 { car.shove = (0., 0.); }
+            }
+            car.spin *= (-2.5 * dt).exp();
             let was=car.braking;car.braking=travel<0.001;car.speed=travel/dt;
             car.along+=if car.reverse{-travel}else{travel};
             (car.at,car.yaw)=car_at_on(car.along,car.reverse,car.loop_half);
+            car.at = (car.at.0 + car.shove.0, car.at.1 + car.shove.1);
+            car.yaw += car.spin;
             if !was&&car.braking {events.push(json!({"kind":"traffic_brake","car":car.id,"x":car.at.0,"z":car.at.1}));}
             changed|=was!=car.braking;
         }
+        self.give_way(obstacles);
         let mut moving: Vec<u8> = self.raids.keys().copied().collect();
         if let Some(p) = &self.positioning {
             if !moving.contains(&p.seat) {
@@ -732,5 +953,115 @@ mod tests {
         assert!(board.traffic_blocks_patrol_vehicle((f32::NAN,0.),(0.,0.),0.));
         let elsewhere=Board::on(Map::Island,&[0,1],5,7);
         assert!(!elsewhere.traffic_blocks_patrol_vehicle((0.,-3.),(0.,-2.8),0.));
+    }
+
+    fn wedged_patrol(seed: u64) -> (crate::city_heist::CityGame, Board, (f32, f32)) {
+        use crate::city_heist::{CityConfig, CityGame};
+        let seats = [(0, false), (1, true), (2, true)];
+        let config = CityConfig { police: 1, jobs: 1, host_police: true, ..Default::default() };
+        let mut city = CityGame::seeded(&seats, config, false, seed);
+        let mut board = Board::for_room(Map::Frozen, &[0, 1, 2], 10, seed);
+        board.use_manual_events();
+        city.ready(0);
+        // Past the night's opening countdown, which holds everyone still.
+        for _ in 0..200 {
+            city.tick_streets(0.02, &[], &[0, 1, 2], &mut board);
+        }
+        // The playtest jam: a crossing taxi off the front-left corner and a
+        // car pressed against the right side, both unable to move on.
+        let at = (16., 16.);
+        city.qa_place_car(0, at, 0.);
+        board.qa_park_traffic(0, (14.6, 18.4), std::f32::consts::FRAC_PI_2, 30.);
+        board.qa_park_traffic(1, (18., 16.2), 0., 30.);
+        (city, board, at)
+    }
+    fn drive(city: &mut crate::city_heist::CityGame, board: &mut Board, seconds: f32, stick: crate::bout::Stick) {
+        for _ in 0..(seconds / 0.02) as usize {
+            board.traffic_tick_city(0.02, &city.patrol_traffic_obstacles(), &city.patrol_sirens());
+            city.tick_streets(0.02, &[(0, stick, 0.)], &[0, 1, 2], board);
+        }
+    }
+    fn patrol_at(city: &crate::city_heist::CityGame) -> (f32, f32) {
+        let me = city.view_for(Some(0));
+        let a = me.actors.iter().find(|a| a.seat == 0).unwrap();
+        (a.x.unwrap(), a.z.unwrap())
+    }
+    #[test]
+    fn a_patrol_car_wedged_at_a_junction_drives_out_as_its_driver_presses_on() {
+        let (mut city, mut board, start) = wedged_patrol(3);
+        assert!(board.traffic_blocks_patrol_vehicle(start, (start.0, start.1 + 0.3), 0.), "the jam blocks the car");
+        drive(&mut city, &mut board, 1., crate::bout::Stick { x: 0., z: 1. });
+        assert!(board.qa_nearest_traffic(start).is_some_and(|(_, _, d)| d > 2.3), "a slow push moves the car in the way");
+        drive(&mut city, &mut board, 5., crate::bout::Stick { x: 0., z: 1. });
+        let now = patrol_at(&city);
+        assert!((now.0 - start.0).hypot(now.1 - start.1) > 6., "the patrol car drove away: {now:?}");
+    }
+    #[test]
+    fn a_car_pinned_against_a_parked_patrol_car_gives_way() {
+        let (mut city, mut board, start) = wedged_patrol(5);
+        drive(&mut city, &mut board, 3., crate::bout::Stick::default());
+        let near = board.qa_nearest_traffic(start).unwrap();
+        assert!(near.2 > 4., "pinned traffic left after a couple of seconds: {near:?}");
+    }
+    #[test]
+    fn traffic_pulls_over_and_stops_for_a_patrol_car_with_its_lights_on() {
+        let mut board = Board::for_room(Map::Frozen, &[0, 1, 2], 10, 7);
+        let car = board.traffic.cars.iter().find(|car| !in_junction(car.at)).cloned().unwrap();
+        let siren = (car.at.0 + car.yaw.sin() * 8., car.at.1 + car.yaw.cos() * 8.);
+        for _ in 0..50 {
+            board.traffic_tick_city(0.02, &[], &[siren]);
+        }
+        let after = board.traffic.cars.iter().find(|c| c.id == car.id).unwrap();
+        assert!(after.speed < 0.01, "it stops");
+        let right = (car.yaw.cos(), -car.yaw.sin());
+        assert!(after.shove.0 * right.0 + after.shove.1 * right.1 > 0.5, "and edges to the curb");
+        for _ in 0..200 {
+            board.traffic_tick_city(0.02, &[], &[]);
+        }
+        let later = board.traffic.cars.iter().find(|c| c.id == car.id).unwrap();
+        assert!(later.speed > 1., "it drives on once the patrol car has gone");
+    }
+
+    #[test]
+    fn a_patrol_car_nosed_into_a_building_resets_onto_the_street() {
+        use crate::bout::Stick;
+        use crate::city_heist::{CityConfig, CityGame};
+        let seats = [(0, false), (1, true), (2, true)];
+        let config = CityConfig { police: 1, jobs: 1, host_police: true, ..Default::default() };
+        let mut city = CityGame::seeded(&seats, config, false, 3);
+        let mut board = Board::for_room(Map::Frozen, &[0, 1, 2], 10, 3);
+        board.use_manual_events();
+        city.ready(0);
+        for _ in 0..200 {
+            city.tick_streets(0.02, &[], &[0, 1, 2], &mut board);
+        }
+        city.qa_place_car(0, (17.5, 22.), std::f32::consts::FRAC_PI_2);
+        let press = [(0, Stick { x: 1., z: 0. }, 0.)];
+        for _ in 0..250 {
+            city.tick_streets(0.02, &press, &[0, 1, 2], &mut board);
+        }
+        assert!(city.view_for(Some(0)).car_stuck);
+        for _ in 0..60 {
+            city.tick_streets(0.02, &[(0, Stick::default(), 0.)], &[0, 1, 2], &mut board);
+        }
+        assert!(city.view_for(Some(0)).car_stuck, "letting go keeps the reset on offer");
+        assert!(city.reset_car(0, &mut board), "reset");
+        let view = city.view_for(Some(0));
+        let me = view.actors.iter().find(|a| a.seat == 0).unwrap();
+        let at = (me.x.unwrap(), me.z.unwrap());
+        for _ in 0..30 {
+            city.tick_streets(0.02, &[(0, Stick::default(), 0.)], &[0, 1, 2], &mut board);
+        }
+        let view = city.view_for(Some(0));
+        let me = view.actors.iter().find(|a| a.seat == 0).unwrap();
+        assert_eq!((me.x.unwrap(), me.z.unwrap()), at, "it stays where it was put");
+        let yaw = me.yaw;
+        let ahead = [(0, Stick { x: yaw.sin(), z: yaw.cos() }, 0.)];
+        for _ in 0..150 {
+            city.tick_streets(0.02, &ahead, &[0, 1, 2], &mut board);
+        }
+        let view = city.view_for(Some(0));
+        let me = view.actors.iter().find(|a| a.seat == 0).unwrap();
+        assert!(((me.x.unwrap() - at.0).hypot(me.z.unwrap() - at.1)) > 6., "drives off from {at:?} to {:?}", (me.x, me.z));
     }
 }

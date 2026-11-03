@@ -358,7 +358,10 @@ export type Member = {
 };
 
 export type CitySide='police'|'crew';
-export type CityView={round:number;jobs:number;remaining:number;briefing:{remaining:number;ready:number;total:number;you_ready:boolean}|null;night_score:[number,number];job_wait:number;patrol_route:[number,number][];dispatch:string|null;draw:boolean;ready:number;scores:[number,number];actors:{seat:number;side:CitySide;x:number|null;z:number|null;yaw:number;jailed:boolean;stunned:number;carrying:boolean;cuffed:number;acting:boolean;suction:boolean;automated:boolean;driving:boolean;car:[number,number]|null;jail_seconds:number;height:number;velocity:[number,number]}[];objective:string;targets:{label:string;x:number;z:number;progress:number}[];bank:[number,number];jail:[number,number];escape:[number,number]|null;alarm:boolean;alert:[number,number]|null;loot:[number,number]|null;loot_carrier:number|null;vault_progress:number|null;power_seconds:number|null;smokes:[number,number,number][];tools:[number,number];scanner:string|null;scanner_bearing:number|null;resolved:CitySide|null;reason:string|null;resolved_for:number};
+export type CityArrest={officer:number;robber:number;stage:'cuffing'|'escort';progress:number;trace:number;cursor:[number,number];mistakes:number;flash:number;escape:number;clock:number;period:number;window:number;lockout:number;jolt:number;remaining:number};
+export type CityImpact={id:number;kind:'ram'|'shove'|'grab'|'cuffed'|'escape'|'jailed'|'slip'|'struggle'|'fumble'|'perfect';x:number;z:number;age:number};
+export type CityTap={station:'power'|'vault'|'jail'|'van'|'loot';phase:number;period:number;window:number;lockout:number};
+export type CityView={tap:CityTap|null;arrests:CityArrest[];slow:number;slow_left:number;cuff_ready:number;grab:number;impacts:CityImpact[];round:number;jobs:number;remaining:number;briefing:{remaining:number;ready:number;total:number;you_ready:boolean}|null;night_score:[number,number];job_wait:number;patrol_route:[number,number][];dispatch:string|null;draw:boolean;ready:number;scores:[number,number];actors:{seat:number;side:CitySide;x:number|null;z:number|null;yaw:number;jailed:boolean;stunned:number;carrying:boolean;cuffed:number;acting:boolean;suction:boolean;automated:boolean;driving:boolean;car:[number,number]|null;jail_seconds:number;height:number;velocity:[number,number];held:boolean}[];objective:string;targets:{label:string;x:number;z:number;progress:number}[];bank:[number,number];jail:[number,number];escape:[number,number]|null;alarm:boolean;alert:[number,number]|null;loot:[number,number]|null;loot_carrier:number|null;vault_progress:number|null;power_seconds:number|null;smokes:[number,number,number][];tools:[number,number];scanner:string|null;scanner_bearing:number|null;resolved:CitySide|null;reason:string|null;resolved_for:number};
 export type RoomView = {
   city_mode?:boolean;
   city_config?:{police:number;jobs:number;host_police:boolean};
@@ -573,6 +576,9 @@ export type BattleSnap = {
     attack: 'slam' | 'sweep' | 'charge';
     timer: number;
     radius: number;
+    core_phase?: number;
+    core_period?: number;
+    core_window?: number;
   };
 };
 
@@ -782,7 +788,8 @@ export type GameEvent =
   | { kind: 'recovered' }
   | { kind: 'floored'; seat: number; by: string }
   | { kind: 'swing'; seat: number }
-  | { kind: 'strike_core'; seat: number; x: number; z: number; left: number }
+  | { kind: 'strike_core'; seat: number; x: number; z: number; left: number; critical?: boolean }
+  | { kind: 'glance'; seat: number }
   | { kind: 'titan_down' };
 
 export type FeedbackResult={number:number;with_note:boolean;saved:boolean;rewarded:boolean;message?:string};
@@ -826,6 +833,9 @@ export type ClientMsg =
   | {type:'city_automate';on:boolean}
   | {type:'city_ready'}
   | {type:'city_vehicle'}
+  | {type:'city_trace';x:number;y:number}
+  | {type:'city_struggle'}
+  | {type:'city_tap'}
   | { type: 'choose_skill'; level: string }
   | { type: 'choose_map'; map: MapKey }
   | { type: 'pick'; character: string }
@@ -841,7 +851,7 @@ export type ClientMsg =
   | { type: 'shop'; item: Item | null; upgrade?: Upgrade | null }
   | { type: 'taunt'; taunt: Taunt }
   | { type: 'bet'; coins: number }
-  | { type: 'fire_cannon'; power: number }
+  | { type: 'fire_cannon'; power: number; stop?: number }
   /** Throw what is in hand: `yaw` the way (0 is +z, a quarter turn +x), `pitch` in radians, `power` 0 to 1. */
   | { type: 'lob'; yaw: number; pitch: number; power: number }
   /** Stop the skill check of the item in hand: 0 to 1, best at 0.5. */
@@ -1006,6 +1016,11 @@ export type VacuumView = {
   pulling: [number, number][];
   siphoning: number[];
   braced: number[];
+  /** Rivals who dug in on the motor's beat, and those who slipped re-grabbing off it. */
+  gripped?: number[];
+  slipping?: number[];
+  brace_period?: number;
+  brace_window?: number;
 };
 
 /** What the vacuum can pull, as the board keys it. */

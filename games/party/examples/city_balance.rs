@@ -20,6 +20,14 @@ struct Run {
     loot_moved: bool,
     arrests: u32,
     rescues: u32,
+    grabs: u32,
+    escapes: u32,
+    shoves: u32,
+    rams: u32,
+    slow_seconds: f32,
+    held_seconds: f32,
+    drive_seconds: f32,
+    drive_distance: f32,
     ticks: u64,
     wall_ms: u128,
 }
@@ -30,6 +38,7 @@ fn run(players: u8, police: u8, seed: u64) -> Run {
         police,
         jobs: 1,
         host_police: false,
+        ..Default::default()
     };
     let mut game = CityGame::seeded(&seats, config, true, seed);
     let mut board = Board::for_room(Map::Frozen, &ids, 10, seed);
@@ -49,18 +58,43 @@ fn run(players: u8, police: u8, seed: u64) -> Run {
         loot_moved: false,
         arrests: 0,
         rescues: 0,
+        grabs: 0,
+        escapes: 0,
+        shoves: 0,
+        rams: 0,
+        slow_seconds: 0.,
+        held_seconds: 0.,
+        drive_seconds: 0.,
+        drive_distance: 0.,
         ticks: 0,
         wall_ms: 0,
     };
-    for tick in 0..60 * 365 {
-        board.traffic_tick_with_obstacles(1. / 60.,&game.patrol_traffic_obstacles());
-        game.tick_with_traffic(1. / 60., &[], &ids, |from, to, yaw| {
-            match yaw {
-                Some(yaw)=>board.traffic_blocks_patrol_vehicle(from,to,yaw),
-                None=>board.traffic_collision(from,to).is_some(),
-            }
-        },|from,to|board.traffic_wait(from,to)>0.);
+    let mut seen_impacts = std::collections::HashSet::new();
+    for tick in 0..60 * 420 {
+        let world = game.time_scale() / 60.;
+        if world < 1. / 60. {
+            record.slow_seconds += 1. / 60.;
+        }
+        board.traffic_tick_city(world, &game.patrol_traffic_obstacles(), &game.patrol_sirens());
+        game.tick_streets(1. / 60., &[], &ids, &mut board);
         record.ticks += 1;
+        let view = game.view_for(Some(police));
+        record.held_seconds += view.arrests.len() as f32 / 60.;
+        for actor in view.actors.iter().filter(|a| a.driving) {
+            record.drive_seconds += 1. / 60.;
+            record.drive_distance += actor.velocity[0].hypot(actor.velocity[1]) / 60.;
+        }
+        for impact in &view.impacts {
+            if seen_impacts.insert(impact.id) {
+                match impact.kind {
+                    "grab" => record.grabs += 1,
+                    "escape" => record.escapes += 1,
+                    "shove" => record.shoves += 1,
+                    "ram" => record.rams += 1,
+                    _ => {}
+                }
+            }
+        }
         if tick % 15 == 0 || game.resolved.is_some() {
             let view = game.view_for(Some(police));
             record.vault_opened |= view.loot_carrier.is_some() || view.loot.is_some();
@@ -129,7 +163,7 @@ fn main() {
     });
     let mut groups = BTreeMap::new();
     for run in &runs {
-        let summary=groups.entry(format!("{}v{}",run.police,run.players-run.police)).or_insert(serde_json::json!({"games":0,"police":0,"crew":0,"timeouts":0,"seconds":0.,"vault_opened":0,"arrests":0,"rescues":0,"wall_ms":0}));
+        let summary=groups.entry(format!("{}v{}",run.police,run.players-run.police)).or_insert(serde_json::json!({"games":0,"police":0,"crew":0,"timeouts":0,"seconds":0.,"vault_opened":0,"arrests":0,"rescues":0,"grabs":0,"escapes":0,"shoves":0,"rams":0,"wall_ms":0}));
         for (key, value) in [
             ("games", 1),
             (
@@ -148,6 +182,10 @@ fn main() {
             ("vault_opened", u64::from(run.vault_opened)),
             ("arrests", run.arrests as u64),
             ("rescues", run.rescues as u64),
+            ("grabs", run.grabs as u64),
+            ("escapes", run.escapes as u64),
+            ("shoves", run.shoves as u64),
+            ("rams", run.rams as u64),
             ("wall_ms", run.wall_ms as u64),
         ] {
             summary[key] = serde_json::json!(summary[key].as_u64().unwrap_or(0) + value);

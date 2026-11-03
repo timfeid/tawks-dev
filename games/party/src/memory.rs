@@ -59,7 +59,7 @@ pub fn tile_at(x: f32, z: f32) -> Option<usize> {
 /// and then; past what a bot can hold in its head it slips a lot.
 fn slip(skill: f32, index: usize) -> f64 {
     let level = Skill(skill).level();
-    let span = 3.0 + level * 7.0;
+    let span = 3.0 + level.powi(3) * 7.0;
     let base = 0.01 + (1.0 - level) as f64 * 0.04;
     if index as f32 >= span {
         base + 0.35

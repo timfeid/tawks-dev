@@ -77,6 +77,16 @@ pub enum ClientMsg {
     CityAutomate {on:bool},
     CityReady,
     CityVehicle,
+    CityResetCar,
+    CityTrace {x:f32,y:f32},
+    CityStruggle,
+    CityCheck {input:crate::city_heist::CheckInput},
+    CitySlip {input:crate::city_slip::SlipInput},
+    CityItem {act:crate::city_heist::ItemAct,#[serde(default)]yaw:f32},
+    CityDodge {#[serde(default)]yaw:f32},
+    CityTakedown {#[serde(default)]yaw:f32},
+    CityCallout {#[serde(default)]yaw:f32},
+    CityClarity {held:bool},
     Pick {
         character: String,
     },
@@ -96,6 +106,11 @@ pub enum ClientMsg {
     StartSandbox {
         #[serde(default)]
         costume: Option<crate::roster::Costume>,
+    },
+    /// Free-roam Cops & Robbers, gated like StartSandbox.
+    StartCitySandbox {
+        #[serde(default = "officer")]
+        police: bool,
     },
     Dev {
         tool: crate::room::DevAction,
@@ -117,6 +132,9 @@ pub enum ClientMsg {
     },
     FireCannon {
         power: u8,
+        /// Where the fuse needle was stopped, 0 to 1; the middle flies true.
+        #[serde(default)]
+        stop: Option<f32>,
     },
     /// Throw the bomb: `yaw` the way (0 is +z, a quarter turn +x), `pitch`
     /// how steeply in radians, `power` from 0 to 1.
@@ -230,4 +248,8 @@ pub enum ServerMsg<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
         code: Option<&'a str>,
     },
+}
+
+fn officer() -> bool {
+    true
 }

@@ -24,3 +24,7 @@ workflow = { package = "workflow-model", path = "../../sdk/workflow-model" }
 
 [dev-dependencies]
 tokio-tungstenite = { workspace = true }
+
+[features]
+# Placement helpers for scripted native review runs and tests.
+qa = []

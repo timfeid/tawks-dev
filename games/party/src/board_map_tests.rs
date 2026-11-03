@@ -510,6 +510,45 @@ fn a_rival_bracing_against_the_vacuum_keeps_more_coins() {
     assert!(braced < open, "bracing keeps coins: {braced} lost against {open}");
 }
 
+/// Coins lost to three seconds of sucking by a rival who re-grabs on every
+/// beat of the motor, or mashes the grab off the beat.
+fn drained_by_grabs(on_beat: bool) -> i32 {
+    let mut board = Board::on(Map::Island, &seats(2), 4, 3);
+    board.clear_crates_for_test();
+    let layout = Map::Island.layout();
+    let (from, to) = layout
+        .iter()
+        .filter(|a| !a.under)
+        .flat_map(|a| layout.iter().filter(|b| !b.under && b.id != a.id).map(move |b| (a, b)))
+        .find(|(a, b)| ((a.x - b.x).powi(2) + (a.z - b.z).powi(2)).sqrt() > 5.0 && ((a.x - b.x).powi(2) + (a.z - b.z).powi(2)).sqrt() < 7.0)
+        .unwrap();
+    board.place_for_test(0, from.id, 0);
+    board.place_for_test(1, to.id, 50);
+    board.turn_to_for_test(0);
+    board.suck(0).unwrap();
+    for tick in 0..(60 * 3) {
+        let out = board.view().vacuum.unwrap().out;
+        let phase = (out / board::BRACE_PERIOD).rem_euclid(1.0);
+        let grab = if on_beat { (phase - 0.5).abs() < 0.01 } else { tick % 9 == 0 && (phase - 0.5).abs() > 0.3 };
+        if grab {
+            board.brace(1, false).unwrap();
+            board.brace(1, true).unwrap();
+        }
+        board.aim_vacuum(0, (to.x - from.x).atan2(to.z - from.z), true).unwrap();
+        board.vacuum_tick(1.0 / 60.0);
+    }
+    50 - coins_of(&board, 1)
+}
+
+#[test]
+fn digging_in_on_the_motor_beat_beats_a_plain_brace_and_mashing_costs() {
+    let braced = drained(true);
+    let gripped = drained_by_grabs(true);
+    let mashed = drained_by_grabs(false);
+    assert!(gripped < braced, "grips on the beat keep more: {gripped} against {braced}");
+    assert!(mashed > braced, "off-beat mashing loses more than a hold: {mashed} against {braced}");
+}
+
 #[test]
 fn the_vacuum_spins_up_and_the_turn_cannot_brace() {
     let mut board = Board::on(Map::Island, &seats(2), 4, 3);

@@ -296,6 +296,13 @@ pub const VACUUM_EDGE: f32 = 0.65;
 pub const VACUUM_FAR: f32 = 0.65;
 /// How much of the drain a rival bracing against the vacuum still loses.
 pub const BRACED: f32 = 0.5;
+/// The motor's beat a bracing rival can dig in on. A grab on the beat grips
+/// tight until the next one; a grab off it slips and loses more than none.
+pub const BRACE_PERIOD: f32 = 0.8;
+pub const BRACE_WINDOW: f32 = 0.15;
+pub const GRIPPED: f32 = 0.15;
+pub const SLIPPING: f32 = 1.25;
+const SLIP_SECONDS: f32 = 0.5;
 /// How long a rival has to stay in the middle of the cone while it blows
 /// before they are knocked back a space.
 pub const KNOCK_AFTER: f32 = 0.5;
@@ -389,8 +396,11 @@ pub struct Vacuum {
     pub left: f32,
     pub out: f32,
     pub pulling: HashMap<u16, f32>,
-    /// Rivals holding on against it.
+    /// Rivals holding on against it, and those gripping tight or slipping.
     pub braced: HashSet<u8>,
+    pub grip: HashMap<u8, f32>,
+    pub slip: HashMap<u8, f32>,
+    pub grabbed: HashMap<u8, f32>,
     /// How long each rival has been in the cone, toward the next coin drawn
     /// out of them; and those whose shield stopped it.
     pub siphon: HashMap<u8, f32>,
@@ -403,6 +413,38 @@ pub struct Vacuum {
     pub chest_blown: bool,
     /// Where the turn was when it came out, to go back to once it is put away.
     pub after: Option<Box<TurnStep>>,
+}
+
+impl Vacuum {
+    /// A fresh grab while bracing, judged on the motor's beat with 150 ms of
+    /// grace for the network.
+    pub fn dig_in(&mut self, seat: u8) {
+        let on_beat = (0..=3).any(|i| {
+            let phase = ((self.out - 0.05 * i as f32) / BRACE_PERIOD).rem_euclid(1.0);
+            (phase - 0.5).abs() <= BRACE_WINDOW
+        });
+        // Only a re-grab within a beat of the last one can slip, so a plain
+        // hold is never worse than before; it is mashing that costs.
+        let hasty = self.grabbed.insert(seat, self.out).is_some_and(|last| self.out - last < BRACE_PERIOD * 1.25);
+        if on_beat {
+            self.slip.remove(&seat);
+            self.grip.insert(seat, BRACE_PERIOD);
+        } else if hasty {
+            self.grip.remove(&seat);
+            self.slip.insert(seat, SLIP_SECONDS);
+        }
+    }
+    pub fn settle_grips(&mut self, dt: f32) {
+        let braced = &self.braced;
+        self.grip.retain(|seat, left| {
+            *left -= dt;
+            *left > 0.0 && braced.contains(seat)
+        });
+        self.slip.retain(|_, left| {
+            *left -= dt;
+            *left > 0.0
+        });
+    }
 }
 
 /// How hard the vacuum at `from`, pointed along `yaw`, pulls on `at`, from 0
@@ -442,6 +484,10 @@ pub struct VacuumView {
     /// The rivals being drained, and those of them bracing.
     pub siphoning: Vec<u8>,
     pub braced: Vec<u8>,
+    pub gripped: Vec<u8>,
+    pub slipping: Vec<u8>,
+    pub brace_period: f32,
+    pub brace_window: f32,
 }
 /// How far coins knocked loose by a bat fly, in world units.
 pub const BAT_SCATTER: f32 = 18.0;
@@ -1363,6 +1409,18 @@ impl Board {
                     seats.sort();
                     seats
                 },
+                gripped: {
+                    let mut seats: Vec<u8> = self.vacuum.grip.keys().copied().collect();
+                    seats.sort();
+                    seats
+                },
+                slipping: {
+                    let mut seats: Vec<u8> = self.vacuum.slip.keys().copied().collect();
+                    seats.sort();
+                    seats
+                },
+                brace_period: BRACE_PERIOD,
+                brace_window: BRACE_WINDOW,
                 pulling: {
                     let mut rows: Vec<(u16, f32)> = self.vacuum.pulling.iter().map(|(key, pull)| (*key, pull.min(1.0))).collect();
                     rows.sort_by_key(|row| row.0);
@@ -1766,6 +1824,23 @@ impl Board {
     /// Fire the cannon. The charge is what you asked for, give or take a
     /// couple of spaces, so aiming at the prize is a gamble.
     pub fn fire(&mut self, seat: u8, power: u8) -> Result<(), BoardError> {
+        self.fire_with(seat, power, CANNON_SCATTER, None)
+    }
+
+    /// Fire with the fuse needle: a perfect stop flies exactly the charge,
+    /// a good one strays a space, a weak one as far as an untimed shot.
+    pub fn fire_timed(&mut self, seat: u8, power: u8, stop: f32) -> Result<(), BoardError> {
+        let grade = Grade::of(stop);
+        let scatter = match grade {
+            Grade::Perfect => 0,
+            Grade::Good => 1,
+            Grade::Weak => CANNON_SCATTER,
+            Grade::Fail => CANNON_SCATTER + 1,
+        };
+        self.fire_with(seat, power, scatter, Some(grade))
+    }
+
+    fn fire_with(&mut self, seat: u8, power: u8, scatter: u8, grade: Option<Grade>) -> Result<(), BoardError> {
         if seat != self.turn_seat() {
             return Err(BoardError::NotYourTurn);
         }
@@ -1773,7 +1848,7 @@ impl Board {
             return Err(BoardError::WrongStep);
         };
         let charge = power.clamp(1, max);
-        let drift = self.rng.random_range(0..=(CANNON_SCATTER * 2)) as i16 - CANNON_SCATTER as i16;
+        let drift = self.rng.random_range(0..=(scatter * 2)) as i16 - scatter as i16;
         let flown = (charge as i16 + drift).max(1) as u8;
         let from = self.space_of(seat);
         let mut at = from;
@@ -1788,7 +1863,7 @@ impl Board {
         }
         self.say(json!({
             "kind": "cannon", "seat": seat, "power": charge, "flew": flown,
-            "from": from, "to": at, "path": path,
+            "from": from, "to": at, "path": path, "quality": grade.map(Grade::label),
         }));
         self.after_landing(seat);
         Ok(())
@@ -2612,7 +2687,9 @@ impl Board {
             return Err(BoardError::WrongStep);
         }
         if on {
-            self.vacuum.braced.insert(seat);
+            if self.vacuum.braced.insert(seat) {
+                self.vacuum.dig_in(seat);
+            }
         } else {
             self.vacuum.braced.remove(&seat);
         }
@@ -2638,6 +2715,9 @@ impl Board {
         self.vacuum.siphon.clear();
         self.vacuum.gust.clear();
         self.vacuum.braced.clear();
+        self.vacuum.grip.clear();
+        self.vacuum.slip.clear();
+        self.vacuum.grabbed.clear();
         self.step = self.vacuum.after.take().map(|step| *step).unwrap_or(TurnStep::Items);
         self.say(json!({ "kind": "vacuum_done", "seat": seat }));
     }
@@ -2752,6 +2832,7 @@ impl Board {
     /// The same targets, cone, motor strength and upgrade rate for standing
     /// and walking. Airborne walking catches keep their separate three cap.
     fn suction_tick(&mut self,seat:u8,dt:f32,power:f32,skip_air:bool)->(bool,bool) {
+        self.vacuum.settle_grips(dt);
         self.crawler_pressure(seat,dt,power,false);
         self.pedestrian_pressure(seat,dt,power);
         let strength = self.reach_of(seat);
@@ -2774,7 +2855,15 @@ impl Board {
                 continue;
             }
             let pull = strength(self.rendered_spot_of(rival), 1.0).unwrap_or(0.0);
-            let hold = if self.vacuum.braced.contains(&rival) { BRACED } else { 1.0 };
+            let hold = if self.vacuum.grip.contains_key(&rival) {
+                GRIPPED
+            } else if self.vacuum.slip.contains_key(&rival) {
+                SLIPPING
+            } else if self.vacuum.braced.contains(&rival) {
+                BRACED
+            } else {
+                1.0
+            };
             let drawn = self.vacuum.siphon.entry(rival).or_insert(0.0);
             *drawn += dt * power * pull * hold * rate;
             if *drawn >= SIPHON_EVERY {

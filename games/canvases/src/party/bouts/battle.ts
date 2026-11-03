@@ -5,12 +5,12 @@ import { asMembers, rosterKeeper } from './common';
 
 const OBJECTIVES: Record<string, string> = {
   tank: 'Bounce shells off the walls · most wrecks wins',
-  titan: 'Dodge the wind-up · strike the core while it is winded',
+  titan: 'Dodge the wind-up · strike the core on its throb while it is winded',
 };
 
 const HINTS: Record<string, string> = {
   tank: 'Drive with WASD, aim the turret with the mouse, click to fire.',
-  titan: 'Move with WASD. Dodge the wind-up, then click to strike the core.',
+  titan: 'Move with WASD. Dodge the wind-up, then click as the open core flashes white for a critical. Off-beat swings glance off.',
 };
 
 /** Tank Clash and Titan Siege share one yard. */
@@ -33,6 +33,7 @@ const battle: BoutModule<BattleSnap, BattleSetup, GameEvent> = {
         else if (event.kind === 'strike') sounds.bump(1);
         else if (event.kind === 'wind_up') sounds.count(false);
         else if (event.kind === 'strike_core') sounds.splat();
+        else if (event.kind === 'glance') sounds.bump(0.4);
         else if (event.kind === 'titan_down') sounds.win();
         else if (event.kind === 'floored') sounds.fall();
       },

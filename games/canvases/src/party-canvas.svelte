@@ -37,7 +37,9 @@
   import CandyVanHud from './party/candy-van-hud.svelte';
   import FinaleHud from './party/finale-hud.svelte';
   import CityHud from './party/city/hud.svelte';
+  import BraceBeat from './party/brace-beat.svelte';
   import{CityHeistScene}from'./party/city/scene';
+  import{myArrest,TraceCursor}from'./party/city/arrest';
   import { observePartyViewport } from './party/viewport';
 
   let {
@@ -65,6 +67,8 @@
   let cityHeld=$state(false);
   let citySuction=$state(false);
   let cityYaw=$state(0);
+  const traceCursor=new TraceCursor();
+  let cityPad=$state(false);
   let candyJoining=false;
   let captureCandy:(()=>void)|null=null;
   // Raw: each message brings a whole new room, and the frame loop reads it
@@ -101,7 +105,6 @@
   let drainingMe = $derived(
     mySeatNow !== null && room?.board?.turn_seat !== mySeatNow && !!room?.board?.vacuum?.siphoning.includes(mySeatNow),
   );
-  let bracingNow = $derived(mySeatNow !== null && !!room?.board?.vacuum?.braced.includes(mySeatNow));
   let covenView = $state<CovenView | null>(null);
   let landlordView = $state<LandlordView | null>(null);
   let covenHit = $state<{ seat: number; index?: number; at: number } | null>(null);
@@ -246,7 +249,7 @@
     const frameBudget=new FrameBudget(Math.min(window.devicePixelRatio,mobile?1:1.25));
     let lastShadowAt=0;
     let vanPadHeld=false;
-    let cityVehiclePadHeld=false;
+    let cityVehiclePadHeld=false,cityStrugglePadHeld=false,cityClose=0;
     let padActionHeld=false;
     // Hints name a controller's buttons when it is the controller in use.
     const onPad=()=>inputDevice()==='pad';
@@ -463,6 +466,8 @@
     const onCityKey=(event:KeyboardEvent)=>{
       if(room?.phase.name!=='city_heist'||typing(event))return;
       if(bound('interact',event.code)){event.preventDefault();cityHeld=event.type==='keydown';}
+      if(event.type==='keydown'&&!event.repeat&&(bound('interact',event.code)||event.code==='Space')&&myArrest(room.city,mySeatNow)?.officer===false){event.preventDefault();send({type:'city_struggle'});}
+      else if(event.type==='keydown'&&!event.repeat&&bound('interact',event.code)&&room.city?.tap)send({type:'city_tap'});
       if(event.type==='keydown'&&!event.repeat&&event.code==='KeyF'){event.preventDefault();send({type:'city_vehicle'});}
       if(event.type==='keydown'&&!event.repeat&&['Digit1','Digit2'].includes(event.code)){event.preventDefault();send({type:'city_tool',tool:event.code==='Digit1'?'smoke':'scanner'});}
     };
@@ -1164,7 +1169,7 @@
       if(cityWorld&&boardView){
         voting=false;voteStage.hide();
         if(!cityScene)cityScene=new CityHeistScene(scene,mobile);
-        cityScene.visible=true;cityScene.sync(boardView,room?.city??null,members,rosterMap,mine?.seat??null);cityScene.update(time,dt);
+        cityScene.visible=true;cityScene.sync(boardView,room?.city??null,members,rosterMap,mine?.seat??null);cityScene.update(time,dt*(room?.city?.slow??1));
       }
       if (boardView&&!cityWorld&&!room?.city_mode) {
         // A game's board left over in the lobby keeps its storm and coins, and
@@ -1396,7 +1401,12 @@
           fuseLeft:Math.max(0,myWalk.delay+myWalk.path.length*myWalk.hop_seconds-myWalk.elapsed),fuse:myWalk.delay+myWalk.path.length*myWalk.hop_seconds,
           wind:0,windAngle:0,hint:onPad()?`RIGHT STICK  Aim     HOLD ${padKey('action')}  Suction     HOLD ${padKey('blow')}  Blow`:'LOOK  Aim     HOLD CLICK / SPACE  Suction     HOLD RMB  Suction     ESC  Cursor'});
       } else if(cityWorld&&cityScene){
-        target.copy(cityScene.focus(mine?.seat??null));frameBox(8,6,Math.max(26,46+orbitPitch));
+        // Cuffing pulls the camera in close on the officer and robber.
+        const held=myArrest(room?.city,mine?.seat??null);
+        cityClose+=((held?.arrest.stage==='cuffing'?1:0)-cityClose)*(1-Math.exp(-dt*6));
+        target.copy(cityScene.focus(mine?.seat??null));
+        if(held)target.lerp(cityScene.focus(held.officer?held.arrest.robber:held.arrest.officer),0.5*cityClose);
+        frameBox(8-5*cityClose,6-3.8*cityClose,Math.max(26,46+orbitPitch)-10*cityClose);
         zoom+=(zoomTarget-zoom)*(1-Math.exp(-dt*10));cameraOffset.multiplyScalar(zoom);
         if(snapCamera)follow.copy(target);else follow.lerp(target,1-Math.exp(-dt*10));snapCamera=false;
         camera.position.copy(follow).add(cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0,1,0),orbitYaw));
@@ -1604,9 +1614,22 @@
         const vehiclePressed=!!playPad()?.buttons[3]?.pressed;
         if(vehiclePressed&&!cityVehiclePadHeld&&!isGameplayTyping())send({type:'city_vehicle'});
         cityVehiclePadHeld=vehiclePressed;
+        const held=myArrest(room?.city,mine?.seat??null);
+        const pad=playPad();
+        cityPad=!!pad;
+        if(held?.officer&&held.arrest.stage==='cuffing'){
+          const ax=pad?.axes[0]??0,ay=pad?.axes[1]??0;
+          if(Math.hypot(ax,ay)>Math.max(0.2,settings().pad.deadzone*1.5))traceCursor.stick(ax,-ay);
+          else traceCursor.keys(stick.x,-stick.z,dt,held.arrest.trace);
+        }else if(!held)traceCursor.reset();
+        const strugglePressed=!!pad?.buttons[settings().pad.action]?.pressed;
+        if(strugglePressed&&!cityStrugglePadHeld&&held&&!held.officer)send({type:'city_struggle'});
+        else if(strugglePressed&&!cityStrugglePadHeld&&!held&&room?.city?.tap)send({type:'city_tap'});
+        cityStrugglePadHeld=strugglePressed;
         if(now-lastSendAt>=50){const pad=playPad();const movable=!!myCity&&!myCity.automated&&!myCity.jailed&&!room?.city?.resolved&&!spectating;
           connection.send({type:'input',x:movable?stick.x*Math.cos(orbitYaw)+stick.z*Math.sin(orbitYaw):0,z:movable?-stick.x*Math.sin(orbitYaw)+stick.z*Math.cos(orbitYaw):0,yaw:orbitYaw+Math.PI});
           connection.send({type:'city_action',held:movable&&!isGameplayTyping()&&(cityHeld||!!pad?.buttons[0]?.pressed),suction:movable&&!isGameplayTyping()&&(citySuction||rightVacuumHeld||!!pad?.buttons[7]?.pressed)});
+          if(held?.officer&&held.arrest.stage==='cuffing')connection.send({type:'city_trace',x:traceCursor.x,y:traceCursor.y});
           lastSendAt=now;
         }return;
       }
@@ -1775,17 +1798,8 @@
       <div class="mt-0.5 leading-snug">{tip.body}</div>
     </div>
   {/if}
-  {#if drainingMe}
-    <div
-      class="pointer-events-none absolute top-[18%] left-1/2 z-30 -translate-x-1/2 rounded-full border px-4 py-2 text-sm font-bold backdrop-blur {bracingNow
-        ? 'border-emerald-300/40 bg-emerald-950/80 text-emerald-200'
-        : 'animate-pulse border-rose-300/40 bg-rose-950/80 text-rose-100'}"
-      aria-live="polite"
-    >
-      {bracingNow
-        ? 'Holding on: you keep half your coins'
-        : `Your coins are being sucked away. Hold ${keyName(settings().keys.action[0] ?? 'Space')} to brace`}
-    </div>
+  {#if drainingMe && room?.board?.vacuum && mySeatNow !== null}
+    <BraceBeat vacuum={room.board.vacuum} seat={mySeatNow} button={keyName(settings().keys.action[0] ?? 'Space')} />
   {/if}
   {#if hud?.award}
     {#key hud.award.id}
@@ -1840,7 +1854,7 @@
   />
   {#if room?.phase.name==='board'&&!room.board?.candy_van&&room.board?.crawler&&!room.board.raids?.some(r=>r.seat===mySeatNow)&&!room.board.driving?.some(d=>d.seat===mySeatNow)}<ZombieControlHud crawler={room.board.crawler} seat={mySeatNow} members={room.members} onexit={room.sandbox?()=>send({type:'dev',tool:{action:'crawler'}}):undefined}/>{/if}
   {#if room?.phase.name==='board'}<CandyVanHud {room} seat={mySeatNow} {send} bearing={candyBearing}/>{/if}
-  {#if room?.phase.name==='city_heist'&&room.city}<CityHud city={room.city} seat={mySeatNow} members={room.members} {send} yaw={cityYaw} {touch} onstick={value=>input?.setTouch(value)} onsuction={held=>citySuction=held} onhold={held=>cityHeld=held}/>{/if}
+  {#if room?.phase.name==='city_heist'&&room.city}<CityHud city={room.city} seat={mySeatNow} members={room.members} {send} yaw={cityYaw} {touch} cursor={traceCursor} pad={cityPad} onstruggle={()=>send({type:'city_struggle'})} onstick={value=>input?.setTouch(value)} onsuction={held=>citySuction=held} onhold={held=>cityHeld=held}/>{/if}
   {#if room?.phase.name==='map_finale'&&room.board?.finale}<FinaleHud finale={room.board.finale} seat={mySeatNow} members={room.members} {spectating} {touch} oncountdown={count=>sfx?.count(count===0)}/>{/if}
   {#if myDrivingNow&&!spectating}<DrivingHud driver={myDrivingNow} onhorn={setDriveHorn}/>{/if}
   {#if !spectating}<RaidHud {room} seat={mySeatNow} {send}/>{/if}

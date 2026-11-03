@@ -5,8 +5,8 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
+use crate::bout::{Bout, Contestant, Input, Skill};
 use crate::ground::{self, Runner};
-use crate::bout::{Contestant, Input, Bout, Skill};
 
 pub const TILE: f32 = 2.6;
 /// How many tiles out from the middle the floor runs for four players.
@@ -74,8 +74,8 @@ pub struct CrumbleRun {
     rng: StdRng,
     skills: std::collections::HashMap<u8, Skill>,
     react: std::collections::HashMap<u8, f32>,
-    goals: std::collections::HashMap<u8,(f32,f32)>,
-    biases: std::collections::HashMap<u8,f32>,
+    goals: std::collections::HashMap<u8, (f32, f32)>,
+    biases: std::collections::HashMap<u8, f32>,
     placements: Option<Vec<Vec<u8>>>,
     next_collapse: f32,
 }
@@ -130,8 +130,14 @@ impl CrumbleRun {
                 .map(|c| (c.seat, Skill(c.skill)))
                 .collect(),
             react: Default::default(),
-            goals:Default::default(),
-            biases:{let mut random=StdRng::seed_from_u64(seed^0xC4AC);contestants.iter().map(|c|(c.seat,random.random_range(0.0..20.0))).collect()},
+            goals: Default::default(),
+            biases: {
+                let mut random = StdRng::seed_from_u64(seed ^ 0xC4AC);
+                contestants
+                    .iter()
+                    .map(|c| (c.seat, random.random_range(0.0..20.0)))
+                    .collect()
+            },
             placements: None,
             next_collapse: SPONTANEOUS_FROM,
         }
@@ -159,7 +165,7 @@ impl CrumbleRun {
 
     /// The next tile to step onto: nearby, still solid, and with solid
     /// neighbours so you do not strand yourself.
-    fn hop_to(&self, from: (f32, f32),bias:f32,care:f32) -> Option<(f32, f32)> {
+    fn hop_to(&self, from: (f32, f32), bias: f32, care: f32) -> Option<(f32, f32)> {
         let current = self.tile_at(from.0, from.1);
         let score = |tile: &Tile| {
             let away = ((tile.x - from.0).powi(2) + (tile.z - from.1).powi(2)).sqrt();
@@ -172,14 +178,23 @@ impl CrumbleRun {
                         && (other.row - tile.row).abs() <= 1
                 })
                 .count() as f32;
-            away - neighbours * 2.2+(tile.x*1.71+tile.z*2.13+bias).sin()*0.8+tile.x.hypot(tile.z)*care
+            away - neighbours * 2.2
+                + (tile.x * 1.71 + tile.z * 2.13 + bias).sin() * 0.8
+                + tile.x.hypot(tile.z) * care
         };
         let solid = || {
-            self.tiles
-                .iter()
-                .enumerate()
-                .filter(|(index, tile)| tile.state == TileState::Solid && Some(*index) != current
-                    && (1..=12).all(|step|{let t=step as f32/12.;self.tile_state(from.0+(tile.x-from.0)*t,from.1+(tile.z-from.1)*t).is_some_and(|s|matches!(s,TileState::Solid|TileState::Cracking))}))
+            self.tiles.iter().enumerate().filter(|(index, tile)| {
+                tile.state == TileState::Solid
+                    && Some(*index) != current
+                    && (1..=12).all(|step| {
+                        let t = step as f32 / 12.;
+                        self.tile_state(
+                            from.0 + (tile.x - from.0) * t,
+                            from.1 + (tile.z - from.1) * t,
+                        )
+                        .is_some_and(|s| matches!(s, TileState::Solid | TileState::Cracking))
+                    })
+            })
         };
         let near = solid()
             .filter(|(_, tile)| {
@@ -388,23 +403,36 @@ impl Bout for CrumbleRun {
             .unwrap_or(TileState::Gone);
         // Finish crossing to the tile centre before reassessing; stopping at
         // its edge let inertia carry every bot back into the same old hole.
-        if let Some(&target)=self.goals.get(&seat){
-            if (here.0-target.0).hypot(here.1-target.1)>0.25&&self.tile_state(target.0,target.1).is_some_and(|s|matches!(s,TileState::Solid|TileState::Cracking)){
-                return Input{stick:ground::steer(here,target),..Default::default()};
+        if let Some(&target) = self.goals.get(&seat) {
+            if (here.0 - target.0).hypot(here.1 - target.1) > 0.25
+                && self
+                    .tile_state(target.0, target.1)
+                    .is_some_and(|s| matches!(s, TileState::Solid | TileState::Cracking))
+            {
+                return Input {
+                    stick: ground::steer(here, target),
+                    ..Default::default()
+                };
             }
             self.goals.remove(&seat);
         }
         // Hold your ground until it starts to go, then find the next tile.
         if under_foot == TileState::Solid {
-            self.react.insert(seat, skill.reaction()*(0.75+0.35*(self.time+self.biases[&seat]).sin().abs()));
+            self.react.insert(
+                seat,
+                skill.reaction() * (0.75 + 0.35 * (self.time + self.biases[&seat]).sin().abs()),
+            );
             return Input::default();
         }
         // A sharp player conserves safe floor instead of burning through
         // every fresh tile as fast as its reaction timer allows. Always leave
         // enough time to cross a neighbouring tile before this one drops.
-        if let Some(index)=self.tile_at(here.0,here.1){
-            let tile=&self.tiles[index];let conserve=(skill.level()-0.4).max(0.)*2.3;
-            if tile.state==TileState::Cracking&&tile.timer>CRACK_SECONDS-conserve{return Input::default();}
+        if let Some(index) = self.tile_at(here.0, here.1) {
+            let tile = &self.tiles[index];
+            let conserve = (skill.level() - 0.4).max(0.) * 2.3;
+            if tile.state == TileState::Cracking && tile.timer > CRACK_SECONDS - conserve {
+                return Input::default();
+            }
         }
         // Noticing takes a moment, and a clumsy bot takes longer.
         let waited = self.react.entry(seat).or_insert(skill.reaction());
@@ -412,10 +440,11 @@ impl Bout for CrumbleRun {
         if *waited > 0.0 {
             return Input::default();
         }
-        let Some(target) = self.hop_to(here,self.biases[&seat],skill.level()*0.8) else {
+        // Skilled bots seek untouched outer floor before the centre gets crowded.
+        let Some(target) = self.hop_to(here, self.biases[&seat], -skill.level() * 0.8) else {
             return Input::default();
         };
-        self.goals.insert(seat,target);
+        self.goals.insert(seat, target);
         Input {
             stick: ground::steer(here, target),
             ..Default::default()
@@ -479,10 +508,20 @@ mod tests {
         assert_eq!(four.tiles.len(), floor_tiles(GRID).len());
         let eight = CrumbleRun::new(&field(8), 1);
         let wider = eight.radius() / four.radius();
-        assert!((wider - 2f32.sqrt()).abs() < 0.05, "eight get the room of two fours, {wider}");
+        assert!(
+            (wider - 2f32.sqrt()).abs() < 0.05,
+            "eight get the room of two fours, {wider}"
+        );
         let more = eight.tiles.len() as f32 / four.tiles.len() as f32;
         assert!((1.8..2.2).contains(&more), "about twice the tiles, {more}");
-        assert_eq!(eight.setup()["radius"], json!(eight.radius()), "and the client is told");
-        assert_eq!(eight.setup()["tiles"].as_array().map(|t| t.len()), Some(eight.tiles.len()));
+        assert_eq!(
+            eight.setup()["radius"],
+            json!(eight.radius()),
+            "and the client is told"
+        );
+        assert_eq!(
+            eight.setup()["tiles"].as_array().map(|t| t.len()),
+            Some(eight.tiles.len())
+        );
     }
 }

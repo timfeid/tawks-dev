@@ -3,6 +3,7 @@ import { PartyBoard } from "../board/scene";
 import { buildCharacter, type CharacterRig } from "../characters";
 import { characterAppearanceKey } from "../appearance";
 import { place, placed } from "../board/models";
+import { ArrestFx } from "./arrest-fx";
 import type { BoardView, CharacterDef, CityView, Member } from "../protocol";
 
 type Actor = {
@@ -49,6 +50,7 @@ export class CityHeistScene {
   private carrier: number | null = null;
   private dead = false;
   private routeMarkers: THREE.InstancedMesh;
+  private fx = new ArrestFx();
 
   constructor(scene: THREE.Scene, mobile: boolean) {
     this.environment = new PartyBoard(scene, {
@@ -81,7 +83,7 @@ export class CityHeistScene {
     this.routeMarkers.count = 0;
     this.routeMarkers.frustumCulled = false;
     this.group.add(this.routeMarkers);
-    this.group.add(this.markers, this.smoke, this.lootBag);
+    this.group.add(this.markers, this.smoke, this.lootBag, this.fx.group);
     scene.add(this.group);
     this.lootBag.name = "stolen-cash-bag";
     this.box(this.lootBag, [0.65, 0.5, 0.4], [0, 0.25, 0], "#8ba16c");
@@ -378,6 +380,7 @@ export class CityHeistScene {
       [],
       roster,
     );
+    this.fx.sync(view, (x, z) => this.ground(x, z));
     if (!view) {
       this.hasEscape = false;
       if (this.van) this.van.visible = false;
@@ -430,6 +433,7 @@ export class CityHeistScene {
       if (!record) {
         const rig = buildCharacter(def);
         rig.group.scale.setScalar(0.85);
+        rig.group.rotation.order = "YXZ";
         this.group.add(rig.group);
         const color = actor.side === "police" ? "#62c7ff" : "#ffcc65";
         const ring = new THREE.Mesh(
@@ -613,19 +617,31 @@ export class CityHeistScene {
           Math.cos(actor.view.yaw - actor.yaw),
         ) *
         (1 - Math.exp(-dt * 14));
-      actor.rig.group.rotation.y = actor.yaw;
       const speed = actor.at.distanceTo(this.oldPosition) / Math.max(0.001, dt);
-      actor.rig.animate(
+      const role = this.fx.role(actor.view.seat);
+      let pose: "fall" | "sad" | "ride" | "idle" | "play" =
         actor.view.stunned > 0
           ? "fall"
           : actor.view.jailed
             ? "sad"
             : speed > 0.1
               ? "ride"
-              : "idle",
-        time + actor.view.seat,
-        Math.min(7, speed),
-      );
+              : "idle";
+      let lean = 0,
+        wobble = 0;
+      if (role?.officer) {
+        if (role.arrest.stage === "cuffing") pose = "play";
+        else lean = 0.15;
+      } else if (role) {
+        if (actor.view.stunned <= 0) pose = "sad";
+        wobble =
+          role.arrest.jolt > 0
+            ? Math.sin(time * 45) * 0.28
+            : Math.sin(time * 6 + actor.view.seat) * 0.06;
+        if (role.arrest.stage === "escort") lean = -0.32;
+      }
+      actor.rig.group.rotation.set(lean, actor.yaw, wobble);
+      actor.rig.animate(pose, time + actor.view.seat, Math.min(7, speed));
       actor.ring.scale.setScalar(actor.view.driving ? 2 : 1);
       actor.ring.position.copy(actor.at);
       actor.ring.position.y += 0.1;
@@ -638,6 +654,12 @@ export class CityHeistScene {
       );
       actor.beam.rotation.y = actor.yaw;
     }
+    this.fx.update(dt, time, (seat) => {
+      const actor = this.actors.get(seat);
+      return actor
+        ? { at: actor.at, yaw: actor.yaw, visible: actor.visible }
+        : null;
+    });
     const carrier =
       this.carrier === null ? null : this.actors.get(this.carrier);
     this.lootBag.visible = !!this.lootAt || !!carrier?.visible;
@@ -679,6 +701,7 @@ export class CityHeistScene {
   }
   dispose() {
     this.dead = true;
+    this.fx.dispose();
     for (const actor of this.actors.values()) this.disposeActor(actor);
     this.environment.dispose();
     for (const object of this.smoke.children) {

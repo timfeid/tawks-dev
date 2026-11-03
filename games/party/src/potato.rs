@@ -5,8 +5,8 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
+use crate::bout::{Bout, Contestant, Input, Skill, Stick};
 use crate::ground::{self, Runner};
-use crate::bout::{Contestant, Input, Bout, Skill, Stick};
 
 pub const ARENA_RADIUS: f32 = 13.0;
 pub const PASS_RANGE: f32 = 1.5;
@@ -17,10 +17,13 @@ pub const FUSE_MIN: f32 = 7.0;
 pub const FUSE_MAX: f32 = 13.0;
 pub const RELIGHT_SECONDS: f32 = 2.0;
 pub const ROUND_SECONDS: f32 = 95.0;
+/// A skilled carrier prefers a slower target even across much of the arena.
+const TARGET_SKILL_WEIGHT: f32 = 100.0;
 
 #[derive(Clone, Debug)]
 pub struct Carrier {
     pub seat: u8,
+    is_bot: bool,
     pub run: Runner,
     pub out_at: Option<f32>,
 }
@@ -56,6 +59,7 @@ impl HotPotato {
             .enumerate()
             .map(|(i, c)| Carrier {
                 seat: c.seat,
+                is_bot: c.is_bot,
                 run: Runner::at(spread[i].0, spread[i].1),
                 out_at: None,
             })
@@ -66,7 +70,10 @@ impl HotPotato {
             .map(|p| p.seat);
         let fuse = rng.random_range(FUSE_MIN..FUSE_MAX);
         HotPotato {
-            allies: contestants.iter().filter_map(|c| c.ally.map(|ally| (c.seat, ally))).collect(),
+            allies: contestants
+                .iter()
+                .filter_map(|c| c.ally.map(|ally| (c.seat, ally)))
+                .collect(),
             players,
             holder,
             fuse,
@@ -117,13 +124,25 @@ impl HotPotato {
             .iter()
             .filter(|p| p.playing() && p.seat != holder)
             // Never on to your partner.
-            .filter(|p| !crate::bout::allied(self.allies.get(&holder).copied(), self.allies.get(&p.seat).copied()))
+            .filter(|p| {
+                !crate::bout::allied(
+                    self.allies.get(&holder).copied(),
+                    self.allies.get(&p.seat).copied(),
+                )
+            })
             .map(|p| (p.seat, carrier.run.distance_to(p.run.x, p.run.z)))
             .filter(|(_, away)| *away <= PASS_RANGE + ground::RUNNER_RADIUS)
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         if let Some((seat, _)) = caught {
+            let quick = self.player(seat).is_some_and(|player| player.is_bot);
             self.holder = Some(seat);
-            self.lock = PASS_LOCK;
+            // Skilled bots can respond to a handoff sooner. People keep the
+            // full grace period before the bomb can be passed again.
+            self.lock = if quick {
+                PASS_LOCK * (1.0 - 0.9 * self.skill(seat).level())
+            } else {
+                PASS_LOCK
+            };
             events.push(json!({ "kind": "pass", "from": holder, "to": seat, "fuse": self.fuse }));
         }
     }
@@ -261,10 +280,13 @@ impl Bout for HotPotato {
                 .iter()
                 .filter(|p| p.playing() && p.seat != seat)
                 .min_by(|a, b| {
-                    me.run
-                        .distance_to(a.run.x, a.run.z)
-                        .partial_cmp(&me.run.distance_to(b.run.x, b.run.z))
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                    let cost = |p: &Carrier| {
+                        me.run.distance_to(p.run.x, p.run.z)
+                            + self.skill(seat).level()
+                                * self.skill(p.seat).level()
+                                * TARGET_SKILL_WEIGHT
+                    };
+                    cost(a).total_cmp(&cost(b))
                 });
             match mark {
                 Some(mark) => ground::steer(here, (mark.run.x, mark.run.z)),
@@ -335,11 +357,61 @@ mod tests {
         let four = HotPotato::new(&field(4), 1);
         assert_eq!(four.radius, ARENA_RADIUS, "four play it as built");
         let eight = HotPotato::new(&field(8), 1);
-        assert!((eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4, "eight get the room of two fours");
         assert!(
-            eight.players.iter().all(|p| p.run.distance_to(0.0, 0.0) > ARENA_RADIUS * 0.6 + 1.0),
+            (eight.radius / ARENA_RADIUS - 2f32.sqrt()).abs() < 1e-4,
+            "eight get the room of two fours"
+        );
+        assert!(
+            eight
+                .players
+                .iter()
+                .all(|p| p.run.distance_to(0.0, 0.0) > ARENA_RADIUS * 0.6 + 1.0),
             "and start further apart"
         );
-        assert_eq!(eight.setup()["radius"], json!(eight.radius), "and the client is told");
+        assert_eq!(
+            eight.setup()["radius"],
+            json!(eight.radius),
+            "and the client is told"
+        );
+    }
+
+    #[test]
+    fn skilled_carrier_pursues_a_slower_runner_and_equal_skills_use_distance() {
+        let field = [
+            Contestant::bot(0, 1.0),
+            Contestant::bot(1, 0.4),
+            Contestant::bot(2, 1.0),
+            Contestant::bot(3, 1.0),
+        ];
+        let mut game = HotPotato::new(&field, 7);
+        game.holder = Some(0);
+        game.players[0].run = Runner::at(0.0, 0.0);
+        game.players[1].run = Runner::at(-5.0, 0.0);
+        game.players[2].run = Runner::at(2.0, 0.0);
+        game.players[3].run = Runner::at(0.0, 12.0);
+
+        assert!(game.bot_input(0, 1.0 / 60.0).stick.x < 0.0);
+        game.skills.insert(1, Skill(1.0));
+        assert!(game.bot_input(0, 1.0 / 60.0).stick.x > 0.0);
+    }
+
+    #[test]
+    fn human_handoff_keeps_the_full_pass_grace() {
+        let field = [Contestant::person(0), Contestant::bot(1, 1.0)];
+        let mut game = HotPotato::new(&field, 9);
+        game.players[0].run = Runner::at(0.0, 0.0);
+        game.players[1].run = Runner::at(0.0, 0.0);
+        game.holder = Some(0);
+        game.lock = 0.0;
+        let mut events = Vec::new();
+
+        game.try_pass(&mut events);
+        assert_eq!(game.holder, Some(1));
+        assert!((game.lock - PASS_LOCK * 0.1).abs() < 1e-5);
+
+        game.lock = 0.0;
+        game.try_pass(&mut events);
+        assert_eq!(game.holder, Some(0));
+        assert_eq!(game.lock, PASS_LOCK);
     }
 }

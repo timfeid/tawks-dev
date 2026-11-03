@@ -530,7 +530,11 @@ fn eight_bots_finish_a_short_party_on_every_board() {
     }
     for (map, stats) in &all {
         assert_eq!(stats.games, 1);
-        assert!(stats.turns >= 2 * MAX_SEATS as u32 - 2, "{map}: only {} turns", stats.turns);
+        // Knocked-out players spend a board turn resting, so count those
+        // receipts alongside turns the bots could actively play.
+        let resting = stats.events.get("resting").copied().unwrap_or(0);
+        assert!(stats.turns >= MAX_SEATS as u32, "{map}: only {} active turns", stats.turns);
+        assert!(stats.turns + resting >= 2 * MAX_SEATS as u32 - 2, "{map}: only {} turns plus {resting} resting", stats.turns);
         assert_eq!(stats.bouts.values().sum::<u32>(), 2, "{map}: a bout a round");
         assert!(stats.refused.is_empty(), "{map}: the board refused bot moves {:?}", stats.refused);
     }

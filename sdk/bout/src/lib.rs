@@ -9,6 +9,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod form;
+pub use form::{bout_form, bout_form_scaled, on_form, on_form_scaled, round_form};
+
 pub const TICK_HZ: u32 = 60;
 pub const TICK_DT: f32 = 1.0 / TICK_HZ as f32;
 pub const SNAPSHOT_EVERY_TICKS: u64 = 3;
@@ -200,6 +203,20 @@ pub trait Bout: Send {
     /// An object with `game` (the bout's key), and `time` and `limit` in
     /// seconds for the clock, plus whatever the renderer draws.
     fn snapshot(&self) -> Value;
+    /// What one seat may see, for a bout that hides part of itself from some
+    /// players; `None` for a spectator. Returning `None` sends that seat the
+    /// shared [`Bout::snapshot`].
+    fn snapshot_for(&self, _seat: Option<u8>) -> Option<Value> {
+        None
+    }
+    /// The seat playing the bout's lone role, one against everyone, so a
+    /// party can pass the role around.
+    fn lead(&self) -> Option<u8> {
+        None
+    }
+    /// Seats that led this bout earlier in the party, oldest first, handed
+    /// over right after it is made.
+    fn rotate_lead(&mut self, _earlier: &[u8]) {}
     fn placements(&self) -> Option<Vec<Vec<u8>>>;
 }
 

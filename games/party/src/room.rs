@@ -33,7 +33,19 @@ mod city_heist_tests;
 #[path="map_finale_room_tests.rs"]
 mod map_finale_tests;
 pub const MAX_SEATS: usize = 8;
-pub const NATIVE_BOUTS: &[&str] = &["bumper", "race", "shooter", "coins"];
+pub const NATIVE_BOUTS: &[&str] = &[
+    "bumper", "race", "shooter", "coins", "titan", "stencil", "teeter", "glass", "lineup",
+    "echo", "lastfloor", "fuse", crate::mugshot::KEY, "blueprints", crate::diner::KEY,
+    "bridgecrew", crate::gallery::KEY,
+    crate::lantern::KEY, crate::beacon::KEY, crate::cue_crowd::KEY, crate::flux_skip::KEY,
+    crate::parcel_panic::KEY, crate::pigeon::KEY, crate::rime::KEY, crate::margin_run::KEY,
+    crate::reef_bloom::KEY, crate::orbit::KEY, crate::crowd_current::KEY,
+    crate::ravine_draft::KEY, crate::whirligig::KEY, crate::stackbreak_yard::KEY,
+    crate::wake::KEY, crate::chimney_dash::KEY, crate::signal_sweep::KEY,
+    crate::shadow_stamp::KEY, crate::garden_snapshot::KEY, crate::powder::KEY,
+    crate::kite_net::KEY, crate::dockside_tangle::KEY, crate::mirth::KEY,
+    crate::mixer_circuit::KEY,
+];
 const COUNTDOWN_TICKS: u32 = TICK_HZ * 3;
 /// More taps than a hand can make in a few ticks are a flood, not play.
 const MAX_QUEUED_PRESSES: usize = 8;
@@ -63,7 +75,7 @@ pub const SANDBOX_ROUNDS: u32 = 999;
 const VACUUM_OFFER_TICKS: u32 = 4 * 60;
 
 /// What the sandbox's tools do to whoever uses them.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum DevAction {
     CandyVan,
@@ -89,6 +101,14 @@ pub enum DevAction {
         seat: Option<u8>,
     },
     Exit,
+    /// A city sandbox tool, such as spawning a dummy or starting an arrest.
+    City { tool: crate::city_heist::CityTool },
+    /// Leaves this sandbox for the free-roam city, as officer or crew.
+    CitySandbox { police: bool },
+    /// Leaves this sandbox for the board sandbox.
+    BoardSandbox,
+    /// Plays one bout straight away, with no ballot.
+    Bout { key: String },
 }
 pub const COVEN_KEY: &str = crate::coven::KEY;
 const LOBBY_DROP_TICKS: u64 = TICK_HZ as u64 * 20;
@@ -329,6 +349,8 @@ pub const FEEDBACK_NOTE_MAX: usize = 500;
 
 pub struct Room {
     native_mode: bool,
+    /// Who led each lone-role bout so far this party, oldest first.
+    pub leads: Vec<u8>,
     pub city_mode:bool,
     pub city_config:crate::city_heist::CityConfig,
     pub city:Option<crate::city_heist::CityGame>,
@@ -398,7 +420,7 @@ impl Room {
     pub fn new(match_id: impl Into<String>, seed: u64) -> Self {
         let mut room = Room {
             native_mode:false,
-            city_mode:false,city_config:crate::city_heist::CityConfig::default(),city:None,
+            city_mode:false,city_config:crate::city_heist::CityConfig{police:0,..Default::default()},city:None,
             match_id: match_id.into(),
             bot_skill: DEFAULT_SKILL,
             map: Map::Frozen,
@@ -442,6 +464,7 @@ impl Room {
             recording: None,
             #[cfg(test)]
             bot_log: Vec::new(),
+            leads: Vec::new(),
         };
         room.rebuild_preview();
         room
@@ -523,6 +546,15 @@ impl Room {
 
     pub fn snapshot(&self) -> Option<Value> {
         self.game.as_ref().map(|g| g.snapshot())
+    }
+
+    /// The bout as one seat may see it, when it hides something from them.
+    pub fn private_snapshot(&self, seat: Option<u8>) -> Option<Value> {
+        self.game.as_ref().and_then(|g| g.snapshot_for(seat))
+    }
+
+    pub fn snapshot_for(&self, seat: Option<u8>) -> Option<Value> {
+        self.private_snapshot(seat).or_else(|| self.snapshot())
     }
 
     fn seat_cap(&self) -> usize {
@@ -1457,9 +1489,13 @@ impl Room {
     }
 
     /// Fire the cannon you are standing in.
-    pub fn fire(&mut self, user_id: &str, power: u8) -> Result<(), RoomError> {
+    pub fn fire(&mut self, user_id: &str, power: u8, stop: Option<f32>) -> Result<(), RoomError> {
         let (board, seat) = self.board_turn(user_id)?;
-        board.fire(seat, power).map_err(RoomError::Board)?;
+        match stop {
+            Some(stop) => board.fire_timed(seat, power, stop),
+            None => board.fire(seat, power),
+        }
+        .map_err(RoomError::Board)?;
         self.dirty = true;
         Ok(())
     }
@@ -1724,12 +1760,164 @@ impl Room {
         Ok(())
     }
 
+    /// Free-roam Cops & Robbers for the host: no night clock, no winner,
+    /// and the city tools in `dev`. Gated like the board sandbox.
+    pub fn start_city_sandbox(&mut self, user_id: &str, police: bool) -> Result<(), RoomError> {
+        self.check_start_sandbox(user_id)?;
+        self.choose_city(user_id, 0, 3, police)?;
+        while self.members.len() < 4 && self.add_bot(user_id).is_ok() {}
+        self.start_city(user_id, false)?;
+        if let Some(city) = self.city.as_mut() {
+            city.begin_sandbox();
+        }
+        self.sandbox = true;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Back to the lobby from any sandbox, keeping the seats and the sandbox
+    /// costume, so another sandbox can start at once.
+    fn leave_sandbox_for_lobby(&mut self) {
+        self.city = None;
+        self.city_mode = false;
+        self.board = None;
+        self.game = None;
+        self.table = None;
+        self.finale_preview = false;
+        self.crawler_preview = false;
+        self.opening_minigame = false;
+        self.phase = Phase::Lobby;
+        self.members.retain(|m| !m.is_bot || m.seat < 4);
+        self.dirty = true;
+    }
+
+    /// A seat for a sandbox dummy, with a bot member so it has a name.
+    fn sandbox_bot_seat(&mut self) -> Option<u8> {
+        let seat = self.free_seat()?;
+        let character = self.free_character();
+        let name = crate::roster::character(character).map(|c| c.name).unwrap_or("Bot");
+        self.members.push(Member {
+            user_id: format!("bot-{seat}-{}", self.tick),
+            name: name.to_string(),
+            avatar_url: String::new(),
+            character: character.to_string(),
+            costume: None,
+            seat,
+            is_bot: true,
+            connected: true,
+            wins: 0,
+            stick: Stick::default(),
+            input_tick: 0,
+            yaw: 0.0,
+            pitch: 0.0,
+            jump: false,
+            crouch: false,
+            fire: false,
+            presses: VecDeque::new(),
+            ready: false,
+            away_since: None,
+            in_round: true,
+        });
+        self.members.sort_by_key(|m| m.seat);
+        Some(seat)
+    }
+
+    fn city_sandbox_tool(&mut self, seat: u8, tool: crate::city_heist::CityTool) -> Result<(), RoomError> {
+        use crate::city_heist::CityTool;
+        if self.phase != Phase::CityHeist {
+            return Err(RoomError::WrongPhase);
+        }
+        let done = match tool {
+            CityTool::Spawn { police, behavior } => {
+                let new = self.sandbox_bot_seat().ok_or(RoomError::Full)?;
+                let city = self.city.as_mut().ok_or(RoomError::WrongPhase)?;
+                city.sandbox_spawn(new, seat, police, behavior)
+            }
+            CityTool::Despawn => {
+                let city = self.city.as_mut().ok_or(RoomError::WrongPhase)?;
+                let Some(last) = city.sandbox_spawned().last().copied() else {
+                    return Ok(());
+                };
+                city.sandbox_despawn(last);
+                self.members.retain(|m| !(m.is_bot && m.seat == last));
+                true
+            }
+            CityTool::Traffic { level } => {
+                self.board.as_mut().ok_or(RoomError::WrongPhase)?.set_traffic_level(level);
+                true
+            }
+            tool => {
+                let (Some(city), Some(board)) = (self.city.as_mut(), self.board.as_mut()) else {
+                    return Err(RoomError::WrongPhase);
+                };
+                match tool {
+                    CityTool::Role { police } => city.sandbox_role(seat, police),
+                    CityTool::Behave { behavior } => {
+                        city.sandbox_behave(behavior);
+                        true
+                    }
+                    CityTool::Alarm { on } => {
+                        city.set_alarm(on);
+                        true
+                    }
+                    CityTool::Teleport { place } => city.sandbox_teleport(seat, place, board),
+                    CityTool::ResetCar => city.sandbox_reset_car(seat, board),
+                    CityTool::Arrest => city.sandbox_arrest(seat),
+                    CityTool::Station { station } => city.sandbox_station(seat, station, board),
+                    CityTool::Give { item } => city.sandbox_give(seat, item),
+                    CityTool::Flat => city.sandbox_flat(seat),
+                    CityTool::Skill { level } => {
+                        city.set_bot_skill(level.value());
+                        true
+                    }
+                    CityTool::Spawn { .. } | CityTool::Despawn | CityTool::Traffic { .. } => false,
+                }
+            }
+        };
+        if done {
+            self.dirty = true;
+        }
+        Ok(())
+    }
+
     /// The sandbox's tools, for whoever is in it.
     pub fn dev(&mut self, user_id: &str, action: DevAction) -> Result<(), RoomError> {
         if self.board_paused()&&action!=DevAction::Exit{return Err(RoomError::WrongPhase);}
 
         if !self.sandbox {
             return Err(RoomError::NoDevTools);
+        }
+        match &action {
+            DevAction::City { tool } => {
+                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                let seat = self.seat_of(user_id).ok_or(RoomError::WrongPhase)?;
+                return self.city_sandbox_tool(seat, *tool);
+            }
+            DevAction::CitySandbox { police } => {
+                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !self.is_host(user_id) { return Err(RoomError::NotHost); }
+                let police = *police;
+                self.leave_sandbox_for_lobby();
+                return self.start_city_sandbox(user_id, police);
+            }
+            DevAction::BoardSandbox => {
+                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !self.is_host(user_id) { return Err(RoomError::NotHost); }
+                self.leave_sandbox_for_lobby();
+                return self.start_sandbox(user_id);
+            }
+            DevAction::Bout { key } => {
+                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !self.is_host(user_id) { return Err(RoomError::NotHost); }
+                let key = BOUTS.iter().find(|spec| spec.key == key.as_str()).map(|spec| spec.key).ok_or(RoomError::NativeUnsupported)?;
+                self.leave_sandbox_for_lobby();
+                self.choose_game(user_id, key)?;
+                while self.members.len() < 4 && self.add_bot(user_id).is_ok() {}
+                self.start(user_id)?;
+                self.sandbox = true;
+                return Ok(());
+            }
+            _ => {}
         }
         if action == DevAction::CandyVan {
             if !self.dev_tools { return Err(RoomError::NoDevTools); }
@@ -1789,6 +1977,7 @@ impl Room {
             DevAction::Finale => {}
             DevAction::Crawler => {}
             DevAction::CandyVan => {}
+            DevAction::City { .. } | DevAction::CitySandbox { .. } | DevAction::BoardSandbox | DevAction::Bout { .. } => {}
         }
         self.dirty = true;
         Ok(())
@@ -1961,6 +2150,7 @@ impl Room {
         if self.phase == Phase::Lobby {
             let contestants = self.contestants(true);
             self.game = bout::create(self.minigame, &contestants, self.rng.random());
+            if let Some(game) = self.game.as_mut() { game.rotate_lead(&self.leads); }
         }
     }
 
@@ -1968,6 +2158,7 @@ impl Room {
         self.pick_teams();
         let contestants = self.contestants(false);
         self.game = bout::create(self.minigame, &contestants, self.rng.random());
+        if let Some(game) = self.game.as_mut() { game.rotate_lead(&self.leads); }
         for member in &mut self.members {
             member.presses.clear();
         }
@@ -2233,6 +2424,7 @@ impl Room {
             Phase::Countdown { .. } => {
                 self.phase_ticks = self.phase_ticks.saturating_sub(1);
                 if self.phase_ticks == 0 {
+                    self.leads.extend(self.game.as_ref().and_then(|g| g.lead()));
                     self.phase = Phase::Playing;
                     self.dirty = true;
                 } else if self.phase_ticks % TICK_HZ == 0 {
@@ -2418,15 +2610,19 @@ impl Room {
     }
     pub fn choose_city(&mut self,user:&str,police:u8,jobs:u8,host_police:bool)->Result<(),RoomError>{
         if !self.is_host(user){return Err(RoomError::NotHost);}if self.phase!=Phase::Lobby{return Err(RoomError::WrongPhase);}
-        if !(1..=7).contains(&police)||![1,3,5,7].contains(&jobs){return Err(RoomError::InvalidRounds);}
+        if police>2||![1,3,5,7].contains(&jobs){return Err(RoomError::InvalidRounds);}
         self.city_mode=true;self.party_mode=false;self.pairs_on=false;self.city=None;self.board=None;self.map=Map::Frozen;self.minigame=BOUTS[0].key;
-        self.city_config=crate::city_heist::CityConfig{police,jobs,host_police};self.rebuild_preview();self.dirty=true;Ok(())
+        self.city_config=crate::city_heist::CityConfig{police,jobs,host_police,..Default::default()};self.rebuild_preview();self.dirty=true;Ok(())
     }
     pub fn start_city(&mut self,user:&str,watch:bool)->Result<(),RoomError>{
         if !self.is_host(user){return Err(RoomError::NotHost);}if self.phase!=Phase::Lobby||!self.city_mode{return Err(RoomError::WrongPhase);}
         if watch&&self.members.iter().filter(|m|!m.is_bot).count()>1{return Err(RoomError::WrongPhase);}
         if self.members.len()==1{for _ in 0..3{self.add_bot(user)?;}}
-        if self.members.len()<2||self.city_config.police as usize>=self.members.len(){return Err(RoomError::NotEnoughPlayers);}
+        let players=self.members.len();
+        let police=match self.city_config.police{0=>crate::city_heist::formats::police_for(players),n=>n};
+        if !crate::city_heist::formats::allowed(police,players){return Err(RoomError::NotEnoughPlayers);}
+        let mut config=self.city_config.clone();config.police=police;
+        config.skill.get_or_insert(self.bot_skill);
         let host=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
         let mut seats:Vec<_>=self.members.iter().map(|m|(m.seat,m.is_bot)).collect();
         seats.sort_by_key(|(seat,_)|if *seat==host{if self.city_config.host_police{0}else{2}}else{1});
@@ -2434,11 +2630,47 @@ impl Room {
         self.parties+=1;self.party_id=format!("{}:city:{}:{}",self.match_id,self.parties,self.rng.random::<u64>());self.bouts=0;self.last_bout=None;
         let all:Vec<_>=seats.iter().map(|s|s.0).collect();let mut board=Board::for_room(Map::Frozen,&all,999,self.rng.random());board.use_manual_events();
         self.board=Some(board);self.game=None;self.table=None;self.sandbox=false;
-        self.city=Some(crate::city_heist::CityGame::seeded(&seats,self.city_config.clone(),watch,self.rng.random()));self.phase=Phase::CityHeist;self.dirty=true;Ok(())
+        self.city=Some(crate::city_heist::CityGame::seeded(&seats,config,watch,self.rng.random()));self.phase=Phase::CityHeist;self.dirty=true;Ok(())
     }
     pub fn city_action(&mut self,user:&str,held:bool,suction:bool)->Result<(),RoomError>{
         if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
         if let Some(city)=self.city.as_mut(){city.control(seat,held,suction);}Ok(())
+    }
+    pub fn city_trace(&mut self,user:&str,x:f32,y:f32)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){city.trace(seat,x,y);}Ok(())
+    }
+    pub fn city_struggle(&mut self,user:&str)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.struggle(seat){self.dirty=true;}}Ok(())
+    }
+    pub fn city_item(&mut self,user:&str,act:crate::city_heist::ItemAct,yaw:f32)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.use_item(seat,act,yaw){self.dirty=true;}}Ok(())
+    }
+    pub fn city_dodge(&mut self,user:&str,yaw:f32)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.dodge(seat,yaw){self.dirty=true;}}Ok(())
+    }
+    pub fn city_takedown(&mut self,user:&str,yaw:f32)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.takedown(seat,yaw){self.dirty=true;}}Ok(())
+    }
+    pub fn city_callout(&mut self,user:&str,yaw:f32)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.callout(seat,yaw){self.dirty=true;}}Ok(())
+    }
+    pub fn city_clarity(&mut self,user:&str,held:bool)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.clarity(seat,held){self.dirty=true;}}Ok(())
+    }
+    pub fn city_check(&mut self,user:&str,input:crate::city_heist::CheckInput)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.check_input(seat,input){self.dirty=true;}}Ok(())
+    }
+    pub fn city_slip(&mut self,user:&str,input:crate::city_slip::SlipInput)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let Some(city)=self.city.as_mut(){if city.slip_input(seat,input){self.dirty=true;}}Ok(())
     }
     pub fn city_tool(&mut self,user:&str,tool:crate::city_heist::Tool)->Result<(),RoomError>{
         if self.phase!=Phase::CityHeist{return Ok(());}let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
@@ -2453,6 +2685,13 @@ impl Room {
         let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
         if let Some(city)=self.city.as_mut(){city.ready(seat);}self.dirty=true;Ok(())
     }
+    /// Puts a stuck patrol car back on a clear lane.
+    pub fn city_reset_car(&mut self,user:&str)->Result<(),RoomError>{
+        if self.phase!=Phase::CityHeist{return Err(RoomError::WrongPhase);}
+        let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
+        if let (Some(city),Some(board))=(self.city.as_mut(),self.board.as_mut()){if city.reset_car(seat,board){self.dirty=true;}}
+        Ok(())
+    }
     pub fn city_vehicle(&mut self,user:&str)->Result<(),RoomError>{
         if self.phase!=Phase::CityHeist{return Err(RoomError::WrongPhase);}
         let seat=self.seat_of(user).ok_or(RoomError::WrongPhase)?;
@@ -2462,11 +2701,8 @@ impl Room {
         let movement:Vec<_>=self.members.iter().filter(|m|m.connected&&self.tick.saturating_sub(m.input_tick)<=15).map(|m|(m.seat,m.stick,m.yaw)).collect();
         let eligible:Vec<_>=self.members.iter().filter(|m|m.connected).map(|m|m.seat).collect();
         if let (Some(city),Some(board))=(self.city.as_mut(),self.board.as_mut()){
-            if city.resolved.is_none(){board.traffic_tick_with_obstacles(TICK_DT,&city.patrol_traffic_obstacles());board.pedestrians_tick(TICK_DT);}
-            city.tick_with_traffic(TICK_DT,&movement,&eligible,|from,to,yaw|match yaw {
-                Some(yaw)=>board.traffic_blocks_patrol_vehicle(from,to,yaw),
-                None=>board.traffic_collision(from,to).is_some(),
-            },|from,to|board.traffic_wait(from,to)>0.);
+            if city.resolved.is_none(){let world=TICK_DT*city.time_scale();board.traffic_tick_city(world,&city.patrol_traffic_obstacles(),&city.patrol_sirens());board.pedestrians_tick(world);}
+            city.tick_streets(TICK_DT,&movement,&eligible,board);
             if city.resolved_for>=4.{self.open_vote();}
         }
         if self.tick%3==0{self.dirty=true;}
