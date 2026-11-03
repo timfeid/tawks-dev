@@ -28,6 +28,20 @@
     onchange?: (value: string) => void;
   } = $props();
 
+  let bar = $state<HTMLElement | null>(null);
+
+  // The bar scrolls sideways when it is wider than its row; the current tab stays in view.
+  $effect(() => {
+    void value;
+    const on = bar?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!bar || !on) return;
+    const left = on.offsetLeft - bar.offsetLeft;
+    if (left < bar.scrollLeft) bar.scrollLeft = left;
+    else if (left + on.offsetWidth > bar.scrollLeft + bar.clientWidth) {
+      bar.scrollLeft = left + on.offsetWidth - bar.clientWidth;
+    }
+  });
+
   function onkeydown(event: KeyboardEvent) {
     const tabs = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"]')];
     const at = tabs.indexOf(document.activeElement as HTMLElement);
@@ -46,7 +60,7 @@
   }
 </script>
 
-<div class={tabsLook.bar} role="tablist" aria-label={label} aria-orientation="horizontal" tabindex="-1" {onkeydown}>
+<div bind:this={bar} class={tabsLook.bar} role="tablist" aria-label={label} aria-orientation="horizontal" tabindex="-1" {onkeydown}>
   {#each items as item (item.value)}
     {@const on = item.value === value}
     {#if item.href}

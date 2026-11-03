@@ -312,3 +312,13 @@ test('a page built from ui helpers sends no classes', () => {
   assert.ok(keys.has('Typography') || keys.has('Hero'));
   assert.ok(![...keys].some((key) => key === 'class' || key.endsWith('_class')));
 });
+
+test('a chart carries its config and a mark', () => {
+  const shown = ui.chart('Line', 'sys.weeks', 'week', 'points', { x_label: 'Week', split_by: 'team', mark: 'c' });
+  assert.deepEqual(shown, {
+    type: {
+      Chart: { type: 'Line', chart_data_key: 'sys.weeks', config: { x_label: 'Week', split_by: 'team' }, x: 'week', y: 'points', axis: null },
+    },
+    mark: 'c',
+  });
+});

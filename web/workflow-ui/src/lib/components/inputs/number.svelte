@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Input } from '@tawks/ui/input/index.js';
   import type { Props } from '../workflow-input.svelte';
+  import { inputLabel } from '../../utils';
 
   let { input, readonly, changed, value, class: classes }: Props & { class?: string } = $props();
 
@@ -17,6 +18,8 @@
     class={classes}
     {readonly}
     type="number"
+    placeholder={number.placeholder ?? undefined}
+    aria-label={inputLabel(input.id, number.placeholder)}
     min={number.min ?? undefined}
     max={number.max ?? undefined}
     required={input.input.required}
@@ -24,11 +27,11 @@
     oninput={(e) => {
       const raw = (e.currentTarget as HTMLInputElement).value;
       if (raw === '') {
-        changed(input.input.required ? 0 : null);
+        changed(null);
         return;
       }
       const parsed = Number(raw);
-      changed(Number.isNaN(parsed) ? (input.input.required ? 0 : null) : parsed);
+      changed(Number.isNaN(parsed) ? null : parsed);
     }}
   />
 {/if}

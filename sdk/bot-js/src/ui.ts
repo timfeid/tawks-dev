@@ -5,6 +5,8 @@ import type {
   Aspect,
   Backdrop,
   CaptionPlacement,
+  ChartConfig,
+  ChartType,
   Corner,
   CreateWorkflowDefinition,
   DisplayType,
@@ -282,6 +284,14 @@ export const stat = (value: string, label: string, o: Marked & ToneOption = {}) 
 /** A thin bar filled to `percent`, a template for a number from 0 to 100. */
 export const meter = (percent: string, o: Marked & ToneOption & { label?: string; value?: string } = {}) =>
   block({ Meter: { label: o.label ?? null, value: o.value ?? null, percent, tone: o.tone ?? '' } }, o.mark);
+
+export type ChartOptions = Marked & ChartConfig;
+
+/** A line, bar or area chart of the rows at `itemsKey`; `x` and `y` name fields of each row. */
+export const chart = (type: ChartType, itemsKey: string, x: string, y: string, o: ChartOptions = {}) => {
+  const { mark, ...config } = o;
+  return block({ Chart: { type, chart_data_key: itemsKey, config, x, y, axis: null } }, mark);
+};
 
 /** One segment per item of `itemsKey`, each coloured by the `state` template. */
 export const segments = (itemsKey: string, as: string, state: string, o: Marked & { label?: string } = {}) =>

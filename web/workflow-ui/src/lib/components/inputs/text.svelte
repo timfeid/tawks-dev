@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Input } from '@tawks/ui/input/index.js';
   import type { Props } from '../workflow-input.svelte';
+  import { inputLabel } from '../../utils';
 
   let { input, readonly, changed, value, class: classes }: Props & { class?: string } = $props();
 
@@ -18,6 +19,7 @@
     {readonly}
     type="text"
     placeholder={text.placeholder}
+    aria-label={inputLabel(input.id, text.placeholder)}
     required={input.input.required}
     {value}
     onkeydown={(e) => {

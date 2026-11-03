@@ -11,10 +11,12 @@
   let label = $derived(action ? interpolate(inputs, action.label) : '');
   let Icon = $derived(action?.icon ? LUCIDE_REGISTRY[interpolate(inputs, action.icon)] : undefined);
   const press = pressable(() => ({ workflow, inputs }));
-  const formSubmit = getContext<(() => void) | undefined>('form-submit');
+  const formSubmit = getContext<
+    ((sent: { action: string; inputs: Record<string, any> } | null, from: Element | null) => void) | undefined
+  >('form-submit');
   let disabled = $derived(press.pending || press.disabled(action?.act));
 
-  // A form clears its fields as it sends, so a second press would send them empty.
+  // A double click on a form's button is one press, whatever the form is doing.
   let sentJustNow = false;
   function holdSecondSubmit(event: MouseEvent) {
     if (!action?.submit) return;
@@ -30,9 +32,11 @@
   function onclick(event: MouseEvent) {
     if (!action) return;
     if (action.submit && formSubmit) {
-      // The enclosing form sends the typed values along with this action.
+      // The enclosing form sends the typed values along with this action and
+      // what this button carries, such as the row it sits in.
       event.preventDefault();
-      formSubmit();
+      if (press.disabled(action.act)) return;
+      formSubmit(press.resolved(action.act), event.currentTarget as Element);
       return;
     }
     press.run(action.act);
@@ -44,7 +48,7 @@
 {#if action}
   <button
     type={action.submit ? 'submit' : 'button'}
-    class={[look.action[action.look], action.full_width && 'w-full', disabled && 'cursor-not-allowed opacity-50', press.pending && 'cursor-progress']}
+    class={[look.action[action.look], 'max-w-full shrink-0', action.full_width && 'w-full', disabled && 'cursor-not-allowed opacity-50', press.pending && 'cursor-progress']}
     aria-label={action.look === 'Icon' ? label : undefined}
     title={action.look === 'Icon' ? label : undefined}
     aria-busy={press.pending}

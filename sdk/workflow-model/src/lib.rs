@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub mod builder;
+pub mod chart;
 pub mod condition;
 pub mod error;
 pub mod path;
@@ -45,6 +46,8 @@ pub enum InputType {
     Number {
         min: Option<u32>,
         max: Option<u32>,
+        #[serde(default)]
+        placeholder: Option<String>,
     },
     TextArea {
         placeholder: Option<String>,
@@ -470,6 +473,8 @@ pub enum IconLibrary {
     Emoji,
 }
 
+pub use chart::{chart_fields, chart_issues, ChartConfig, ChartSeries, ChartXFormat, ChartYFormat};
+
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub enum ChartType {
     Bar,
@@ -619,7 +624,8 @@ pub enum DisplayType {
     Chart {
         r#type: ChartType,
         chart_data_key: String,
-        config: Value,
+        #[serde(default)]
+        config: ChartConfig,
         x: String,
         y: String,
         axis: Option<String>,

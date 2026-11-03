@@ -1,4 +1,7 @@
 <script lang="ts">
+  import RowScope from './row-scope.svelte';
+  import { getContext } from 'svelte';
+  import { holdsInputs, rowKeys } from '../../utils';
   /** A length such as 120px, 30% or 8rem; anything else could smuggle in more CSS. */
   const columnWidth = (width: string | null | undefined) =>
     width && /^\d{1,4}(\.\d+)?(px|%|rem|em|ch)$/.test(width.trim()) ? width.trim() : 'auto';
@@ -30,6 +33,8 @@
     return [];
   });
 
+  const inForm = !!getContext('form-state');
+  let keys = $derived(rowKeys(items, inForm || holdsInputs(display.type)));
   let columnCount = $derived.by(() => headers.length || 1);
 </script>
 
@@ -56,7 +61,7 @@
       </thead>
 
       <tbody>
-        {#each items as item}
+        {#each items as item, index (keys[index])}
           {@const scope = { ...inputs, [table.as]: item }}
           {#if table.section_key && interpolate(scope, table.section_key)}
             <tr class="border-b border-foreground/10 bg-foreground/[0.03] last:border-b-0">
@@ -70,18 +75,21 @@
             {@const state = look.stateOf(table.row_state, scope)}
             {@const accent = look.accentOf(table.row_accent, scope)}
             <tr
+              data-workflow-row
               class={['border-b border-foreground/10 last:border-b-0', state !== 'Default' && look.rowState[state]]}
               style:background-color={accent ? look.accentFill(accent) : undefined}
             >
+              <RowScope>
               {#each table.row as displayItem, index}
                 {@const header = headers[index]}
                 <td
-                  class={['px-3 py-2 text-sm', header?.numeric && 'text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}
+                  class={['px-3 py-2 text-sm [&_*]:[overflow-wrap:normal]', header?.numeric && 'whitespace-nowrap text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}
                   style:box-shadow={accent && index === 0 ? look.accentEdge(accent) : undefined}
                 >
                   <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
                 </td>
               {/each}
+              </RowScope>
             </tr>
           {/if}
         {/each}

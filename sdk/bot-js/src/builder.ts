@@ -1,4 +1,5 @@
 import type {
+  ChartConfig,
   Act,
   ActionType,
   Backdrop,
@@ -317,15 +318,15 @@ export class WorkflowDisplayBuilder {
     });
   }
 
-  barChart(chartDataKey: string, config: JsonValue, x: string, y: string, axis: string | null = null): this {
+  barChart(chartDataKey: string, config: ChartConfig, x: string, y: string, axis: string | null = null): this {
     return this.#set({ Chart: { type: 'Bar', chart_data_key: chartDataKey, config, x, y, axis } });
   }
 
-  areaChart(chartDataKey: string, config: JsonValue, x: string, y: string, axis: string | null = null): this {
+  areaChart(chartDataKey: string, config: ChartConfig, x: string, y: string, axis: string | null = null): this {
     return this.#set({ Chart: { type: 'Area', chart_data_key: chartDataKey, config, x, y, axis } });
   }
 
-  lineChart(chartDataKey: string, config: JsonValue, x: string, y: string, axis: string | null = null): this {
+  lineChart(chartDataKey: string, config: ChartConfig, x: string, y: string, axis: string | null = null): this {
     return this.#set({ Chart: { type: 'Line', chart_data_key: chartDataKey, config, x, y, axis } });
   }
 

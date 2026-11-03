@@ -156,6 +156,7 @@ Text modifiers, which set fields of `style`:
 | `Empty { icon, title, body, loading, actions }` | `empty(title)`, `loading(title)` then `.titled` (the body), `.with_icon`, `.actions` | What a page shows with nothing in it yet. `loading(title)` is the pulsing line a page shows while its data loads. |
 | `Stat { value, label, tone }` | `stat(value, label)` then `.tone` | A number over its label. Both are templates. |
 | `Meter { label, value, percent, tone }` | `meter(percent)` then `.labelled`, `.valued`, `.tone` | A thin bar filled to `percent`, a template for a number from 0 to 100, with an optional label and value text above it. |
+| `Chart { type, chart_data_key, config, x, y }` | `chart(type, key, x, y, config)` | A line, bar or area chart of a list of rows. See [Chart](#chart). |
 | `Segments { items_key, as, state, label }` | `segments(items_key, as, state)` then `.labelled` | A row of small segments, one per item, each coloured by the `state` template, such as a streak or the rounds of a match. |
 | `Progress { progress_percentage_key, tone }` | `progress(key, tone)` | A bar filled to the number at the key, from 0 to 100. |
 | `Countdown { until, as, text, role, tone, .. }` | `countdown(until, as, text)` then `.role`, `.tone` | Live time left. See [Countdown](#countdown). |
@@ -338,7 +339,7 @@ Send each item's `state` from your bot, such as `"Highlight"` for the viewer's o
 | Block | Builder | What it is |
 | --- | --- | --- |
 | `Link { href, content, style, thumb }` | `link_primary`, `link_secondary`, `link_inline`, `link_card(href, content)`, `link_entry(href, content)`, `link(href, style, content)`, then `.thumb(src)` | A link. See the styles below and [Link](#link) for what `href` may be. |
-| `Action { label, icon, look, act, full_width, submit, scroll_to }` | `primary_action(label, act)`, `secondary_action(label, act)`, `icon_action(icon, label, act)`, `action(label, look, act)` | A button that runs `act`. Adjust with `.with_icon`, `.full_width()`, `.submits()` (sends the form it sits in) and `.scroll_to(id)` (scrolls to the element with that HTML id, or the display marked with that name, after the press). |
+| `Action { label, icon, look, act, full_width, submit, scroll_to }` | `primary_action(label, act)`, `secondary_action(label, act)`, `icon_action(icon, label, act)`, `action(label, look, act)` | A button that runs `act`. Adjust with `.with_icon`, `.full_width()`, `.submits()` (sends the form it sits in, along with `act.inputs`, so a button in a list can carry its row) and `.scroll_to(id)` (scrolls to the element with that HTML id, or the display marked with that name, after the press). |
 | `TabBar { style, tabs }` | `tabs(style, tabs)` with `tab(label, active, act)` and `tab_link(label, active, href)`, each with an optional `.icon(name)` | Switches between views. A tab shows as current while its `active` condition holds. `TabStyle::Bottom` sits fixed at the foot of the page; `Underline` and `Segmented` sit in place. |
 | `ButtonGroup { buttons }` | `button_group(buttons)` with `group_button(label, act)` | A compact segmented strip of small buttons, each running its own `act`, for quick picks such as 1, 3 or 5 tickets. Unlike a tab bar, no button stays current. |
 | `Stepper { title, subtitle, previous, next }` | `stepper(title, previous, next)` then `.meta` (the subtitle) | A label between back and forward buttons, for stepping through days or weeks. Pass `None` to leave a button out. |
@@ -937,6 +938,38 @@ Display conditions see responses only. Compute booleans in your bot and test the
   }
 }
 ```
+
+#### Chart
+
+Draws the list of rows at `chart_data_key`. `type` is `Line`, `Bar` or `Area`. `x` and `y` name fields of each row. Tawks picks every colour and size, thins the x labels to fit, draws tooltips and writes a short text summary under the chart. It updates when the rows change, shows a loading block until they arrive and says "No data yet" when there is nothing to draw.
+
+```rust
+use workflow_model::{ChartConfig, ChartType, ChartXFormat};
+
+chart(
+    ChartType::Line,
+    "points_by_week",
+    "week",
+    "points",
+    ChartConfig::default().labelled("Week", "Points").x_format(ChartXFormat::Number).split_by("team"),
+)
+```
+
+```ts
+ui.chart('Line', 'points_by_week', 'week', 'points', { x_label: 'Week', y_label: 'Points', split_by: 'team' });
+```
+
+`config` holds only these, all optional:
+
+| Key | What it does |
+| --- | --- |
+| `x_label`, `y_label` | Plain text under and over the chart, up to 60 characters. |
+| `x_format` | `Auto` (the default looks at the values), `Text`, `Number`, `Date` or `DateTime`. |
+| `y_format` | `Number`, `Compact` (1.5K) or `Percent` (values from 0 to 100). |
+| `series` | Up to 8 of `{ key, label }`, for rows holding several values. Leave `y` empty. |
+| `split_by` | A field whose values name the series, for rows such as `{ week, team, points }`. |
+
+Rows sharing an x and a series add up. With `split_by`, the largest 8 series show. Values that are not numbers leave a gap, and the summary counts them. Long charts are drawn with fewer points: lines keep the points that hold their shape, and bars average. Hub pages are refused for any other key; a bot's unknown keys are ignored.
 
 #### Progress
 

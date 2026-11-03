@@ -29,7 +29,7 @@ pub use crate::{
     Accent, Act, ActionLook, Align, GroupButton, Aspect, Backdrop, CaptionPlacement, Fit, FlexDirection, Gap, IconSize, Justify, Layout, LinkStyle,
     Corner, PageWidth, Shape, Size, State, Tab, TabStyle, TextAlign, TextRole, TextStyle, Tone, Typeface,
 };
-use crate::{DisplayType, IconLibrary, NodeCondition, WorkflowDisplay};
+use crate::{ChartConfig, ChartType, DisplayType, IconLibrary, NodeCondition, WorkflowDisplay};
 
 fn display(r#type: DisplayType) -> WorkflowDisplay {
     WorkflowDisplay { r#type, mark: None }
@@ -355,6 +355,25 @@ pub fn stat(value: impl Into<String>, label: impl Into<String>) -> WorkflowDispl
 
 pub fn meter(percent: impl Into<String>) -> WorkflowDisplay {
     display(DisplayType::Meter { label: None, value: None, percent: percent.into(), tone: String::new() })
+}
+
+/// A line, bar or area chart of the rows at `items_key`. `x` and `y` name fields
+/// of each row; `config` holds labels, formats and further series.
+pub fn chart(
+    r#type: ChartType,
+    items_key: impl Into<String>,
+    x: impl Into<String>,
+    y: impl Into<String>,
+    config: ChartConfig,
+) -> WorkflowDisplay {
+    display(DisplayType::Chart {
+        r#type,
+        chart_data_key: items_key.into(),
+        config,
+        x: x.into(),
+        y: y.into(),
+        axis: None,
+    })
 }
 
 /// One segment per item of `items_key`, each coloured by the `state` template.

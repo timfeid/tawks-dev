@@ -29,7 +29,7 @@
     </div>
   {/if}
   <div class="flex min-w-0 flex-1 flex-col">
-    <span class={['truncate text-sm font-semibold', state === 'Muted' || state === 'Disabled' ? 'text-muted-foreground' : 'text-foreground']}>{interpolate(inputs, row!.title)}</span>
+    <span class={['text-sm font-semibold [overflow-wrap:anywhere]', state === 'Muted' || state === 'Disabled' ? 'text-muted-foreground' : 'text-foreground']}>{interpolate(inputs, row!.title)}</span>
     {#if row!.meta}<span class="truncate text-xs text-muted-foreground">{interpolate(inputs, row!.meta)}</span>{/if}
   </div>
   {#if row!.trail.length}

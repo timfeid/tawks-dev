@@ -61,7 +61,10 @@ export function pressable(get: () => { workflow: WorkflowResource; inputs: Recor
     showAtOnce(workflow, sent.inputs);
     pending = true;
     timer = setTimeout(clear, PENDING_TIMEOUT_MS);
-    submitServerAction(provider, workflow.instance_id, sent.inputs, sent.action);
+    // No update is coming after a refusal, so the press is over now.
+    void submitServerAction(provider, workflow.instance_id, sent.inputs, sent.action).then((went) => {
+      if (went === false) clear();
+    });
   }
 
   return {
@@ -70,6 +73,10 @@ export function pressable(get: () => { workflow: WorkflowResource; inputs: Recor
     },
     disabled(act: Act | null | undefined) {
       return !!act?.disabled && evaluateCondition(act.disabled, get().inputs);
+    },
+    /** What a press of this act would send, resolved in this row's scope. */
+    resolved(act: Act | null | undefined) {
+      return resolve(act);
     },
     run(act: Act | null | undefined) {
       if (pending) return;

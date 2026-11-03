@@ -10,7 +10,7 @@ export interface WorkflowStateProvider {
     instanceId: string,
     actionId: string,
     inputs: Record<string, any>,
-  ): Promise<void>;
+  ): Promise<boolean | void>;
   customComponents?: Record<string, Component<any>>;
   /** Keeps host updates from interrupting an active display; cleanup runs when it leaves. */
   holdWhileDisplayed?(type: string): (() => void) | undefined;

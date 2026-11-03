@@ -26,7 +26,7 @@ pub(super) fn select(items_key: &str, item: &str) -> InputType {
 }
 
 pub(super) fn number(min: Option<u32>) -> InputType {
-    InputType::Number { min, max: None }
+    InputType::Number { min, max: None, placeholder: None }
 }
 
 fn input(key: impl Into<String>, input: WorkflowInput) -> WorkflowDisplay {

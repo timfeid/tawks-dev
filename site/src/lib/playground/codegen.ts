@@ -337,6 +337,11 @@ function block(kind: string, v: J, mark: string | null, depth: number, im: Impor
     case 'Meter':
       if (!exactly(v, ['label', 'value', 'percent', 'tone'])) return null;
       return helper(im, 'meter', [str(v.percent)], o([['label', optStr(v.label)], ['value', optStr(v.value)], tone(v.tone)]));
+    case 'Chart': {
+      if (!exactly(v, ['type', 'chart_data_key', 'config', 'x', 'y', 'axis']) || v.axis !== null) return null;
+      const entries = Object.entries(v.config ?? {}).filter(([, value]) => value !== null);
+      return helper(im, 'chart', [str(v.type), str(v.chart_data_key), str(v.x), str(v.y)], o(entries.map(([key, value]) => [key, JSON.stringify(value)])));
+    }
     case 'Segments':
       if (!exactly(v, ['items_key', 'as', 'state', 'label'])) return null;
       return helper(im, 'segments', [str(v.items_key), str(v.as), str(v.state)], o([['label', optStr(v.label)]]));

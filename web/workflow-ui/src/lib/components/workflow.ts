@@ -33,7 +33,7 @@ export async function submitServerAction(
   return provider.processAction(instanceId, actionId, payload).catch(async (error) => {
     // Refused unapplied because a live update saved first. Pages with live
     // updates lose this race often, and a lost press looks like a dead button.
-    if (!String(error?.message).includes('changed by another request')) throw error;
+    if (error?.code !== 409 && !String(error?.message).includes('changed by another request')) throw error;
     await new Promise((resolve) => setTimeout(resolve, 150));
     return provider.processAction!(instanceId, actionId, payload);
   });

@@ -1,5 +1,5 @@
 use crate::{
-    ActionType, ButtonType, CardLayout, ChartType, CreateWorkflowDefinition, DisplayType,
+    ActionType, ButtonType, CardLayout, ChartConfig, ChartType, CreateWorkflowDefinition, DisplayType,
     DisplayVisual, IconLibrary, IconSize, LinkStyle, PageWidth, NodeCondition, NodesMap, NotificationVariant, StickyPosition,
     SubmitWhen, TableHeader, TimeDisplayOpts, TransformOp, WorkflowAction, WorkflowDisplay,
     WorkflowInput, WorkflowNode, WorkflowVisual, service::InjectWorkflowPlace,
@@ -361,7 +361,7 @@ impl WorkflowDisplayBuilder {
     pub fn bar_chart(
         mut self,
         chart_data_key: impl Into<String>,
-        config: serde_json::Value,
+        config: ChartConfig,
         x: impl Into<String>,
         y: impl Into<String>,
         axis: Option<String>,
@@ -380,7 +380,7 @@ impl WorkflowDisplayBuilder {
     pub fn area_chart(
         mut self,
         chart_data_key: impl Into<String>,
-        config: serde_json::Value,
+        config: ChartConfig,
         x: impl Into<String>,
         y: impl Into<String>,
         axis: Option<String>,
@@ -399,7 +399,7 @@ impl WorkflowDisplayBuilder {
     pub fn line_chart(
         mut self,
         chart_data_key: impl Into<String>,
-        config: serde_json::Value,
+        config: ChartConfig,
         x: impl Into<String>,
         y: impl Into<String>,
         axis: Option<String>,
@@ -956,7 +956,7 @@ impl InputTypeBuilder {
     }
 
     pub fn number(min: Option<u32>, max: Option<u32>) -> crate::InputType {
-        crate::InputType::Number { min, max }
+        crate::InputType::Number { min, max, placeholder: None }
     }
 
     pub fn text_area(placeholder: Option<String>, rows: Option<u32>) -> crate::InputType {

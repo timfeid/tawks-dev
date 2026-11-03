@@ -304,3 +304,35 @@ export function pictureUrl(src: string | null | undefined): string | null {
   if (value.startsWith('default/')) return `https://cdn.tawks.app/avatars/${value}`;
   return null;
 }
+
+/** Whether a list's row template has something to type into. */
+export function holdsInputs(template: unknown): boolean {
+  return /"(Input|Form)":/.test(JSON.stringify(template) ?? '');
+}
+
+/** A key per list row that follows the row when the list re-sorts: its id or
+ * key when it has one, else its position. Repeats stay unique. A row people type
+ * into is keyed by what it holds instead of its position, because what they typed
+ * going with the wrong row saves to the wrong row. */
+export function rowKeys(rows: readonly unknown[], typedInto = false): string[] {
+  const seen = new Map<string, number>();
+  return rows.map((row, index) => {
+    const own = row && typeof row === 'object' ? ((row as any).id ?? (row as any).key) : undefined;
+    const base =
+      typeof own === 'string' || typeof own === 'number'
+        ? `id:${own}`
+        : typedInto
+          ? `row:${JSON.stringify(row)}`
+          : `at:${index}`;
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return count ? `${base}:${count}` : base;
+  });
+}
+
+/** What assistive tech reads for an input: its placeholder, else its own name. */
+export function inputLabel(id: string, placeholder: string | null | undefined): string {
+  if (placeholder) return placeholder;
+  const name = id.split('.').pop() ?? id;
+  return name.replace(/[_-]+/g, ' ');
+}

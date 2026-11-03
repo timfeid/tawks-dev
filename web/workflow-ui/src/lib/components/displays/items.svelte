@@ -1,4 +1,7 @@
 <script lang="ts">
+  import RowScope from './row-scope.svelte';
+  import { getContext } from 'svelte';
+  import { holdsInputs, rowKeys } from '../../utils';
   import { getNestedValue } from '../../utils';
   import * as look from '../../look';
   import type { Props } from '../workflow-display.svelte';
@@ -23,16 +26,22 @@
     const l = items?.layout;
     return l && typeof l === 'object' && 'Scroll' in l ? `${Math.max(l.Scroll.rows, 1) * 3.75}rem` : undefined;
   });
+  const inForm = !!getContext('form-state');
+  let keys = $derived(rowKeys(list, inForm || holdsInputs(items?.content)));
   let grid = $derived(!!items?.layout && typeof items.layout === 'object' && 'Grid' in items.layout);
 </script>
 
 {#if items && list.length}
   <div class={grid ? '@container w-full min-w-0' : 'contents'}>
     <div class={['min-w-0', layout]} style:max-height={maxHeight}>
-      {#each list as item}
-        {#each items.content as child}
-          <WorkflowDisplay {...rest} {workflow} inputs={{ ...inputs, [items.as]: item }} display={child} />
-        {/each}
+      {#each list as item, index (keys[index])}
+        <div class="contents" data-workflow-row>
+          <RowScope>
+            {#each items.content as child}
+              <WorkflowDisplay {...rest} {workflow} inputs={{ ...inputs, [items.as]: item }} display={child} />
+            {/each}
+          </RowScope>
+        </div>
       {/each}
     </div>
   </div>
