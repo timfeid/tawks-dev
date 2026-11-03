@@ -717,7 +717,7 @@ The tawks app does not show these for third-party games yet. Show them on a page
 
 ### Showing what someone is playing
 
-`presence_set_activity { user_ids, activity: { game, detail? }, ttl_secs? }` shows "Playing Number Duel" (with the detail after it) next to those players in the member list and on their profile cards. It expires after `ttl_secs`, 120 by default, so refresh it while the game runs and send `activity: null` to clear it. It only reaches players who are in a hub with your bot; the rest are skipped.
+`presence_set_activity { user_ids, activity: { game, detail? }, ttl_secs? }` shows "Playing Number Duel" (with the detail after it) next to those players in the member list and on their profile cards. It expires after `ttl_secs`, 120 by default, so refresh it while the game runs and send `activity: null` to clear it. It only reaches players who are in a public hub with your bot, since it shows on every list they're on; the rest are skipped.
 
 ### Other score
 
