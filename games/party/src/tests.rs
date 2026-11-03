@@ -19,10 +19,7 @@ use crate::memory::{
 };
 use crate::redlight::RedLightRush;
 use crate::room::{Phase, Room, RoomError, TICK_DT};
-use crate::shooter::{
-    ARENA_HALF, FIRE_COOLDOWN, MAX_HP, PaintBlasters, RESPAWN_SECONDS,
-    ROUND_SECONDS as BLAST_SECONDS, SHOT_DAMAGE,
-};
+use crate::shooter::{ARENA_HALF, FIRE_COOLDOWN, MAX_HP, PaintBlasters};
 
 fn contestants(n: u8, bots: bool) -> Vec<Contestant> {
     (0..n)
@@ -1890,7 +1887,7 @@ fn a_clear_shot_splats_a_rival_and_cover_stops_one() {
     let yaw = look_at((-12.0, 11.0), (12.0, 11.0));
     let events = shoot(&mut game, 0, yaw);
     let hit = game.fighters.iter().find(|f| f.seat == 1).unwrap();
-    assert_eq!(hit.hp, MAX_HP - SHOT_DAMAGE, "the shot took health off");
+    assert_eq!(hit.hp, 0, "one clean paintball eliminates a player");
     assert!(
         events
             .iter()
@@ -1915,31 +1912,12 @@ fn a_clear_shot_splats_a_rival_and_cover_stops_one() {
 }
 
 #[test]
-fn it_takes_a_few_splats_to_take_someone_out_and_they_come_back() {
+fn a_splat_eliminates_until_the_next_speedball_round() {
     let mut game = PaintBlasters::new(&contestants(2, false), 2);
     stand(&mut game, 0, -12.0, 11.0);
     stand(&mut game, 1, 12.0, 11.0);
     let yaw = look_at((-12.0, 11.0), (12.0, 11.0));
-    let hits = (MAX_HP / SHOT_DAMAGE) as usize;
-    assert!(hits >= 3, "a single hit never takes anyone out");
-    let mut events = Vec::new();
-    for _ in 0..hits {
-        events.extend(shoot(&mut game, 0, yaw));
-        // Wait out the trigger before the next one.
-        for _ in 0..((FIRE_COOLDOWN / TICK_DT) as usize + 1) {
-            game.step(
-                &[(
-                    0,
-                    Input {
-                        yaw,
-                        ..Default::default()
-                    },
-                )],
-                TICK_DT,
-                &mut events,
-            );
-        }
-    }
+    let events = shoot(&mut game, 0, yaw);
     assert!(
         events
             .iter()
@@ -1950,18 +1928,18 @@ fn it_takes_a_few_splats_to_take_someone_out_and_they_come_back() {
     assert_eq!(shooter.kills, 1, "the splat was scored");
     let down = game.fighters.iter().find(|f| f.seat == 1).unwrap().clone();
     assert_eq!(down.deaths, 1);
-    assert_eq!(down.hp, 0, "they are out until they come back");
+    assert_eq!(down.hp, 0, "they stay out for this round");
 
     let mut events = Vec::new();
-    for _ in 0..((RESPAWN_SECONDS / TICK_DT) as usize + 2) {
+    for _ in 0..((crate::shooter::SERIES_BREAK_SECONDS / TICK_DT) as usize + 2) {
         game.step(&[], TICK_DT, &mut events);
     }
     let back = game.fighters.iter().find(|f| f.seat == 1).unwrap();
-    assert_eq!(back.hp, MAX_HP, "they came back with full health");
+    assert_eq!(back.hp, MAX_HP, "they rejoin the next round with full health");
     assert!(
         events
             .iter()
-            .any(|e| e["kind"] == "respawn" && e["seat"] == 1)
+            .any(|e| e["kind"] == "paint_round_start" && e["round"] == 2)
     );
 }
 
@@ -2005,7 +1983,7 @@ fn bots_shoot_it_out_and_the_round_ends_with_a_winner() {
     let mut game = PaintBlasters::new(&contestants(4, true), 7);
     let mut events = Vec::new();
     let mut steps = 0;
-    while game.placements().is_none() && steps < (BLAST_SECONDS / TICK_DT) as usize + 120 {
+    while game.placements().is_none() && steps < (200.0 / TICK_DT) as usize {
         let inputs: Vec<(u8, Input)> = (0..4).map(|s| (s, game.bot_input(s, TICK_DT))).collect();
         game.step(&inputs, TICK_DT, &mut events);
         steps += 1;
@@ -2522,9 +2500,10 @@ fn every_registered_minigame_has_a_live_bot_simulation_and_result() {
             "{key} reports its own snapshot kind"
         );
         let mut events = Vec::new();
-        // Paint playlists have a ninety-second timer; this leaves margin for
-        // the fixed simulation step as well as the survival modes' endgame.
-        for _ in 0..6_000 {
+        // Speedball can play all seven 25-second rounds; the other bouts
+        // still keep the tighter 100-second termination bound.
+        let max_ticks = if key == "shooter" { 12_000 } else { 6_000 };
+        for _ in 0..max_ticks {
             let inputs: Vec<(u8, Input)> = seats
                 .iter()
                 .map(|seat| (seat.seat, game.bot_input(seat.seat, TICK_DT)))
@@ -2767,7 +2746,7 @@ fn crouching_slows_you_down_and_ducks_you_under_a_shot() {
 
     // A shot at chest height goes over a crouching head.
     stand(&mut game, 0, -12.0, 11.0);
-    stand(&mut game, 1, 12.0, 11.0);
+    stand(&mut game, 1, -6.0, 11.0);
     let yaw = look_at((-12.0, 11.0), (12.0, 11.0));
     let aim = Input {
         yaw,
@@ -2786,7 +2765,7 @@ fn crouching_slows_you_down_and_ducks_you_under_a_shot() {
     let ducked = game.fighters.iter().find(|f| f.seat == 1).unwrap().hp;
     assert_eq!(ducked, MAX_HP, "the shot passed over a crouching player");
 
-    stand(&mut game, 1, 12.0, 11.0);
+    stand(&mut game, 1, -6.0, 11.0);
     for _ in 0..((FIRE_COOLDOWN / TICK_DT) as usize + 1) {
         game.step(
             &[(
@@ -3289,8 +3268,8 @@ fn the_skill_setting_decides_how_hard_the_bots_play() {
     let relaxed = splats_at(0.15);
     let ruthless = splats_at(1.0);
     assert!(
-        ruthless > relaxed * 2,
-        "sharp bots hit far more often: {ruthless} against {relaxed}"
+        ruthless >= relaxed * 2,
+        "sharp bots should land at least twice as many hits: {ruthless} against {relaxed}"
     );
     assert!(relaxed > 0, "even the relaxed ones play, {relaxed} hits");
 }

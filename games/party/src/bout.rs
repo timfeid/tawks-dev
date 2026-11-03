@@ -33,13 +33,16 @@ fn paint(
 
 pub static BOUTS: &[BoutSpec] = &[
     bumper_balls::SPEC,
-    spec(
-        "shooter",
-        "Paint Blasters",
-        "Claim the arena with fast paint fights.",
-        Controls::FirstPerson,
-        |c, s| Box::new(crate::shooter::PaintBlasters::new(c, s)),
-    ),
+    BoutSpec {
+        format: Format::Teams,
+        ..spec(
+            "shooter",
+            "Paint Blasters",
+            "One paintball eliminates. Win four speedball rounds to take the match.",
+            Controls::FirstPerson,
+            |c, s| Box::new(crate::shooter::PaintBlasters::new(c, s)),
+        )
+    },
     spec(
         "dodgeball",
         "Dodgeball",

@@ -1,6 +1,6 @@
-//! Paint Blasters: a first person round in a walled arena. Splat a rival three
-//! times to take them out, they come back a couple of seconds later, and
-//! whoever has the most splats when the clock runs out wins.
+//! Paint Blasters: first-person speedball. One paintball eliminates a rival;
+//! each team plays up to seven rounds, with the first four wins taking it.
+//! Paint variants reuse the movement and shot physics with their own rules.
 
 use std::collections::HashMap;
 
@@ -20,8 +20,10 @@ pub const PAINTBALL_SPEED: f32 = 48.0;
 pub const PAINTBALL_GRAVITY: f32 = 9.8;
 pub const RESPAWN_SECONDS: f32 = 2.5;
 pub const ROUND_SECONDS: f32 = 90.0;
-
-const BOT_REACTION: f32 = 0.38;
+pub const SERIES_ROUND_SECONDS: f32 = 25.0;
+pub const SERIES_BREAK_SECONDS: f32 = 2.5;
+pub const DIVE_SECONDS: f32 = 0.38;
+pub const DIVE_COOLDOWN: f32 = 3.0;
 
 /// Mirrored speedball lanes with inflatable bunkers and open flanks.
 pub fn arena() -> Vec<Block> {
@@ -79,8 +81,8 @@ pub fn spawn_points() -> Vec<(f32, f32)> {
         (-22.0, 22.0),
         (0.0, -23.0),
         (0.0, 23.0),
-        (-23.5, 4.0),
-        (23.5, -4.0),
+        (-14.0, -23.0),
+        (14.0, 23.0),
     ]
 }
 
@@ -383,6 +385,9 @@ pub struct Fighter {
     pub cooldown: f32,
     pub respawn_in: f32,
     pub crouching: bool,
+    pub dive_for: f32,
+    pub dive_cooldown: f32,
+    dive_held: bool,
 }
 
 impl Fighter {
@@ -412,6 +417,15 @@ struct BotBrain {
     aim_error: (f32, f32),
 }
 
+#[derive(Clone, Debug)]
+struct Series {
+    round: u8,
+    wins: [u8; 2],
+    left: f32,
+    break_left: f32,
+    last_winner: Option<u8>,
+}
+
 pub struct PaintBlasters {
     pub fighters: Vec<Fighter>,
     pub time: f32,
@@ -435,6 +449,7 @@ pub struct PaintBlasters {
     /// How much wider than the map for four, for the size of the field.
     size: f32,
     shot_range: f32,
+    series: Option<Series>,
 }
 
 impl PaintBlasters {
@@ -466,6 +481,29 @@ impl PaintBlasters {
                 )
             })
             .collect();
+        let series = (contestants.len() >= 2).then_some(Series {
+            round: 1,
+            wins: [0, 0],
+            left: SERIES_ROUND_SECONDS,
+            break_left: 0.0,
+            last_winner: None,
+        });
+        let assigned_sides =
+            contestants.iter().any(|c| c.team == 0) && contestants.iter().any(|c| c.team == 1);
+        let teams = contestants
+            .iter()
+            .enumerate()
+            .map(|(index, c)| {
+                (
+                    c.seat,
+                    if assigned_sides {
+                        c.team.min(1)
+                    } else {
+                        (index % 2) as u8
+                    },
+                )
+            })
+            .collect();
         PaintBlasters {
             fighters,
             time: 0.0,
@@ -475,14 +513,22 @@ impl PaintBlasters {
             rng: StdRng::seed_from_u64(seed),
             brains,
             placements: None,
-            damage: SHOT_DAMAGE,
-            respawn_seconds: RESPAWN_SECONDS,
+            damage: if series.is_some() {
+                MAX_HP
+            } else {
+                SHOT_DAMAGE
+            },
+            respawn_seconds: if series.is_some() {
+                f32::INFINITY
+            } else {
+                RESPAWN_SECONDS
+            },
             round_seconds: ROUND_SECONDS,
             half_x: ARENA_HALF * size,
             half_z: ARENA_HALF * size,
             player_damage: true,
             allow_movement: true,
-            teams: HashMap::new(),
+            teams,
             allies: contestants
                 .iter()
                 .filter_map(|c| c.ally.map(|ally| (c.seat, ally)))
@@ -494,6 +540,7 @@ impl PaintBlasters {
             size,
             // A paintball still carries across the yard when the yard is bigger.
             shot_range: SHOT_RANGE * size,
+            series,
         }
     }
 
@@ -519,6 +566,8 @@ impl PaintBlasters {
     /// range.  Keeping movement and shot authority shared avoids a client-only
     /// "map" that disagrees with collisions.
     pub fn use_target_range(&mut self) {
+        self.series = None;
+        self.teams.clear();
         let (blocks, spawns, half_x) = target_range(self.fighters.len());
         // The range already gets a lane per player, so it is never stretched.
         self.size = 1.0;
@@ -544,6 +593,8 @@ impl PaintBlasters {
     /// Popgun Knockout: every direct hit is decisive and there are no
     /// respawns.  The wrapper owns the shorter party-round finish/ranking.
     pub fn use_popgun_knockout(&mut self) {
+        self.series = None;
+        self.teams.clear();
         let map = Timberline::build_for(self.size);
         self.blocks = map.blocks;
         self.block_kinds = map.kinds;
@@ -566,6 +617,10 @@ impl PaintBlasters {
     }
 
     pub fn use_ricochet_table(&mut self) {
+        self.series = None;
+        self.teams.clear();
+        self.damage = SHOT_DAMAGE;
+        self.respawn_seconds = RESPAWN_SECONDS;
         let (blocks, mut spawns) = ricochet_table();
         // Six spots seat six; any more get the middle of each short end
         // rather than doubling up on a corner.
@@ -589,6 +644,7 @@ impl PaintBlasters {
     }
 
     pub fn use_retake_site(&mut self) {
+        self.series = None;
         let size = self.size;
         self.blocks = stretch(retake_site(), size);
         self.spawns = spread(
@@ -640,6 +696,7 @@ impl PaintBlasters {
         half_x: f32,
         half_z: f32,
     ) {
+        self.series = None;
         self.blocks = blocks;
         self.block_kinds = kinds;
         self.half_x = half_x;
@@ -707,7 +764,8 @@ impl PaintBlasters {
         let fighter = &mut self.fighters[index];
         fighter.yaw = input.yaw;
         fighter.pitch = input.pitch.clamp(-1.4, 1.4);
-        fighter.crouching = input.crouch && fighter.on_ground;
+        let diving = fighter.dive_for > 0.0;
+        fighter.crouching = (input.crouch || diving) && fighter.on_ground;
         let mut body = Body {
             x: fighter.x,
             y: fighter.y,
@@ -717,7 +775,16 @@ impl PaintBlasters {
             vz: fighter.vz,
             on_ground: fighter.on_ground,
         };
-        fpmove::step_body(&mut body, input, dt, &blocks, self.half_x, self.half_z);
+        let mut movement = input;
+        if diving {
+            let (dx, _, dz) = fpmove::look(fighter.yaw, 0.0);
+            body.vx = dx * 12.5;
+            body.vz = dz * 12.5;
+            movement.stick = Default::default();
+            movement.jump = false;
+            movement.crouch = true;
+        }
+        fpmove::step_body(&mut body, movement, dt, &blocks, self.half_x, self.half_z);
         fighter.x = body.x;
         fighter.y = body.y;
         fighter.z = body.z;
@@ -894,7 +961,89 @@ impl PaintBlasters {
         )
     }
 
+    fn restart_series_round(&mut self, events: &mut Vec<Value>) {
+        let Some(series) = &mut self.series else {
+            return;
+        };
+        series.round += 1;
+        series.left = SERIES_ROUND_SECONDS;
+        series.break_left = 0.0;
+        for (index, fighter) in self.fighters.iter_mut().enumerate() {
+            let (x, z) = self.spawns[index % self.spawns.len()];
+            let (seat, kills, deaths) = (fighter.seat, fighter.kills, fighter.deaths);
+            *fighter = Fighter {
+                x,
+                z,
+                yaw: facing_center(x, z),
+                kills,
+                deaths,
+                ..blank(seat)
+            };
+        }
+        for brain in self.brains.values_mut() {
+            *brain = BotBrain::default();
+        }
+        events.push(json!({"kind":"paint_round_start","round":series.round}));
+    }
+
+    fn resolve_series(&mut self, dt: f32, events: &mut Vec<Value>) {
+        let Some(series) = &mut self.series else {
+            return;
+        };
+        series.left = (series.left - dt).max(0.0);
+        let tally = |team: u8| {
+            self.fighters
+                .iter()
+                .filter(|f| self.teams.get(&f.seat) == Some(&team))
+                .fold((0usize, 0i32), |(alive, hp), f| {
+                    (alive + usize::from(f.hp > 0), hp + i32::from(f.hp.max(0)))
+                })
+        };
+        let a = tally(0);
+        let b = tally(1);
+        if a.0 > 0 && b.0 > 0 && series.left > 0.0 {
+            return;
+        }
+        let winner = if a > b {
+            0
+        } else if b > a {
+            1
+        } else if series.wins[0] < series.wins[1] {
+            0
+        } else if series.wins[1] < series.wins[0] {
+            1
+        } else {
+            (series.round - 1) % 2
+        };
+        series.wins[winner as usize] += 1;
+        series.last_winner = Some(winner);
+        events.push(json!({
+            "kind":"paint_round_end", "round":series.round,
+            "winner":winner, "wins":series.wins,
+        }));
+        if series.wins[winner as usize] >= 4 {
+            let winners = self
+                .fighters
+                .iter()
+                .filter(|f| self.teams[&f.seat] == winner)
+                .map(|f| f.seat)
+                .collect();
+            let losers = self
+                .fighters
+                .iter()
+                .filter(|f| self.teams[&f.seat] != winner)
+                .map(|f| f.seat)
+                .collect();
+            self.placements = Some(vec![winners, losers]);
+        } else {
+            series.break_left = SERIES_BREAK_SECONDS;
+        }
+    }
+
     fn settle(&mut self) {
+        if self.series.is_some() {
+            return;
+        }
         if self.placements.is_some() || self.time < self.round_seconds {
             return;
         }
@@ -935,6 +1084,9 @@ fn blank(seat: u8) -> Fighter {
         cooldown: 0.0,
         respawn_in: 0.0,
         crouching: false,
+        dive_for: 0.0,
+        dive_cooldown: 0.0,
+        dive_held: false,
     }
 }
 
@@ -955,6 +1107,7 @@ impl Bout for PaintBlasters {
     fn setup(&self) -> Value {
         json!({
             "game": "shooter",
+            "rule": "Eliminate the other team. First to four rounds wins; one paintball takes a player out.",
             "half": self.half_x,
             "half_z": self.half_z,
             "scale": self.size,
@@ -974,6 +1127,15 @@ impl Bout for PaintBlasters {
             return;
         }
         self.time += dt;
+        if let Some(series) = &mut self.series {
+            if series.break_left > 0.0 {
+                series.break_left -= dt;
+                if series.break_left <= 0.0 {
+                    self.restart_series_round(events);
+                }
+                return;
+            }
+        }
 
         for index in 0..self.fighters.len() {
             let seat = self.fighters[index].seat;
@@ -984,6 +1146,20 @@ impl Bout for PaintBlasters {
                 .unwrap_or_default();
             let fighter = &mut self.fighters[index];
             fighter.cooldown = (fighter.cooldown - dt).max(0.0);
+            fighter.dive_cooldown = (fighter.dive_cooldown - dt).max(0.0);
+            fighter.dive_for = (fighter.dive_for - dt).max(0.0);
+            let dive_pressed = input.jump && input.crouch;
+            if dive_pressed
+                && !fighter.dive_held
+                && fighter.dive_cooldown <= 0.0
+                && fighter.alive()
+                && fighter.on_ground
+            {
+                fighter.dive_for = DIVE_SECONDS;
+                fighter.dive_cooldown = DIVE_COOLDOWN;
+                events.push(json!({"kind":"dive","seat":seat}));
+            }
+            fighter.dive_held = dive_pressed;
             if !fighter.alive() {
                 fighter.respawn_in -= dt;
                 fighter.yaw = input.yaw;
@@ -1024,7 +1200,11 @@ impl Bout for PaintBlasters {
             }
         }
 
-        self.settle();
+        if self.series.is_some() {
+            self.resolve_series(dt, events);
+        } else {
+            self.settle();
+        }
     }
 
     fn bot_input(&mut self, seat: u8, dt: f32) -> Input {
@@ -1122,10 +1302,11 @@ impl Bout for PaintBlasters {
     fn snapshot(&self) -> Value {
         json!({
             "game": "shooter",
-            "time": round(self.time),
-            "limit": self.round_seconds,
+            "time": round(self.series.as_ref().map_or(self.time, |series| SERIES_ROUND_SECONDS - series.left)),
+            "limit": self.series.as_ref().map_or(self.round_seconds, |_| SERIES_ROUND_SECONDS),
             "players": self.fighters.iter().map(|f| json!({
                 "seat": f.seat,
+                "team": self.team_of(f.seat),
                 "x": round(f.x),
                 "y": round(f.y),
                 "z": round(f.z),
@@ -1137,10 +1318,19 @@ impl Bout for PaintBlasters {
                 "kills": f.kills,
                 "deaths": f.deaths,
                 "alive": f.alive(),
-                "respawn": round(f.respawn_in.max(0.0)),
+                "respawn": round(if f.respawn_in.is_finite() { f.respawn_in.max(0.0) } else { 0.0 }),
                 "ground": f.on_ground,
                 "crouch": f.crouching,
+                "diving": f.dive_for > 0.0,
+                "dive_cd": round(f.dive_cooldown),
             })).collect::<Vec<_>>(),
+            "series": self.series.as_ref().map(|series| json!({
+                "round": series.round,
+                "wins": series.wins,
+                "left": round(series.left),
+                "break_left": round(series.break_left.max(0.0)),
+                "last_winner": series.last_winner,
+            })),
         })
     }
 
@@ -1168,6 +1358,68 @@ mod tests {
 
     fn players(count: u8) -> Vec<Contestant> {
         (0..count).map(Contestant::person).collect()
+    }
+
+    #[test]
+    fn speedball_is_one_hit_elimination_first_to_four() {
+        let mut game = PaintBlasters::new(&players(2), 17);
+        game.blocks.clear();
+        let mut events = Vec::new();
+        for round in 1..=4 {
+            game.fighters[0].x = 0.0;
+            game.fighters[0].z = 0.0;
+            game.fighters[0].yaw = 0.0;
+            game.fighters[1].x = 0.0;
+            game.fighters[1].z = -3.0;
+            game.step(
+                &[(
+                    0,
+                    Input {
+                        fire: true,
+                        ..Default::default()
+                    },
+                )],
+                0.016,
+                &mut events,
+            );
+            assert_eq!(
+                game.fighters[1].hp, 0,
+                "one hit eliminates in round {round}"
+            );
+            assert_eq!(game.series.as_ref().unwrap().wins, [round, 0]);
+            if round < 4 {
+                assert!(game.placements().is_none());
+                game.step(&[], SERIES_BREAK_SECONDS + 0.01, &mut events);
+                assert_eq!(game.fighters[1].hp, MAX_HP);
+            }
+            events.clear();
+        }
+        assert_eq!(game.placements(), Some(vec![vec![0], vec![1]]));
+    }
+
+    #[test]
+    fn speedball_dive_has_a_cooldown_and_requires_a_fresh_press() {
+        let mut game = PaintBlasters::new(&players(2), 18);
+        game.blocks.clear();
+        game.fighters[0].x = 0.0;
+        game.fighters[0].z = 0.0;
+        game.fighters[0].yaw = 0.0;
+        let input = Input {
+            jump: true,
+            crouch: true,
+            ..Default::default()
+        };
+        let mut events = Vec::new();
+        game.step(&[(0, input)], 0.016, &mut events);
+        assert!(events.iter().any(|e| e["kind"] == "dive" && e["seat"] == 0));
+        assert!(game.fighters[0].z < 0.0, "dive moves toward the aim ray");
+        game.fighters[0].dive_cooldown = 0.0;
+        events.clear();
+        game.step(&[(0, input)], 0.016, &mut events);
+        assert!(!events.iter().any(|e| e["kind"] == "dive"));
+        game.step(&[], 0.016, &mut events);
+        game.step(&[(0, input)], 0.016, &mut events);
+        assert_eq!(events.iter().filter(|e| e["kind"] == "dive").count(), 1);
     }
 
     #[test]
