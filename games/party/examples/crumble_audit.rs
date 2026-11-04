@@ -34,6 +34,8 @@ fn sample(games: u64, offset: u64, scale: f32, top: f32, field: f32) {
                 skill: if seat == star { top } else { field },
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect();
         let mut game = CrumbleRun::new(&on_form_scaled(&seats, seed, scale), seed);

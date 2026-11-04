@@ -29,6 +29,8 @@ fn contestants(n: u8, bots: bool) -> Vec<Contestant> {
             skill: crate::bout::DEFAULT_SKILL,
             team: seat % 2,
             ally: None,
+            body_width: 1.0,
+            pet: 4,
         })
         .collect()
 }
@@ -2486,11 +2488,12 @@ fn every_registered_minigame_has_a_live_bot_simulation_and_result() {
     // fails one test instead of silently shipping a dead selection.
     assert_eq!(
         BOUTS.len(),
-        62,
+        74,
         "the registry holds every implemented bout"
     );
-    for (index, key) in BOUTS.iter().map(|spec| spec.key).enumerate() {
-        let seats = contestants(4, true);
+    for (index, spec) in BOUTS.iter().enumerate() {
+        let key = spec.key;
+        let seats = contestants(u8::try_from(spec.min_players.max(4)).unwrap(), true);
         let mut game =
             create(key, &seats, 900 + index as u64).expect("registered game has a factory");
         assert_eq!(game.key(), key);
@@ -2500,9 +2503,13 @@ fn every_registered_minigame_has_a_live_bot_simulation_and_result() {
             "{key} reports its own snapshot kind"
         );
         let mut events = Vec::new();
-        // Speedball can play all seven 25-second rounds; the other bouts
-        // still keep the tighter 100-second termination bound.
-        let max_ticks = if key == "shooter" { 12_000 } else { 6_000 };
+        // Speedball can play all seven rounds. Crownfall has a draft and a
+        // five-minute Crown objective; other bouts keep the 100-second bound.
+        let max_ticks = match key {
+            "shooter" => 12_000,
+            "pet_teamfight" => 20_000,
+            _ => 6_000,
+        };
         for _ in 0..max_ticks {
             let inputs: Vec<(u8, Input)> = seats
                 .iter()
@@ -4734,7 +4741,7 @@ fn sharp_relay_bots_run_a_leg_faster_than_relaxed_ones() {
 #[test]
 fn every_bout_and_board_takes_a_full_room() {
     let contestants: Vec<crate::bout::Contestant> = (0..crate::room::MAX_SEATS as u8)
-        .map(|seat| crate::bout::Contestant { seat, is_bot: true, skill: 0.5, team: seat % 2, ally: None })
+        .map(|seat| crate::bout::Contestant { seat, is_bot: true, skill: 0.5, team: seat % 2, ally: None, body_width: 1.0, pet: 4 })
         .collect();
     let mut broken = Vec::new();
     for spec in crate::bout::BOUTS {

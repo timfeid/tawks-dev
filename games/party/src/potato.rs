@@ -60,7 +60,7 @@ impl HotPotato {
             .map(|(i, c)| Carrier {
                 seat: c.seat,
                 is_bot: c.is_bot,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 out_at: None,
             })
             .collect();

@@ -1,5 +1,5 @@
 //! A social sprint: exchange introductions with distinct partners to finish a card.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
@@ -10,6 +10,14 @@ const SPEED: f32 = 6.4;
 const REACH: f32 = 1.65;
 const PAIR_WAIT: f32 = 2.4;
 const LEAVE_AFTER: f32 = 4.;
+fn greeting_reach(width: f32) -> f32 {
+    let body = BodyProfile::new(width);
+    REACH * body.radius * body.mass.sqrt()
+}
+fn run_speed(width: f32) -> f32 {
+    let body = BodyProfile::new(width);
+    SPEED * body.speed * body.acceleration.sqrt()
+}
 fn mix(mut n: u64) -> u64 {
     n ^= n >> 30;
     n = n.wrapping_mul(0xbf58476d1ce4e5b9);
@@ -21,6 +29,7 @@ fn mix(mut n: u64) -> u64 {
 #[derive(Clone)]
 struct Player {
     seat: u8,
+    width: f32,
     skill: f32,
     x: f32,
     z: f32,
@@ -60,6 +69,7 @@ impl MixerCircuit {
                 let angle = TAU * ((i + seed as usize % count) % count) as f32 / count as f32;
                 Player {
                     seat: c.seat,
+                    width: BodyProfile::new(c.body_width).width,
                     skill: c.skill.clamp(0., 1.),
                     x: angle.sin() * 6.8,
                     z: angle.cos() * 6.8,
@@ -168,11 +178,12 @@ impl Bout for MixerCircuit {
             };
             p.missing = 0.;
             let stick = input.stick.clamped();
-            p.x += stick.x * SPEED * dt;
-            p.z += stick.z * SPEED * dt;
+            p.x += stick.x * run_speed(p.width) * dt;
+            p.z += stick.z * run_speed(p.width) * dt;
             let distance = p.x.hypot(p.z);
-            if distance > RADIUS - 0.45 {
-                let scale = (RADIUS - 0.45) / distance;
+            let edge = RADIUS - 0.45 * BodyProfile::new(p.width).radius;
+            if distance > edge {
+                let scale = edge / distance;
                 p.x *= scale;
                 p.z *= scale;
             }
@@ -200,7 +211,7 @@ impl Bout for MixerCircuit {
                 .filter(|(j, q)| *j != index && !q.left)
                 .filter(|(_, q)| self.pair_ready[p.seat as usize][q.seat as usize] <= self.time)
                 .map(|(j, q)| (j, (p.x - q.x).hypot(p.z - q.z)))
-                .filter(|(_, distance)| *distance <= REACH)
+                .filter(|(_, distance)| *distance <= greeting_reach(p.width))
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .map(|(j, _)| j);
             let Some(j) = partner else { continue };
@@ -286,7 +297,8 @@ impl Bout for MixerCircuit {
         } else {
             (0., 0.)
         };
-        let fire = ready && distance <= REACH * (0.78 + p.skill * 0.12) && !p.held;
+        let fire =
+            ready && distance <= greeting_reach(p.width) * (0.78 + p.skill * 0.12) && !p.held;
         Input {
             stick: Stick { x, z },
             fire,
@@ -298,7 +310,8 @@ impl Bout for MixerCircuit {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"done":self.placed.is_some(),"target":target,
             "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"yaw":p.yaw,
                 "points":p.points,"intros":p.intros,"circuits":p.circuits,"met":p.met,
-                "met_count":p.met.count_ones(),"left":p.left})).collect::<Vec<_>>(),
+                "met_count":p.met.count_ones(),"left":p.left,"body_width":p.width,
+                "greeting_reach":greeting_reach(p.width),"move_speed":run_speed(p.width)})).collect::<Vec<_>>(),
             "links":self.links.iter().map(|l|json!({"id":l.id,"a":l.a,"b":l.b,"life":l.life})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
@@ -309,6 +322,136 @@ impl Bout for MixerCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn small_build_runs_faster_broad_build_greets_farther() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut g = MixerCircuit::new(&[small, broad], 4);
+        g.players[0].x = 0.;
+        g.players[1].x = 0.;
+        g.players[0].z = 0.;
+        g.players[1].z = 0.;
+        g.step(
+            &[
+                (0, Input::from_stick(Stick { x: 1., z: 0. })),
+                (1, Input::from_stick(Stick { x: 1., z: 0. })),
+            ],
+            0.1,
+            &mut vec![],
+        );
+        assert!(g.players[0].x > g.players[1].x);
+        g.players[0].x = 0.;
+        g.players[1].x = 1.8;
+        let mut events = Vec::new();
+        g.step(
+            &[
+                (
+                    0,
+                    Input {
+                        fire: true,
+                        ..Default::default()
+                    },
+                ),
+                (1, Input::default()),
+            ],
+            0.,
+            &mut events,
+        );
+        assert_eq!(g.players[0].intros, 0);
+        g.step(
+            &[
+                (0, Input::default()),
+                (
+                    1,
+                    Input {
+                        fire: true,
+                        ..Default::default()
+                    },
+                ),
+            ],
+            0.,
+            &mut events,
+        );
+        assert_eq!(g.players[1].intros, 1);
+        assert_eq!(g.players[0].intros, 1);
+    }
+    #[test]
+    fn mixed_builds_can_all_finish_cards() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128 {
+            let seats = (0..4)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize / 4) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut g = MixerCircuit::new(&seats, seed);
+            while g.placements().is_none() {
+                let inputs = seats
+                    .iter()
+                    .map(|s| (s.seat, g.bot_input(s.seat, 1. / 60.)))
+                    .collect::<Vec<_>>();
+                g.step(&inputs, 1. / 60., &mut vec![]);
+            }
+            for player in &g.players {
+                let index = widths
+                    .iter()
+                    .position(|width| *width == player.width)
+                    .unwrap();
+                scores[index] += player.points;
+            }
+            for seat in &g.placements().unwrap()[0] {
+                let player = g.players.iter().find(|p| p.seat == *seat).unwrap();
+                let index = widths
+                    .iter()
+                    .position(|width| *width == player.width)
+                    .unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("mixer circuit points by build: {scores:?}, wins: {wins:?}");
+        assert!(scores.iter().all(|score| *score > 0));
+        assert!(scores.iter().max().unwrap() < &(scores.iter().min().unwrap() * 11 / 10));
+        assert!(wins.iter().all(|wins| (20..=50).contains(wins)));
+    }
+    #[test]
+    fn eight_player_mixed_builds_keep_exchanging() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        for seed in 0..16 {
+            let seats = (0..8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize / 8) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = MixerCircuit::new(&seats, seed);
+            while game.placements().is_none() {
+                let inputs = seats
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1. / 60.)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1. / 60., &mut vec![]);
+            }
+            assert_eq!(game.placements().unwrap().iter().flatten().count(), 8);
+            assert!(
+                game.players.iter().all(|player| player.points > 0),
+                "seed {seed}"
+            );
+            assert!(
+                game.players
+                    .iter()
+                    .map(|player| player.circuits)
+                    .sum::<u32>()
+                    > 0
+            );
+        }
+    }
     #[test]
     fn circuits_scale_from_two_to_four_players() {
         for count in 2..=4 {

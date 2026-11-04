@@ -4,18 +4,19 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "beacon";
 pub const LIMIT: f32 = 64.0;
 const TURN: f32 = 2.7;
-const HIT: f32 = 0.24;
+pub const HIT: f32 = 0.24;
 const COOLDOWN: f32 = 0.55;
 const BLOOM: f32 = 0.48;
 
 #[derive(Clone, Debug)]
 pub struct Keeper {
     seat: u8,
+    body_width: f32,
     aim: f32,
     mote: f32,
     drift: f32,
@@ -40,12 +41,25 @@ fn angular_gap(a: f32, b: f32) -> f32 {
 }
 
 impl BeaconBloom {
+    fn turn_rate(p: &Keeper) -> f32 {
+        TURN * (1.0 - (p.body_width - 1.0) * 0.10)
+    }
+
+    fn hit_arc(p: &Keeper) -> f32 {
+        HIT * p.body_width
+    }
+
+    fn pulse_cooldown(p: &Keeper) -> f32 {
+        COOLDOWN * (1.0 + (p.body_width - 1.0) * 0.12)
+    }
+
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
         let players = contestants
             .iter()
             .map(|c| Keeper {
                 seat: c.seat,
+                body_width: BodyProfile::new(c.body_width).width,
                 aim: rng.random_range(0.0..TAU),
                 mote: rng.random_range(0.0..TAU),
                 drift: if rng.random_bool(0.5) { 0.42 } else { -0.42 },
@@ -103,12 +117,12 @@ impl Bout for BeaconBloom {
                 continue;
             };
             let turn = input.stick.clamped().x;
-            p.aim = (p.aim + turn * TURN * dt).rem_euclid(TAU);
+            p.aim = (p.aim + turn * Self::turn_rate(p) * dt).rem_euclid(TAU);
             if !input.fire || p.cooldown > 0.0 {
                 continue;
             }
-            p.cooldown = COOLDOWN;
-            let hit = angular_gap(p.aim, p.mote) <= HIT;
+            p.cooldown = Self::pulse_cooldown(p);
+            let hit = angular_gap(p.aim, p.mote) <= Self::hit_arc(p);
             if hit {
                 p.streak = (p.streak + 1).min(5);
                 let gained = p.streak as u32;
@@ -141,7 +155,8 @@ impl Bout for BeaconBloom {
         p.bot_delay -= dt.max(0.0);
         let delta = (p.mote - p.aim + std::f32::consts::PI).rem_euclid(TAU) - std::f32::consts::PI;
         let error = 0.0;
-        let fire = p.cooldown <= 0.0 && p.bot_delay <= 0.0 && delta.abs() < HIT + error;
+        let fire =
+            p.cooldown <= 0.0 && p.bot_delay <= 0.0 && delta.abs() < Self::hit_arc(p) + error;
         if fire {
             p.bot_delay = 0.45 + (1.0 - p.skill) * 0.22 + self.rng.random_range(0.0..0.35);
         }
@@ -162,6 +177,8 @@ impl Bout for BeaconBloom {
                 "x":(index % columns) as f32 * 4.4 - (columns as f32 - 1.0) * 2.2,
                 "z":(index / columns) as f32 * 4.5 - if count > 4 { 2.25 } else { 0.0 } + 2.1,
                 "yaw":p.aim,"aim":p.aim,"mote":p.mote,
+                "body_width":p.body_width,"turn_rate":Self::turn_rate(p),
+                "hit_arc":Self::hit_arc(p),"pulse_cooldown":Self::pulse_cooldown(p),
                 "score":p.score,"streak":p.streak,"cooldown":p.cooldown,"bloom":p.bloom,"misses":p.misses})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
@@ -172,6 +189,34 @@ impl Bout for BeaconBloom {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn body_width_changes_lantern_turn_arc_and_cooldown() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = BeaconBloom::new(&[small, broad], 5);
+        assert!(
+            BeaconBloom::turn_rate(&game.players[0]) > BeaconBloom::turn_rate(&game.players[1])
+        );
+        assert!(BeaconBloom::hit_arc(&game.players[0]) < BeaconBloom::hit_arc(&game.players[1]));
+        assert!(
+            BeaconBloom::pulse_cooldown(&game.players[0])
+                < BeaconBloom::pulse_cooldown(&game.players[1])
+        );
+        for p in &mut game.players {
+            p.aim = 0.0;
+            p.mote = 0.25;
+        }
+        let fire = Input {
+            fire: true,
+            ..Default::default()
+        };
+        game.step(&[(0, fire), (1, fire)], 1.0 / 60.0, &mut Vec::new());
+        assert_eq!(game.players[0].score, 0);
+        assert_eq!(game.players[1].score, 1);
+    }
+
     #[test]
     fn pulse_scores_only_when_aligned_and_obeys_cooldown() {
         let mut game = BeaconBloom::new(&[Contestant::person(0), Contestant::person(1)], 5);
@@ -229,5 +274,42 @@ mod tests {
         let places = game.placements().unwrap();
         assert_eq!(places.iter().flatten().count(), 8);
         assert!(game.players.iter().any(|p| p.score > 0));
+    }
+
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = BeaconBloom::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.players {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.players.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Beacon Bloom mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 700);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 30);
     }
 }

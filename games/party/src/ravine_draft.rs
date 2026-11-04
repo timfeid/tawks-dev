@@ -1,6 +1,6 @@
 //! A downhill precision slide. Steer through wind corridors at speed, or
 //! brake for a cleaner line and give up the speed bonus.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 
 pub const KEY: &str = "ravine_draft";
@@ -21,6 +21,7 @@ struct Gate {
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     vx: f32,
@@ -63,6 +64,7 @@ impl RavineDraft {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0., 1.),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x,
                     z: 0.,
                     vx: 0.,
@@ -174,17 +176,19 @@ impl Bout for RavineDraft {
                 continue;
             };
             p.missing = 0.;
+            let body = BodyProfile::new(p.body_width);
             let stick = input.stick.clamped();
             p.braking = input.fire || input.jump;
             p.spin = (p.spin - dt).max(0.);
-            let steer = if p.braking { 6.2 } else { 4.8 };
-            p.vx += (stick.x * steer - p.vx) * (dt * 5.).min(1.);
+            let steer = (if p.braking { 6.2 } else { 4.8 }) * body.speed;
+            p.vx += (stick.x * steer - p.vx) * (dt * 5. * body.acceleration).min(1.);
             if p.spin > 0. {
                 p.vx *= 0.7;
             }
-            p.x = (p.x + p.vx * dt).clamp(-HALF_WIDTH, HALF_WIDTH);
+            let edge = HALF_WIDTH - 0.3 * body.radius;
+            p.x = (p.x + p.vx * dt).clamp(-edge, edge);
             let throttle = stick.z.clamp(-1., 1.);
-            p.vz = (5.35 + throttle * 1.8
+            p.vz = (5.35 + (body.mass - 1.) * 0.9 + throttle * 1.8
                 - if p.braking { 2.2 } else { 0. }
                 - if p.spin > 0. { 1.8 } else { 0. })
             .clamp(1.6, 8.0);
@@ -194,24 +198,25 @@ impl Bout for RavineDraft {
             }
             while let Some(gate) = self.gates.get(p.next).filter(|g| p.z >= g.z) {
                 let near = (p.x - gate.safe).abs();
-                if near <= 1.25 {
+                let clearance = (body.radius - 1.) * 0.8;
+                if near <= 1.25 - clearance {
                     let fast = p.vz >= 6.3 && !p.braking && p.spin <= 0.;
                     p.score += 3 + u32::from(fast);
                     p.clean += 1;
                     events.push(
                         json!({"kind":"ravine_clean","seat":p.seat,"gate":p.next,"fast":fast}),
                     );
-                } else if near <= 2.35 {
+                } else if near <= 2.35 - clearance {
                     p.score += 1;
                     events.push(json!({"kind":"ravine_glance","seat":p.seat,"gate":p.next}));
                 } else {
                     p.misses += 1;
                     events.push(json!({"kind":"ravine_miss","seat":p.seat,"gate":p.next}));
                 }
-                if (p.x - gate.rock).abs() < 0.95 {
+                if (p.x - gate.rock).abs() < 0.95 * body.radius {
                     p.rocks += 1;
                     p.score = p.score.saturating_sub(1);
-                    p.spin = 0.75;
+                    p.spin = 0.75 * body.stun;
                     events.push(json!({"kind":"ravine_rock","seat":p.seat,"gate":p.next}));
                 }
                 p.next += 1;
@@ -263,7 +268,7 @@ impl Bout for RavineDraft {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"done":self.placed.is_some(),
             "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"y":-p.z*0.018,"z":p.z,
                 "vx":p.vx,"vz":p.vz,"yaw":p.yaw,"score":p.score,"clean":p.clean,"misses":p.misses,"rocks":p.rocks,
-                "next":p.next,"speed":p.vz,"brake":p.braking,"spin":p.spin,"left":p.left,"finished":p.finished})).collect::<Vec<_>>()})
+                "next":p.next,"speed":p.vz,"brake":p.braking,"spin":p.spin,"left":p.left,"finished":p.finished,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placed.clone()
@@ -275,6 +280,64 @@ mod tests {
     use super::*;
     fn game() -> RavineDraft {
         RavineDraft::new(&[Contestant::person(0), Contestant::person(1)], 7)
+    }
+    #[test]
+    fn size_changes_steering_speed_and_gate_clearance() {
+        let mut seats = [Contestant::person(0), Contestant::person(1)];
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut game = RavineDraft::new(&seats, 7);
+        for p in &mut game.players {
+            p.x = 0.;
+            p.z = 0.;
+        }
+        let input = Input::from_stick(Stick { x: 1., z: 1. });
+        game.step(&[(0, input), (1, input)], 1. / 60., &mut vec![]);
+        assert!(game.players[0].vx > game.players[1].vx);
+        assert!(game.players[1].vz > game.players[0].vz);
+        let safe = game.gates[0].safe;
+        let z = game.gates[0].z - 0.02;
+        for p in &mut game.players {
+            p.x = safe + 1.25;
+            p.z = z;
+            p.vx = 0.;
+        }
+        game.step(
+            &[(0, Input::default()), (1, Input::default())],
+            1. / 60.,
+            &mut vec![],
+        );
+        assert_eq!(game.players[0].clean, 1);
+        assert_eq!(game.players[1].clean, 0);
+    }
+    #[test]
+    fn mixed_size_bots_finish_with_competitive_scores() {
+        let seats = [0.7, 0.9, 1.2, 1.4]
+            .iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.6);
+                c.body_width = *width;
+                c
+            })
+            .collect::<Vec<_>>();
+        let mut scores = [0u32; 4];
+        for seed in 0..24 {
+            let mut game = RavineDraft::new(&seats, seed);
+            while game.placements().is_none() {
+                let inputs = seats
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1. / 60.)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1. / 60., &mut vec![]);
+            }
+            for p in &game.players {
+                scores[p.seat as usize] += p.score;
+            }
+        }
+        let least = *scores.iter().min().unwrap();
+        let most = *scores.iter().max().unwrap();
+        assert!(least > 0 && most < least * 2, "scores={scores:?}");
     }
     #[test]
     fn safe_gate_scores_and_rock_penalizes() {

@@ -2,7 +2,7 @@
 //! jumping around a floor of blocks, and the ray tests they need for shots and
 //! for working out who can see whom.
 
-use crate::bout::Input;
+use crate::bout::{BodyProfile, Input};
 
 pub const PLAYER_RADIUS: f32 = 0.45;
 pub const PLAYER_HEIGHT: f32 = 1.7;
@@ -77,6 +77,18 @@ pub fn step_body(
     half_x: f32,
     half_z: f32,
 ) {
+    step_body_profile(body, input, dt, blocks, half_x, half_z, BodyProfile::new(1.0));
+}
+
+pub fn step_body_profile(
+    body: &mut Body,
+    input: Input,
+    dt: f32,
+    blocks: &[Block],
+    half_x: f32,
+    half_z: f32,
+    profile: BodyProfile,
+) {
     let stick = input.stick.clamped();
     let (sy, cy) = input.yaw.sin_cos();
     // Screen up is forward, and the stick's x strafes.
@@ -85,22 +97,22 @@ pub fn step_body(
     let wish_len = (wish_x * wish_x + wish_z * wish_z).sqrt();
     let control = if body.on_ground { 1.0 } else { AIR_CONTROL };
     let top_speed = if input.crouch && body.on_ground {
-        MAX_SPEED * CROUCH_SPEED
+        MAX_SPEED * CROUCH_SPEED * profile.speed
     } else {
-        MAX_SPEED
+        MAX_SPEED * profile.speed
     };
     if wish_len > 1e-3 {
         let (wx, wz) = (wish_x / wish_len, wish_z / wish_len);
         let speed_along = body.vx * wx + body.vz * wz;
         let add = (top_speed * wish_len - speed_along).max(0.0);
-        let step = (ACCEL * control * dt).min(add);
+        let step = (ACCEL * profile.acceleration * control * dt).min(add);
         body.vx += wx * step;
         body.vz += wz * step;
     }
     if body.on_ground {
         let speed = (body.vx * body.vx + body.vz * body.vz).sqrt();
         if speed > 0.0 {
-            let drop = speed * FRICTION * dt;
+            let drop = speed * FRICTION * (2.0 - profile.mass).clamp(0.7, 1.2) * dt;
             let keep = (speed - drop).max(0.0) / speed;
             body.vx *= keep;
             body.vz *= keep;

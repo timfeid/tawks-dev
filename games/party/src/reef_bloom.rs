@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "reefbloom";
 pub const COLS: usize = 9;
@@ -24,6 +24,7 @@ pub struct Coral {
 
 pub struct Gardener {
     pub seat: u8,
+    pub body_width: f32,
     pub score: u32,
     pub planted: u32,
     pub cooldown: f32,
@@ -74,6 +75,7 @@ impl ReefBloom {
             .iter()
             .map(|c| Gardener {
                 seat: c.seat,
+                body_width: BodyProfile::new(c.body_width).width,
                 score: 0,
                 planted: 0,
                 cooldown: 0.,
@@ -212,15 +214,22 @@ impl Bout for ReefBloom {
                 if self.cells[index].owner.is_some() {
                     continue;
                 }
+                let body = BodyProfile::new(p.body_width);
                 self.cells[index] = Coral {
                     owner: Some(p.seat),
-                    life: 6,
+                    life: if body.width < 0.9 {
+                        5
+                    } else if body.width > 1.1 {
+                        7
+                    } else {
+                        6
+                    },
                 };
-                p.cooldown = PLANT_COOLDOWN;
+                p.cooldown = PLANT_COOLDOWN * body.mass;
                 p.planted += 1;
                 p.score += PLANT_POINTS;
                 p.next_bot = self.time
-                    + PLANT_COOLDOWN
+                    + p.cooldown
                     + 0.25
                     + (1. - p.skill) * 4.5
                     + self.rng.random_range(-0.2..0.2);
@@ -257,7 +266,7 @@ impl Bout for ReefBloom {
             "cols":COLS,"rows":ROWS,
             "cells":self.cells.iter().map(|c|json!({"owner":c.owner,"life":c.life})).collect::<Vec<_>>(),
             "players":self.gardeners.iter().map(|p|json!({"seat":p.seat,"score":p.score,
-                "planted":p.planted,"cooldown":p.cooldown,"gone":p.gone})).collect::<Vec<_>>()})
+                "planted":p.planted,"cooldown":p.cooldown,"gone":p.gone,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.places.clone()
@@ -276,6 +285,54 @@ mod tests {
             yaw: plant_code(index),
             ..Default::default()
         }
+    }
+    #[test]
+    fn body_size_trades_planting_pace_for_coral_lifespan() {
+        let mut seats = people(2);
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut game = ReefBloom::new(&seats, 8);
+        game.step(&[(0, plant(10)), (1, plant(50))], 0.01, &mut vec![]);
+        assert!(game.gardeners[0].cooldown < game.gardeners[1].cooldown);
+        assert!(game.cells[10].life < game.cells[50].life);
+        for _ in 0..150 {
+            game.step(
+                &[(0, Input::default()), (1, Input::default())],
+                1. / 60.,
+                &mut vec![],
+            );
+        }
+        assert_eq!(game.gardeners[0].cooldown, 0.);
+        assert!(game.gardeners[1].cooldown > 0.);
+    }
+    #[test]
+    fn mixed_size_bots_keep_scoring() {
+        let seats = [0.7, 0.9, 1.2, 1.4]
+            .iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.6);
+                c.body_width = *width;
+                c
+            })
+            .collect::<Vec<_>>();
+        let mut scores = [0u32; 4];
+        for seed in 0..24 {
+            let mut game = ReefBloom::new(&seats, seed);
+            while game.placements().is_none() {
+                let inputs = seats
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1. / 60.)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1. / 60., &mut vec![]);
+            }
+            for p in &game.gardeners {
+                scores[p.seat as usize] += p.score;
+            }
+        }
+        let least = *scores.iter().min().unwrap();
+        let most = *scores.iter().max().unwrap();
+        assert!(least > 0 && most < least * 2, "scores={scores:?}");
     }
     #[test]
     fn only_open_cells_take_valid_seeds() {

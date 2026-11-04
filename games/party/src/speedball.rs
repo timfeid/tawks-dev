@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use crate::fpmove::Block;
 use crate::shooter::PaintBlasters;
 
@@ -22,7 +22,11 @@ pub const PICKUP_RADIUS: f32 = 1.8;
 pub const STATION_X: f32 = 25.5;
 pub const STATION_HALF_Z: f32 = 4.0;
 const RULE: &str =
-    "Hang the centre flag at their station or take everyone out. First to three rounds.";
+    "Hang the centre flag at their station or take everyone out. Broad builds grab farther; small builds move faster. First to three rounds.";
+
+fn flag_reach(body_width: f32) -> f32 {
+    PICKUP_RADIUS * BodyProfile::new(body_width).radius
+}
 
 /// Where each team lines up at the start of a round, as offsets across the field.
 const STARTS: [f32; 4] = [-3.0, 3.0, -8.0, 8.0];
@@ -244,11 +248,14 @@ impl Speedball {
             .fighters
             .iter()
             .filter(|f| f.hp > 0)
-            .find(|f| {
-                (f.x - self.flag.x).powi(2) + (f.z - self.flag.z).powi(2)
-                    <= PICKUP_RADIUS * PICKUP_RADIUS
+            .filter_map(|f| {
+                let distance_squared =
+                    (f.x - self.flag.x).powi(2) + (f.z - self.flag.z).powi(2);
+                (distance_squared <= flag_reach(f.body_width).powi(2))
+                    .then_some((f.seat, distance_squared))
             })
-            .map(|f| f.seat);
+            .min_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)))
+            .map(|(seat, _)| seat);
         if let Some(seat) = grabber {
             self.flag.holder = Some(seat);
             events.push(json!({ "kind": "flag_taken", "seat": seat, "team": self.team_of(seat) }));
@@ -566,6 +573,25 @@ mod tests {
         let events = idle(&mut game, 0.1);
         assert!(events.iter().any(|e| e["kind"] == "flag_hung"));
         assert_eq!(game.wins, [1, 1]);
+    }
+
+    #[test]
+    fn broad_player_can_reach_a_loose_flag_and_closest_player_wins_a_contest() {
+        let mut contestants = players(2);
+        contestants[0].body_width = 0.7;
+        contestants[1].body_width = 1.4;
+        let mut game = Speedball::new(&contestants, 13);
+        game.put(0, 2.0, 0.0);
+        game.put(1, 1.9, 0.0);
+        let events = idle(&mut game, 0.1);
+        assert_eq!(game.flag.holder, Some(1));
+        assert_eq!(events.iter().filter(|event| event["kind"] == "flag_taken").count(), 1);
+
+        game.flag = Flag::centre();
+        game.put(0, 1.0, 0.0);
+        game.put(1, 0.8, 0.0);
+        idle(&mut game, 0.1);
+        assert_eq!(game.flag.holder, Some(1), "the closer player gets the contested flag");
     }
 
     #[test]

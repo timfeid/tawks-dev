@@ -118,6 +118,7 @@ impl Ghost {
 pub struct Player {
     pub seat: u8,
     pub body: Body,
+    pub body_width: f32,
     pub yaw: f32,
     pub pitch: f32,
     pub points: u32,
@@ -256,6 +257,7 @@ impl GhostBusting {
                         on_ground: true,
                         ..Body::default()
                     },
+                    body_width: c.body_width,
                     yaw: x.atan2(z),
                     pitch: 0.0,
                     points: 0,
@@ -380,7 +382,8 @@ impl GhostBusting {
             } else {
                 (player.power - dt * 3.0).max(0.0)
             };
-            fpmove::step_body(&mut player.body, input, dt, &blocks, half, half);
+            fpmove::step_body_profile(&mut player.body, input, dt, &blocks, half, half,
+                crate::bout::BodyProfile::new(player.body_width));
         }
     }
 
@@ -401,7 +404,7 @@ impl GhostBusting {
                     return None;
                 }
                 let nozzle = (eye.0 + look.0 * 0.8, eye.1 - 0.3 + look.1 * 0.8, eye.2 + look.2 * 0.8);
-                Some((p.seat, pull * p.power, nozzle))
+                Some((p.seat, pull * p.power * crate::bout::BodyProfile::new(p.body_width).reach, nozzle))
             })
             .collect()
     }

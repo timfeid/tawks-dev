@@ -116,7 +116,7 @@ impl CoinScramble {
             .enumerate()
             .map(|(i, c)| Scrambler {
                 seat: c.seat,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 purse: 0,
                 charge: 0.0,
                 cooldown: 0.0,
@@ -230,7 +230,8 @@ impl CoinScramble {
             .map(|p| (p.seat, p.run.x, p.run.z, p.run.vx, p.run.vz))
             .collect();
         for (seat, x, z, vx, vz) in chargers {
-            let reach = CHARGE_RANGE + ground::RUNNER_RADIUS;
+            let attacker = self.players.iter().find(|p| p.seat == seat).unwrap();
+            let reach = CHARGE_RANGE * crate::bout::BodyProfile::new(attacker.run.width).reach;
             let hit = self
                 .players
                 .iter()
@@ -247,7 +248,10 @@ impl CoinScramble {
                         ((p.run.x - x).powi(2) + (p.run.z - z).powi(2)).sqrt(),
                     )
                 })
-                .filter(|(_, away)| *away <= reach)
+                .filter(|(seat, away)| {
+                    let victim = self.players.iter().find(|p| p.seat == *seat).unwrap();
+                    *away <= reach + ground::RUNNER_RADIUS * crate::bout::BodyProfile::new(victim.run.width).radius
+                })
                 .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             let Some((mark, _)) = hit else { continue };
             let mut loose = 0;
@@ -257,10 +261,11 @@ impl CoinScramble {
                     .min(SPILL_MAX)
                     .min(target.purse);
                 target.purse -= loose;
-                target.safe = SAFE_SECONDS;
+                let body = crate::bout::BodyProfile::new(target.run.width);
+                target.safe = SAFE_SECONDS * body.stun;
                 let push = (vx * vx + vz * vz).sqrt().max(1.0);
-                target.run.vx += vx / push * KNOCKBACK;
-                target.run.vz += vz / push * KNOCKBACK;
+                target.run.vx += vx / push * KNOCKBACK / body.mass;
+                target.run.vz += vz / push * KNOCKBACK / body.mass;
                 at = (target.run.x, target.run.z);
             }
             if let Some(charger) = self.players.iter_mut().find(|p| p.seat == seat) {
@@ -279,6 +284,8 @@ impl CoinScramble {
             .map(|p| (p.seat, p.run.x, p.run.z, p.facing))
             .collect();
         for (seat, x, z, facing) in punches {
+            let reach = self.players.iter().find(|p| p.seat == seat)
+                .map(|p| crate::bout::BodyProfile::new(p.run.width).reach).unwrap_or(1.0);
             let forward = (facing.sin(), facing.cos());
             let target = self
                 .players
@@ -294,7 +301,7 @@ impl CoinScramble {
                     let dx = p.run.x - x;
                     let dz = p.run.z - z;
                     let distance = dx.hypot(dz);
-                    (distance <= PUNCH_RANGE + ground::RUNNER_RADIUS
+                    (distance <= PUNCH_RANGE * reach + ground::RUNNER_RADIUS * crate::bout::BodyProfile::new(p.run.width).radius
                         && dx * forward.0 + dz * forward.1 > distance * 0.45)
                         .then_some((p.seat, distance))
                 })
@@ -307,9 +314,10 @@ impl CoinScramble {
                     .min(3)
                     .min(victim.purse);
                 victim.purse -= loose;
-                victim.safe = 1.0;
-                victim.run.vx += forward.0 * 6.0;
-                victim.run.vz += forward.1 * 6.0;
+                let body = crate::bout::BodyProfile::new(victim.run.width);
+                victim.safe = body.stun;
+                victim.run.vx += forward.0 * 6.0 / body.mass;
+                victim.run.vz += forward.1 * 6.0 / body.mass;
                 at = (victim.run.x, victim.run.z);
             }
             if let Some(attacker) = self.players.iter_mut().find(|p| p.seat == seat) {
@@ -450,8 +458,9 @@ impl Bout for CoinScramble {
                 }
                 .clamped();
                 let length = (aim.x * aim.x + aim.z * aim.z).sqrt().max(0.01);
-                player.run.vx = aim.x / length * ground::RUN_SPEED * CHARGE_SPEED;
-                player.run.vz = aim.z / length * ground::RUN_SPEED * CHARGE_SPEED;
+                let speed = crate::bout::BodyProfile::new(player.run.width).speed;
+                player.run.vx = aim.x / length * ground::RUN_SPEED * CHARGE_SPEED * speed;
+                player.run.vz = aim.z / length * ground::RUN_SPEED * CHARGE_SPEED * speed;
             }
             player.dive_held = input.jump;
             let speed = if player.charging() {

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Press, Skill};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Press, Skill};
 
 pub const KEY: &str = "tug";
 /// Half the water gap the losing side is hauled over.
@@ -34,8 +34,15 @@ const STEP: f32 = 0.08;
 const SPLASH_SECONDS: f32 = 1.5;
 const FALL: f32 = 11.0;
 const WATER_Y: f32 = -3.2;
-const RULE: &str =
-    "Alternate your presses to heave the rope. The side it hauls over the water goes in.";
+const RULE: &str = "Alternate your presses to heave the rope. Broad pullers haul farther; small pullers keep a faster rhythm.";
+
+fn heave_force(width: f32) -> f32 {
+    1.0 + (BodyProfile::new(width).width - 1.0) * 0.25
+}
+
+fn rhythm_rate(width: f32) -> f32 {
+    MAX_RATE * BodyProfile::new(width).speed.powi(2)
+}
 
 /// Which way a side hauls: red stands at the negative end of the rope.
 fn direction(team: u8) -> f32 {
@@ -46,6 +53,7 @@ fn direction(team: u8) -> f32 {
 pub struct Puller {
     pub seat: u8,
     pub team: u8,
+    pub body_width: f32,
     /// Place in the line back from the rope, nearest hands first.
     slot: usize,
     pub x: f32,
@@ -76,7 +84,8 @@ impl Puller {
             return false;
         }
         self.last = Some(press);
-        self.budget = (self.budget + (now - self.refilled) * MAX_RATE).min(BURST);
+        self.budget =
+            (self.budget + (now - self.refilled) * rhythm_rate(self.body_width)).min(BURST);
         self.refilled = now;
         let since = now - self.last_press;
         self.last_press = now;
@@ -131,6 +140,7 @@ impl TugOfWar {
             pullers.push(Puller {
                 seat: contestant.seat,
                 team,
+                body_width: BodyProfile::new(contestant.body_width).width,
                 slot,
                 x: 0.0,
                 y: 0.0,
@@ -278,7 +288,8 @@ impl Bout for TugOfWar {
             let team = puller.team;
             // Every side hauls at the pace of one pair of hands, so being
             // outnumbered still leaves you a rope to pull.
-            let share = STEP / self.sides[team as usize].max(1) as f32;
+            let share =
+                STEP * heave_force(puller.body_width) / self.sides[team as usize].max(1) as f32;
             self.rope = (self.rope + direction(team) * share).clamp(-BRINK, BRINK);
             events.push(json!({ "kind": "heave", "seat": seat, "team": team }));
         }
@@ -299,6 +310,11 @@ impl Bout for TugOfWar {
         if self.dunked.is_some() {
             return Input::default();
         }
+        let width = self
+            .pullers
+            .iter()
+            .find(|p| p.seat == seat)
+            .map_or(1.0, |p| p.body_width);
         let brain = self.brains.get(&seat).copied().unwrap_or(BotBrain {
             side: -1.0,
             next: 0.05,
@@ -315,6 +331,7 @@ impl Bout for TugOfWar {
             next = self.rng.random_range(0.14..0.22)
                 + (1.0 - skill.level()) * 0.16
                 + if fumbled { 0.55 } else { 0.0 };
+            next /= BodyProfile::new(width).speed.powf(0.7);
             press = Some(if side > 0.0 {
                 Press::Right
             } else {
@@ -334,12 +351,17 @@ impl Bout for TugOfWar {
             "game": KEY,
             "time": round(self.time),
             "limit": ROUND_SECONDS,
+            "half": round(self.half),
+            "pit": PIT_HALF,
             "rope": round(self.rope),
             "brink": BRINK,
             "dunked": self.dunked,
             "players": self.pullers.iter().map(|p| json!({
                 "seat": p.seat,
                 "team": p.team,
+                "body_width": p.body_width,
+                "heave_force": round(heave_force(p.body_width)),
+                "rhythm_rate": round(rhythm_rate(p.body_width)),
                 "x": round(p.x),
                 "z": p.z(),
                 "y": round(p.y),
@@ -449,6 +471,72 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn broad_pullers_win_equal_rhythms_but_small_pullers_can_outpace_them() {
+        let mut rng = StdRng::seed_from_u64(30);
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let same = mashing(12.0, ROUND_SECONDS + 5.0, &mut rng);
+        let mut equal = TugOfWar::new(&[small.clone(), broad.clone()], 30);
+        play(&mut equal, &[same.clone(), same]);
+        assert_eq!(
+            equal.dunked,
+            Some(0),
+            "broader hands move more rope per beat"
+        );
+        let mut quick = TugOfWar::new(&[small, broad], 31);
+        play(
+            &mut quick,
+            &[
+                mashing(18.0, ROUND_SECONDS + 5.0, &mut rng),
+                mashing(12.0, ROUND_SECONDS + 5.0, &mut rng),
+            ],
+        );
+        assert_eq!(
+            quick.dunked,
+            Some(1),
+            "faster small hands can win the tempo"
+        );
+        let players = quick.snapshot()["players"].as_array().unwrap().clone();
+        assert!(
+            players[0]["rhythm_rate"].as_f64().unwrap()
+                > players[1]["rhythm_rate"].as_f64().unwrap()
+        );
+        assert!(
+            players[0]["heave_force"].as_f64().unwrap()
+                < players[1]["heave_force"].as_f64().unwrap()
+        );
+    }
+
+    #[test]
+    fn body_builds_stay_competitive_with_bots() {
+        let mut small_wins = 0;
+        let mut broad_wins = 0;
+        for seed in 0..128u64 {
+            let mut field = pullers(2);
+            field[(seed as usize) % 2].body_width = 0.7;
+            field[(seed as usize + 1) % 2].body_width = 1.4;
+            let mut game = TugOfWar::new(&field, 300 + seed);
+            while game.placements().is_none() {
+                let inputs = field
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, TICK_DT)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, TICK_DT, &mut Vec::new());
+            }
+            let winner = game.placements().unwrap()[0][0];
+            if field[winner as usize].body_width < 1.0 {
+                small_wins += 1;
+            } else {
+                broad_wins += 1;
+            }
+        }
+        println!("Tug body builds over 128: small={small_wins} broad={broad_wins}");
+        assert!(small_wins >= 35 && broad_wins >= 35);
     }
 
     #[test]

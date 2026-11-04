@@ -15,12 +15,12 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, DEFAULT_SKILL, Input, Skill};
+use crate::bout::{BodyProfile, Bout, Contestant, DEFAULT_SKILL, Input, Skill};
 use brain::Brain;
 pub use course::{Blow, Course, Kind, Piece};
 
 pub const KEY: &str = "bridgecrew";
-pub const RULE: &str = "Navigators ping, drivers steer blind through the fog. First team across wins. Swap seats each round.";
+pub const RULE: &str = "Navigators ping, drivers steer blind through the fog. Heavy crews resist gusts but break weak planks sooner. First team across wins. Swap seats each round.";
 pub const ROUNDS: usize = 2;
 pub const ROUND_LIMIT: f32 = 40.0;
 /// How far the driver can see through the fog. The client draws the fog to
@@ -102,6 +102,7 @@ pub struct Hand {
     pub seat: Option<u8>,
     pub bot: bool,
     pub skill: Skill,
+    pub width: f32,
     idle: f32,
     pub autopilot: bool,
 }
@@ -177,6 +178,7 @@ pub struct Crew {
     pub team: u8,
     pub lane: f32,
     pub hands: [Hand; 2],
+    pub load: f32,
     pub cart: Cart,
     pub pings: Vec<SentPing>,
     last_ping: f32,
@@ -252,6 +254,7 @@ impl BridgeCrew {
                     seat: Some(c.seat),
                     bot: c.is_bot,
                     skill: Skill(if c.is_bot { c.skill } else { DEFAULT_SKILL }),
+                    width: BodyProfile::new(c.body_width).width,
                     idle: 0.0,
                     autopilot: false,
                 })
@@ -263,6 +266,7 @@ impl BridgeCrew {
                     seat: None,
                     bot: true,
                     skill: Skill(stand_in_skill),
+                    width: 1.0,
                     idle: 0.0,
                     autopilot: false,
                 });
@@ -282,11 +286,14 @@ impl BridgeCrew {
         for slot in 0..per_team {
             for team in 0..2 {
                 let hands = teams[team][slot].clone();
+                let load = hands.iter().map(|hand| BodyProfile::new(hand.width).mass)
+                    .sum::<f32>() / 2.0;
                 let lane = (crews.len() as f32 - (total as f32 - 1.0) / 2.0) * LANE_SPACING;
                 crews.push(Crew {
                     team: team as u8,
                     lane,
                     hands,
+                    load,
                     cart: Cart::at_start(&courses[0]),
                     pings: Vec::new(),
                     last_ping: -10.0,
@@ -425,6 +432,7 @@ impl BridgeCrew {
         let course = &self.courses[self.round];
         let lane = self.crews[crew].lane;
         let team = self.crews[crew].team;
+        let load = self.crews[crew].load;
         let cart = &mut self.crews[crew].cart;
         if let Some(t) = cart.falling {
             let t = t + dt;
@@ -487,9 +495,11 @@ impl BridgeCrew {
             if cart.z >= gust.z0 && cart.z <= gust.z1 {
                 let (blow, dir) = gust.state(time);
                 if blow == Blow::Blow {
+                    // A larger wind reduction let heavy crews dominate despite weaker planks.
                     cart.x += dir
                         * GUST_PUSH
                         * (0.35 + 0.65 * (cart.speed.abs() / MAX_SPEED).min(1.0))
+                        / load.powf(0.25)
                         * dt;
                     cart.gusted = dir;
                 }
@@ -497,7 +507,7 @@ impl BridgeCrew {
         }
         for (index, span) in course.spans.iter().enumerate() {
             if let Some(since) = cart.weak_since[index] {
-                if !cart.collapsed[index] && time - since >= span.weak_delay() {
+                if !cart.collapsed[index] && time - since >= span.weak_delay() / load {
                     cart.collapsed[index] = true;
                     events.push(json!({ "kind": "collapse", "crew": crew, "span": index }));
                 }
@@ -853,6 +863,7 @@ impl Bout for BridgeCrew {
                     "speed": r(cart.speed),
                     "steer": r(cart.steer),
                     "fuel": r(cart.fuel / BOOST_FUEL),
+                    "load": r(crew.load),
                     "boosting": cart.boosting,
                     "falling": cart.falling.map(r),
                     "cause": cart.cause,
@@ -862,7 +873,7 @@ impl Bout for BridgeCrew {
                     "gusted": cart.gusted,
                     "collapsed": cart.collapsed.iter().enumerate().filter(|(_, c)| **c).map(|(i, _)| i).collect::<Vec<_>>(),
                     "creaking": cart.weak_since.iter().enumerate()
-                        .filter_map(|(i, since)| since.filter(|_| !cart.collapsed[i]).map(|s| json!([i, r((self.time - s) / course.spans[i].weak_delay())])))
+                        .filter_map(|(i, since)| since.filter(|_| !cart.collapsed[i]).map(|s| json!([i, r((self.time - s) * crew.load / course.spans[i].weak_delay())])))
                         .collect::<Vec<_>>(),
                     "pings": crew.pings.iter().filter(|p| self.time - p.at < PING_LIFE * 2.0).map(|p| json!({
                         "id": p.id, "kind": p.kind, "age": r(self.time - p.at),

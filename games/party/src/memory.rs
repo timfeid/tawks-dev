@@ -6,7 +6,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Skill, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill, Stick};
 
 pub const KEY: &str = "memory";
 pub const SIDE: usize = 3;
@@ -44,9 +44,16 @@ pub fn tile_centre(tile: usize) -> (f32, f32) {
 }
 
 pub fn tile_at(x: f32, z: f32) -> Option<usize> {
+    tile_at_for_build(x, z, 1.0)
+}
+
+/// A wider stance forgives a stomp a little farther from a tile's edge.
+/// Even the widest stance leaves a gap between adjacent tiles.
+fn tile_at_for_build(x: f32, z: f32, width: f32) -> Option<usize> {
+    let half = TILE_HALF + (BodyProfile::new(width).radius - 1.0) * 1.5;
     let index = |v: f32| {
         let slot = (v / SPACING).round();
-        if slot.abs() > 1.0 || (v - slot * SPACING).abs() > TILE_HALF {
+        if slot.abs() > 1.0 || (v - slot * SPACING).abs() > half {
             None
         } else {
             Some((slot + 1.0) as usize)
@@ -90,6 +97,7 @@ struct Walker {
     seat: u8,
     x: f32,
     z: f32,
+    width: f32,
     skill: f32,
     /// Tiles walked correctly this round.
     progress: usize,
@@ -154,6 +162,7 @@ impl MemoryTiles {
                         seat: one.seat,
                         x: cx * start,
                         z: cz * start,
+                        width: BodyProfile::new(one.body_width).width,
                         skill: one.skill,
                         progress: 0,
                         done: false,
@@ -307,14 +316,15 @@ impl Bout for MemoryTiles {
                 .map(|(_, input)| *input)
                 .unwrap_or_default();
             let stick = input.stick.clamped();
-            walker.x = (walker.x + stick.x * WALK * dt).clamp(-half, half);
-            walker.z = (walker.z + stick.z * WALK * dt).clamp(-half, half);
+            let pace = WALK * BodyProfile::new(walker.width).speed;
+            walker.x = (walker.x + stick.x * pace * dt).clamp(-half, half);
+            walker.z = (walker.z + stick.z * pace * dt).clamp(-half, half);
 
             if self.phase != Phase::Recall || walker.done || !input.fire {
                 continue;
             }
             // The grid is laid out for four, so measure against that.
-            let Some(tile) = tile_at(walker.x / size, walker.z / size) else {
+            let Some(tile) = tile_at_for_build(walker.x / size, walker.z / size, walker.width) else {
                 continue;
             };
             let wanted = self.sequence[walker.progress];
@@ -432,6 +442,7 @@ impl Bout for MemoryTiles {
                     "seat": w.seat,
                     "x": w.x,
                     "z": w.z,
+                    "body_width": w.width,
                     "progress": w.progress,
                     "done": w.done,
                     "out": w.out.is_some(),
@@ -483,5 +494,34 @@ mod tests {
         assert_eq!(setup["half"], json!(eight.half()), "and the client is told");
         assert_eq!(setup["spacing"], json!(SPACING * eight.size));
         assert_eq!(setup["tile"], json!(TILE_HALF * eight.size));
+    }
+    #[test]
+    fn small_walkers_move_faster_and_broad_walkers_stomp_farther_from_a_tile() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = MemoryTiles::new(&[small, broad], 3);
+        for walker in &mut game.walkers {
+            walker.x = 0.0;
+            walker.z = 0.0;
+        }
+        let right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        game.step(&[(0, right), (1, right)], 0.1, &mut Vec::new());
+        assert!(game.walkers[0].x > game.walkers[1].x);
+        assert_eq!(tile_at_for_build(2.08, 0.0, 0.7), None);
+        assert_eq!(tile_at_for_build(2.08, 0.0, 1.4), Some(4));
+        assert_eq!(tile_at_for_build(2.5, 0.0, 1.4), None);
+        game.phase = Phase::Recall;
+        game.sequence = vec![4];
+        for walker in &mut game.walkers {
+            walker.x = 2.08 * game.size;
+            walker.z = 0.0;
+        }
+        game.step(&[(0, Input { fire: true, ..Default::default() }),
+            (1, Input { fire: true, ..Default::default() })], 0.0, &mut Vec::new());
+        assert_eq!(game.walkers[0].progress, 0);
+        assert_eq!(game.walkers[1].progress, 1);
+        assert!((game.snapshot()["players"][1]["body_width"].as_f64().unwrap() - 1.4).abs() < 0.001);
     }
 }

@@ -4,6 +4,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::room::TICK_HZ;
 
+pub const SPECIES: [&str; 5] = ["pet-ember", "pet-puddle", "pet-sprout", "pet-fizz", "pet-mochi"];
+
+/// The room, native renderer, and Tawks use the same account hatch order.
+pub fn species_for(user: &str, chosen: Option<&str>) -> u8 {
+    if let Some(index) = chosen.and_then(|id| SPECIES.iter().position(|pet| *pet == id)) {
+        return index as u8;
+    }
+    let hash = "pet:"
+        .bytes()
+        .chain(user.bytes())
+        .fold(2166136261u32, |h, b| (h ^ b as u32).wrapping_mul(16777619));
+    (hash as usize % SPECIES.len()) as u8
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PetAction {
@@ -59,6 +73,13 @@ impl PetReacts {
 mod tests {
     use super::*;
     use crate::room::Room;
+
+    #[test]
+    fn chosen_species_overrides_the_account_hatch() {
+        assert_eq!(species_for("alice", Some("pet-fizz")), 3);
+        assert_eq!(species_for("alice", Some("unknown")), species_for("alice", None));
+        assert!(species_for("alice", None) < SPECIES.len() as u8);
+    }
 
     #[test]
     fn a_seat_reacts_once_its_last_reaction_has_played() {

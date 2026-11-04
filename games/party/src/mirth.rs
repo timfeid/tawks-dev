@@ -4,7 +4,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 
 pub const KEY: &str = "mirth";
 pub const LIMIT: f32 = 64.0;
@@ -19,6 +19,7 @@ const ECHO_COOLDOWN: f32 = 2.8;
 #[derive(Clone, Debug)]
 pub struct Performer {
     pub seat: u8,
+    pub body_width: f32,
     pub x: f32,
     pub z: f32,
     pub mood: u8,
@@ -77,6 +78,7 @@ impl MirthChain {
                 let a = (i + (seed as usize % count)) as f32 * std::f32::consts::TAU / count as f32;
                 Performer {
                     seat: c.seat,
+                    body_width: BodyProfile::new(c.body_width).width,
                     x: a.cos() * 8.5,
                     z: a.sin() * 7.0,
                     mood: 0,
@@ -152,13 +154,15 @@ impl MirthChain {
             return;
         }
         let (x, z) = (self.players[player_index].x, self.players[player_index].z);
-        self.players[player_index].cooldown = COOLDOWN;
+        let body = BodyProfile::new(self.players[player_index].body_width);
+        let reach = START_RADIUS * body.radius;
+        self.players[player_index].cooldown = COOLDOWN * body.mass;
         self.players[player_index].broadcasts += 1;
         let seed = self
             .crowd
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.cooldown <= 0.0 && dist(x, z, p.x, p.z) <= START_RADIUS)
+            .filter(|(_, p)| p.cooldown <= 0.0 && dist(x, z, p.x, p.z) <= reach)
             .min_by(|(_, a), (_, b)| {
                 dist(x, z, a.x, a.z)
                     .partial_cmp(&dist(x, z, b.x, b.z))
@@ -236,14 +240,16 @@ impl Bout for MirthChain {
         let dt = dt.clamp(0.0, 0.1);
         self.time += dt;
         for p in &mut self.players {
+            let body = BodyProfile::new(p.body_width);
             let input = inputs
                 .iter()
                 .find(|(s, _)| *s == p.seat)
                 .map(|(_, v)| *v)
                 .unwrap_or_default();
             let stick = input.stick.clamped();
-            p.x = (p.x + stick.x * SPEED * dt).clamp(-HALF, HALF);
-            p.z = (p.z + stick.z * SPEED * dt).clamp(-HALF, HALF);
+            let edge = (body.radius - 1.).max(0.) * 0.35;
+            p.x = (p.x + stick.x * SPEED * body.speed * dt).clamp(-HALF + edge, HALF - edge);
+            p.z = (p.z + stick.z * SPEED * body.speed * dt).clamp(-HALF + edge, HALF - edge);
             p.cooldown = (p.cooldown - dt).max(0.0);
             if let Some(m) = mood(input.yaw) {
                 p.mood = m;
@@ -318,7 +324,8 @@ impl Bout for MirthChain {
         let dz = c.z - p.z;
         let length = dx.hypot(dz).max(0.001);
         let pace = 0.65 + p.skill * 0.35;
-        let ready = length < START_RADIUS * 0.85 && p.cooldown <= 0.0;
+        let ready = length < START_RADIUS * BodyProfile::new(p.body_width).radius * 0.85
+            && p.cooldown <= 0.0;
         let fire = ready && self.rng.random_bool((0.48 + p.skill * 0.5) as f64);
         Input {
             stick: Stick {
@@ -333,7 +340,7 @@ impl Bout for MirthChain {
     fn snapshot(&self) -> Value {
         json!({"game":KEY,"time":self.time.min(LIMIT),"limit":LIMIT,
         "crowd":self.crowd.iter().map(|p|json!({"x":p.x,"z":p.z,"mood":p.mood,"spark":p.spark,"pulse_delay":p.pulse_delay,"source":p.source,"cooldown":p.cooldown})).collect::<Vec<_>>(),
-        "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"yaw":0.0,"mood":p.mood,"score":p.score,"best":p.best,"broadcasts":p.broadcasts,"cooldown":p.cooldown})).collect::<Vec<_>>()})
+        "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"yaw":0.0,"mood":p.mood,"score":p.score,"best":p.best,"broadcasts":p.broadcasts,"cooldown":p.cooldown,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.result.clone()
@@ -344,6 +351,64 @@ mod tests {
     use super::*;
     fn people() -> Vec<Contestant> {
         vec![Contestant::person(0), Contestant::person(1)]
+    }
+    #[test]
+    fn body_size_trades_broadcast_reach_for_movement_and_retry() {
+        let mut seats = people();
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut game = MirthChain::new(&seats, 4);
+        for face in &mut game.crowd {
+            face.cooldown = 4.;
+        }
+        game.crowd[0].x = 0.;
+        game.crowd[0].z = 0.;
+        game.crowd[0].cooldown = 0.;
+        for p in &mut game.players {
+            p.x = 2.4;
+            p.z = 0.;
+        }
+        game.broadcast(0, 0, &mut vec![]);
+        game.broadcast(1, 0, &mut vec![]);
+        assert_eq!(game.players[0].score, 0);
+        assert_eq!(game.players[1].score, 1);
+        assert!(game.players[0].cooldown < game.players[1].cooldown);
+        for p in &mut game.players {
+            p.x = 0.;
+            p.z = 0.;
+        }
+        let right = Input::from_stick(Stick { x: 1., z: 0. });
+        game.step(&[(0, right), (1, right)], 0.1, &mut vec![]);
+        assert!(game.players[0].x > game.players[1].x);
+    }
+    #[test]
+    fn mixed_size_bots_all_build_chains() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        for seed in 0..80 {
+            let seats = (0..4)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.6);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = MirthChain::new(&seats, seed);
+            while game.placements().is_none() {
+                let inputs = seats
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1. / 60.)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1. / 60., &mut vec![]);
+            }
+            for p in &game.players {
+                scores[(p.seat as usize + seed as usize) % 4] += p.score;
+            }
+        }
+        let least = *scores.iter().min().unwrap();
+        let most = *scores.iter().max().unwrap();
+        println!("Mirth Chain mixed-size scores: {scores:?}");
+        assert!(least > 0 && most < least * 2, "scores={scores:?}");
     }
     #[test]
     fn broadcast_chains_only_matching_neighbors() {

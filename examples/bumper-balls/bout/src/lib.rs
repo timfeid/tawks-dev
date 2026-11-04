@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use tawks_bout::{Bout, BoutSpec, Contestant, Controls, Format, Input, Skill, Stick, crowd_scale};
+use tawks_bout::{BodyProfile, Bout, BoutSpec, Contestant, Controls, Format, Input, Skill, Stick, crowd_scale};
 
 pub const SPEC: BoutSpec = BoutSpec {
     key: "bumper",
@@ -55,6 +55,7 @@ pub struct Ball {
     pub vy: f32,
     pub state: BallState,
     pub fell_at: Option<f32>,
+    pub body_width: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -107,6 +108,7 @@ impl BumperBalls {
                     vy: 0.0,
                     state: BallState::Rolling,
                     fell_at: None,
+                    body_width: c.body_width,
                 }
             })
             .collect();
@@ -227,21 +229,23 @@ impl Bout for BumperBalls {
         for ball in self.balls.iter_mut() {
             match ball.state {
                 BallState::Rolling => {
+                    let body = BodyProfile::new(ball.body_width);
                     let stick = inputs
                         .iter()
                         .find(|(s, _)| *s == ball.seat)
                         .map(|(_, input)| input.stick.clamped())
                         .unwrap_or_default();
-                    let (ax, az) = (stick.x * ACCEL, stick.z * ACCEL);
+                    let (ax, az) = (stick.x * ACCEL * body.acceleration, stick.z * ACCEL * body.acceleration);
                     let speed = (ball.vx * ball.vx + ball.vz * ball.vz).sqrt();
+                    let top_speed = MAX_SPEED * body.speed;
                     // Input can always steer or brake, but cannot push past top speed.
-                    if speed < MAX_SPEED || ball.vx * ax + ball.vz * az < 0.0 {
+                    if speed < top_speed || ball.vx * ax + ball.vz * az < 0.0 {
                         ball.vx += ax * dt;
                         ball.vz += az * dt;
                     }
                     let pushing = stick.x.abs() + stick.z.abs() > 0.1;
                     let mut drag = if pushing { ROLL_DRAG } else { COAST_DRAG };
-                    if speed > MAX_SPEED {
+                    if speed > top_speed {
                         drag += OVERSPEED_DRAG;
                     }
                     let keep = (-drag * dt).exp();
@@ -292,6 +296,7 @@ impl Bout for BumperBalls {
                     self.allies.get(&a.seat).copied(),
                     self.allies.get(&b.seat).copied(),
                 );
+                let (mass_a, mass_b) = (BodyProfile::new(a.body_width).mass, BodyProfile::new(b.body_width).mass);
                 let closing_speed = (-approach).max(0.0);
                 let impulse = if partners {
                     // Partners only roll apart.
@@ -301,23 +306,23 @@ impl Bout for BumperBalls {
                     // Only velocity toward the other ball counts, so glancing
                     // contacts keep their sideways motion.
                     let restitution = (0.45 + closing_speed / MAX_SPEED * 0.55).clamp(0.45, 1.0);
-                    (1.0 + restitution) * closing_speed * 0.5
+                    (1.0 + restitution) * closing_speed / (1.0 / mass_a + 1.0 / mass_b)
                 } else {
                     0.0
                 };
                 {
                     let a = &mut self.balls[i];
-                    a.x -= nx * push;
-                    a.z -= nz * push;
-                    a.vx -= nx * impulse;
-                    a.vz -= nz * impulse;
+                    a.x -= nx * push * (2.0 * mass_b / (mass_a + mass_b));
+                    a.z -= nz * push * (2.0 * mass_b / (mass_a + mass_b));
+                    a.vx -= nx * impulse / mass_a;
+                    a.vz -= nz * impulse / mass_a;
                 }
                 {
                     let b = &mut self.balls[j];
-                    b.x += nx * push;
-                    b.z += nz * push;
-                    b.vx += nx * impulse;
-                    b.vz += nz * impulse;
+                    b.x += nx * push * (2.0 * mass_a / (mass_a + mass_b));
+                    b.z += nz * push * (2.0 * mass_a / (mass_a + mass_b));
+                    b.vx += nx * impulse / mass_b;
+                    b.vz += nz * impulse / mass_b;
                 }
                 let pair = (a.seat.min(b.seat), a.seat.max(b.seat));
                 if closing_speed >= BUMP_EVENT_MIN_SPEED
@@ -504,6 +509,8 @@ mod tests {
                 skill: DEFAULT_SKILL,
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect()
     }
@@ -518,6 +525,22 @@ mod tests {
             game.step(&inputs, TICK_DT, &mut events);
         }
         events
+    }
+
+    #[test]
+    fn broad_rider_keeps_more_momentum_in_a_collision() {
+        let mut seats = contestants(2, false);
+        seats[0].body_width = 1.4;
+        seats[1].body_width = 0.7;
+        let mut game = BumperBalls::new(&seats, 3);
+        game.balls[0].x = -0.9;
+        game.balls[1].x = 0.9;
+        game.balls[0].z = 0.0;
+        game.balls[1].z = 0.0;
+        game.balls[0].vx = 6.0;
+        game.balls[1].vx = -6.0;
+        game.step(&[], TICK_DT, &mut Vec::new());
+        assert!((game.balls[0].vx - 6.0).abs() < (game.balls[1].vx + 6.0).abs());
     }
 
     #[test]

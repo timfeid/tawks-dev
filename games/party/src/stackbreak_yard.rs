@@ -1,6 +1,6 @@
 //! Each player shepherds one ball into shared block towers. Impacts knock
 //! blocks away, a complete collapse pays a bonus, then the tower rebuilds.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
@@ -21,6 +21,7 @@ fn norm(x: f32, z: f32) -> (f32, f32) {
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     vx: f32,
@@ -69,6 +70,7 @@ impl StackbreakYard {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0., 1.),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x,
                     z,
                     vx: 0.,
@@ -163,6 +165,7 @@ impl Bout for StackbreakYard {
             if p.left {
                 continue;
             }
+            let body = BodyProfile::new(p.body_width);
             let Some(input) = inputs
                 .iter()
                 .find(|(seat, _)| *seat == p.seat)
@@ -179,13 +182,14 @@ impl Bout for StackbreakYard {
             };
             p.missing = 0.;
             let stick = input.stick.clamped();
-            p.vx = stick.x * WALK_SPEED;
-            p.vz = stick.z * WALK_SPEED;
+            p.vx = stick.x * WALK_SPEED * body.speed;
+            p.vz = stick.z * WALK_SPEED * body.speed;
             p.x += p.vx * dt;
             p.z += p.vz * dt;
             let distance = p.x.hypot(p.z);
-            if distance > RADIUS - 0.45 {
-                let s = (RADIUS - 0.45) / distance;
+            let edge = RADIUS - 0.45 * body.radius;
+            if distance > edge {
+                let s = edge / distance;
                 p.x *= s;
                 p.z *= s;
             }
@@ -196,21 +200,22 @@ impl Bout for StackbreakYard {
             let dz = p.ball_z - p.z;
             let distance = dx.hypot(dz);
             let (nx, nz) = norm(dx, dz);
-            if distance < BALL_RADIUS + 0.55 {
-                p.x = p.ball_x - nx * (BALL_RADIUS + 0.55);
-                p.z = p.ball_z - nz * (BALL_RADIUS + 0.55);
-                let drive = (p.vx * nx + p.vz * nz).max(0.) * dt * 2.1;
+            let contact = BALL_RADIUS + 0.55 * body.radius;
+            if distance < contact {
+                p.x = p.ball_x - nx * contact;
+                p.z = p.ball_z - nz * contact;
+                let drive = (p.vx * nx + p.vz * nz).max(0.) * dt * 2.1 * body.mass;
                 p.ball_vx += nx * drive;
                 p.ball_vz += nz * drive;
             }
             let fire = input.fire || input.jump;
             if fire
                 && !p.held_fire
-                && self.time - p.last_shove >= 0.7
-                && distance < BALL_RADIUS + 1.12
+                && self.time - p.last_shove >= 0.7 * body.mass
+                && distance < BALL_RADIUS + 1.12 * body.reach
             {
-                p.ball_vx += nx * 6.5;
-                p.ball_vz += nz * 6.5;
+                p.ball_vx += nx * 6.5 * body.mass;
+                p.ball_vz += nz * 6.5 * body.mass;
                 p.last_shove = self.time;
                 events.push(json!({"kind":"stack_shove","seat":p.seat}));
             }
@@ -380,6 +385,7 @@ impl Bout for StackbreakYard {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"done":self.placed.is_some(),
             "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.yaw,
                 "points":p.points,"blocks":p.blocks,"collapses":p.collapses,"left":p.left,
+                "body_width":p.body_width,
                 "ball":{"x":p.ball_x,"z":p.ball_z,"vx":p.ball_vx,"vz":p.ball_vz}})).collect::<Vec<_>>(),
             "towers":self.towers.iter().enumerate().map(|(id,t)|json!({"id":id,"health":t.health,"rebuild":t.rebuild})).collect::<Vec<_>>()})
     }
@@ -393,6 +399,88 @@ mod tests {
     use super::*;
     fn game() -> StackbreakYard {
         StackbreakYard::new(&[Contestant::person(0), Contestant::person(1)], 7)
+    }
+    #[test]
+    fn size_changes_speed_shove_strength_and_retry() {
+        let mut seats = [Contestant::person(0), Contestant::person(1)];
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut g = StackbreakYard::new(&seats, 7);
+        for p in &mut g.players {
+            p.x = 0.0;
+            p.z = 0.0;
+            p.ball_x = 7.0;
+            p.ball_z = if p.seat == 0 { -5.0 } else { 5.0 };
+        }
+        let move_right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        g.step(&[(0, move_right), (1, move_right)], 0.1, &mut vec![]);
+        assert!(g.players[0].x > g.players[1].x);
+
+        g.players[0].x = -4.0;
+        g.players[0].z = 0.0;
+        g.players[0].ball_x = -3.0;
+        g.players[0].ball_z = 0.0;
+        g.players[1].x = 4.0;
+        g.players[1].z = 0.0;
+        g.players[1].ball_x = 3.0;
+        g.players[1].ball_z = 0.0;
+        for p in &mut g.players {
+            p.ball_vx = 0.0;
+            p.ball_vz = 0.0;
+        }
+        let fire = Input {
+            fire: true,
+            ..Default::default()
+        };
+        g.step(&[(0, fire), (1, fire)], 1.0 / 60.0, &mut vec![]);
+        assert!(g.players[1].ball_vx.abs() > g.players[0].ball_vx.abs() * 1.2);
+
+        g.time = 0.73;
+        for p in &mut g.players {
+            p.held_fire = false;
+            p.ball_vx = 0.0;
+            p.ball_vz = 0.0;
+            p.ball_x = if p.seat == 0 { -3.0 } else { 3.0 };
+            p.ball_z = 0.0;
+        }
+        g.step(&[(0, fire), (1, fire)], 1.0 / 60.0, &mut vec![]);
+        assert!(
+            g.players[0].ball_vx.abs() > 1.0,
+            "light build can retry sooner"
+        );
+        assert!(
+            g.players[1].ball_vx.abs() < 0.01,
+            "broad build is still cooling down"
+        );
+    }
+    #[test]
+    fn mixed_size_bots_all_find_scoring_opportunities() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let contestants = widths
+            .iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.6);
+                c.body_width = *width;
+                c
+            })
+            .collect::<Vec<_>>();
+        let mut scores = [0u32; 4];
+        for seed in 0..8 {
+            let mut game = StackbreakYard::new(&contestants, seed);
+            let mut events = Vec::new();
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut events);
+            }
+            for p in &game.players {
+                scores[p.seat as usize] += p.points;
+            }
+        }
+        assert!(scores.iter().all(|score| *score > 0), "scores={scores:?}");
     }
     #[test]
     fn shove_moves_only_your_ball_and_spam_does_not_retrigger() {

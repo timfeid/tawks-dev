@@ -227,6 +227,30 @@ fn the_torch_never_outruns_its_top_speed_and_ignores_garbage() {
 }
 
 #[test]
+fn smaller_cutter_sweeps_faster_without_exceeding_its_own_limit() {
+    let mut contestants = people(2);
+    contestants[0].body_width = 0.7;
+    contestants[1].body_width = 1.4;
+    let mut game = StencilRush::new(&contestants, 1);
+    let mut events = Vec::new();
+    for _ in 0..((PREVIEW_SECONDS + 0.05) / TICK_DT) as usize {
+        game.step(&[], TICK_DT, &mut events);
+    }
+    let start = game.player(0).unwrap().torch;
+    let far = Input {
+        yaw: 1.0,
+        pitch: -0.7,
+        ..Default::default()
+    };
+    game.step(&[(0, far), (1, far)], TICK_DT, &mut events);
+    let small = dist(start, game.player(0).unwrap().torch);
+    let broad = dist(start, game.player(1).unwrap().torch);
+    assert!(small > broad, "small pet's torch should be quicker");
+    assert!(small <= torch_speed(0.7) * TICK_DT + 1e-5);
+    assert!(broad <= torch_speed(1.4) * TICK_DT + 1e-5);
+}
+
+#[test]
 fn cutting_across_the_middle_is_no_shortcut() {
     let mut game = StencilRush::new(&people(1), 6);
     let mut events = Vec::new();

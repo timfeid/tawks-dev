@@ -111,7 +111,7 @@ impl CrumbleRun {
             .enumerate()
             .map(|(i, c)| Faller {
                 seat: c.seat,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 y: 0.0,
                 fell_at: None,
                 dwell: 0.0,
@@ -496,6 +496,8 @@ mod tests {
                 skill: crate::bout::DEFAULT_SKILL,
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect()
     }

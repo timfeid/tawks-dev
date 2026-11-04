@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Skill, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill, Stick};
 use crate::ground::{self, Runner};
 
 pub const KEY: &str = "rising";
@@ -31,6 +31,14 @@ const WATER_START: f32 = -2.0;
 const WATER_SPEED: f32 = 0.2;
 const WATER_ACCEL: f32 = 0.0022;
 const PLAYER_HEIGHT: f32 = 1.0;
+
+fn jump_speed(width: f32) -> f32 {
+    JUMP_SPEED * (1.0 - (BodyProfile::new(width).width - 1.0) * 0.12)
+}
+
+fn pad_lifetime(width: f32) -> f32 {
+    CRUMBLE_SECONDS / BodyProfile::new(width).mass.sqrt()
+}
 
 /// Where the water stands a given number of seconds in. It starts slow and
 /// keeps speeding up, and passes the top of the tower before the clock ends.
@@ -59,8 +67,9 @@ impl Pad {
         self.state != PadState::Gone
     }
 
-    fn under(&self, x: f32, z: f32) -> bool {
-        (self.x - x).hypot(self.z - z) <= PAD_RADIUS
+    fn under(&self, x: f32, z: f32, width: f32) -> bool {
+        let stance = BodyProfile::new(width).radius;
+        (self.x - x).hypot(self.z - z) <= PAD_RADIUS + (stance - 1.0) * 0.8
     }
 }
 
@@ -141,7 +150,7 @@ impl RisingWater {
                 .enumerate()
                 .map(|(index, one)| Climber {
                     seat: one.seat,
-                    run: Runner::at(spread[index].0, spread[index].1),
+                    run: Runner::at(spread[index].0, spread[index].1).with_width(one.body_width),
                     y: 0.0,
                     vy: 0.0,
                     footing: Footing::Floor,
@@ -165,12 +174,12 @@ impl RisingWater {
     }
 
     /// The highest platform caught by someone dropping from `from` to `to`.
-    fn landing(&self, x: f32, z: f32, from: f32, to: f32) -> Option<usize> {
+    fn landing(&self, x: f32, z: f32, width: f32, from: f32, to: f32) -> Option<usize> {
         self.pads
             .iter()
             .enumerate()
             .filter(|(_, pad)| {
-                pad.standable() && pad.under(x, z) && pad.y <= from + 0.05 && pad.y >= to
+                pad.standable() && pad.under(x, z, width) && pad.y <= from + 0.05 && pad.y >= to
             })
             .max_by(|a, b| a.1.y.total_cmp(&b.1.y))
             .map(|(index, _)| index)
@@ -182,19 +191,19 @@ impl RisingWater {
         ground::hold_inside(&mut climber.run, self.radius);
 
         if let Footing::Pad(pad) = climber.footing
-            && !(self.pads[pad].standable() && self.pads[pad].under(climber.run.x, climber.run.z))
+            && !(self.pads[pad].standable() && self.pads[pad].under(climber.run.x, climber.run.z, climber.run.width))
         {
             climber.footing = Footing::Air;
         }
         if (input.jump || input.fire) && climber.footing != Footing::Air {
             climber.footing = Footing::Air;
-            climber.vy = JUMP_SPEED;
+            climber.vy = jump_speed(climber.run.width);
         }
         if climber.footing == Footing::Air {
             climber.vy -= GRAVITY * dt;
             let next = climber.y + climber.vy * dt;
             let caught = if climber.vy <= 0.0 {
-                self.landing(climber.run.x, climber.run.z, climber.y, next)
+                self.landing(climber.run.x, climber.run.z, climber.run.width, climber.y, next)
             } else {
                 None
             };
@@ -215,24 +224,28 @@ impl RisingWater {
 
     /// Players only push each other about when they are at the same height.
     fn separate(&mut self) {
-        let reach = ground::RUNNER_RADIUS * 2.0;
         for i in 0..self.players.len() {
             for j in (i + 1)..self.players.len() {
                 let (a, b) = (&self.players[i], &self.players[j]);
                 if !a.up() || !b.up() || (a.y - b.y).abs() > PLAYER_HEIGHT {
                     continue;
                 }
+                let a_body = BodyProfile::new(a.run.width);
+                let b_body = BodyProfile::new(b.run.width);
+                let reach = ground::RUNNER_RADIUS * (a_body.radius + b_body.radius);
                 let (dx, dz) = (b.run.x - a.run.x, b.run.z - a.run.z);
                 let apart = dx.hypot(dz);
                 if apart >= reach || apart < 1e-4 {
                     continue;
                 }
-                let push = (reach - apart) / 2.0;
+                let push = reach - apart;
                 let (nx, nz) = (dx / apart, dz / apart);
-                self.players[i].run.x -= nx * push;
-                self.players[i].run.z -= nz * push;
-                self.players[j].run.x += nx * push;
-                self.players[j].run.z += nz * push;
+                let a_share = b_body.mass / (a_body.mass + b_body.mass);
+                let b_share = a_body.mass / (a_body.mass + b_body.mass);
+                self.players[i].run.x -= nx * push * a_share;
+                self.players[i].run.z -= nz * push * a_share;
+                self.players[j].run.x += nx * push * b_share;
+                self.players[j].run.z += nz * push * b_share;
             }
         }
     }
@@ -240,11 +253,15 @@ impl RisingWater {
     fn wear_pads(&mut self, dt: f32, events: &mut Vec<Value>) {
         for climber in self.players.iter().filter(|climber| climber.up()) {
             if let Footing::Pad(index) = climber.footing
-                && self.pads[index].state == PadState::Solid
             {
-                self.pads[index].state = PadState::Crumbling;
-                self.pads[index].timer = CRUMBLE_SECONDS;
-                events.push(json!({ "kind": "crack", "seat": climber.seat, "pad": index }));
+                let lifetime = pad_lifetime(climber.run.width);
+                if self.pads[index].state == PadState::Solid {
+                    self.pads[index].state = PadState::Crumbling;
+                    self.pads[index].timer = lifetime;
+                    events.push(json!({ "kind": "crack", "seat": climber.seat, "pad": index }));
+                } else if self.pads[index].state == PadState::Crumbling {
+                    self.pads[index].timer = self.pads[index].timer.min(lifetime);
+                }
             }
         }
         for (index, pad) in self.pads.iter_mut().enumerate() {
@@ -496,6 +513,7 @@ impl Bout for RisingWater {
             "water": round(self.water),
             "players": self.players.iter().map(|climber| json!({
                 "seat": climber.seat,
+                "body_width": climber.run.width,
                 "x": round(climber.run.x),
                 "y": round(climber.y),
                 "z": round(climber.run.z),
@@ -541,5 +559,55 @@ mod tests {
         let setup = eight.setup();
         assert_eq!(setup["radius"], json!(eight.radius), "and the client is told");
         assert_eq!(setup["pads"].as_array().map(|pads| pads.len()), Some(eight.pads.len()));
+    }
+    #[test]
+    fn build_size_changes_jump_footing_pad_wear_and_shoves() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = RisingWater::new(&[small, broad], 4);
+        assert!(jump_speed(0.7) > jump_speed(1.4));
+        assert!(pad_lifetime(0.7) > pad_lifetime(1.4));
+        let pad = &game.pads[0];
+        assert!(!pad.under(pad.x + 1.75, pad.z, 0.7));
+        assert!(pad.under(pad.x + 1.75, pad.z, 1.4));
+
+        game.players[0].run.x = 0.0;
+        game.players[0].run.z = 0.0;
+        game.players[1].run.x = 0.5;
+        game.players[1].run.z = 0.0;
+        game.separate();
+        assert!(game.players[0].run.x.abs() > game.players[1].run.x - 0.5);
+
+        game.players[0].footing = Footing::Pad(0);
+        game.players[1].footing = Footing::Pad(1);
+        game.wear_pads(0.0, &mut Vec::new());
+        assert!(game.pads[0].timer > game.pads[1].timer);
+        assert!((game.snapshot()["players"][1]["body_width"].as_f64().unwrap() - 1.4).abs() < 0.001);
+    }
+    #[test]
+    #[ignore = "manual body build balance audit"]
+    fn body_build_balance_audit() {
+        let mut wins = [0u32; 2];
+        let mut ties = 0u32;
+        for seed in 0..24 {
+            let broad_seat = (seed % 2) as usize;
+            let mut contestants = [Contestant::bot(0, 0.7), Contestant::bot(1, 0.7)];
+            contestants[broad_seat].body_width = 1.4;
+            contestants[1 - broad_seat].body_width = 0.7;
+            let mut game = RisingWater::new(&contestants, seed);
+            let mut events = Vec::new();
+            for _ in 0..(ROUND_SECONDS as usize * 60 + 2) {
+                let inputs = contestants.iter().map(|c|
+                    (c.seat, game.bot_input(c.seat, 1.0 / 60.0))).collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut events);
+                if game.placements().is_some() { break; }
+            }
+            let first = &game.placements().unwrap()[0];
+            if first.len() == 2 { ties += 1; }
+            else { wins[usize::from(first[0] != broad_seat as u8)] += 1; }
+        }
+        println!("Rising Water broad wins={} small wins={} ties={ties}", wins[0], wins[1]);
     }
 }

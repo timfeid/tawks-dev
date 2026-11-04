@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "prismforge";
 pub const LIMIT: f32 = 63.0;
@@ -13,9 +13,22 @@ pub const ARRIVAL: f32 = 2.1;
 pub const CHUTES: usize = 3;
 const MOVE_DELAY: f32 = 0.19;
 
+fn move_delay(width: f32) -> f32 {
+    MOVE_DELAY / BodyProfile::new(width).speed
+}
+
+fn catch_window(width: f32) -> f32 {
+    0.5 * BodyProfile::new(width).radius
+}
+
+fn precision_window(width: f32, base: f32) -> f32 {
+    base / BodyProfile::new(width).radius
+}
+
 #[derive(Clone)]
 pub struct Sorter {
     pub seat: u8,
+    pub body_width: f32,
     pub lane: u8,
     pub score: i32,
     pub caught: u32,
@@ -51,6 +64,7 @@ impl ParcelPanic {
             .iter()
             .map(|c| Sorter {
                 seat: c.seat,
+                body_width: BodyProfile::new(c.body_width).width,
                 lane: (c.seat % CHUTES as u8),
                 score: 0,
                 caught: 0,
@@ -151,16 +165,17 @@ impl Bout for ParcelPanic {
                 {
                     p.lane =
                         (p.lane as i8 + if input.stick.x > 0. { 1 } else { -1 }).clamp(0, 2) as u8;
-                    p.move_at = self.time + MOVE_DELAY;
+                    p.move_at = self.time + move_delay(p.body_width);
                 }
                 if input.fire && !p.answered && age >= 0.55 && age <= 2.75 {
                     p.answered = true;
                     let distance = (age - ARRIVAL).abs();
-                    let points = if p.lane != self.chute || distance > 0.5 {
+                    let window = catch_window(p.body_width);
+                    let points = if p.lane != self.chute || distance > window {
                         -1
-                    } else if distance <= 0.14 {
+                    } else if distance <= precision_window(p.body_width, 0.14) {
                         5
-                    } else if distance <= 0.31 {
+                    } else if distance <= precision_window(p.body_width, 0.31) {
                         3
                     } else {
                         1
@@ -209,7 +224,9 @@ impl Bout for ParcelPanic {
             "chute":self.chute,"style":self.style,"age":self.time-self.parcel as f32*DELIVERY,
             "arrival":ARRIVAL,"players":self.sorters.iter().map(|p|json!({"seat":p.seat,"lane":p.lane,
                 "score":p.score,"caught":p.caught,"misses":p.misses,"last_points":p.last_points,
-                "answered":p.answered,"gone":p.gone})).collect::<Vec<_>>()})
+                "answered":p.answered,"gone":p.gone,"body_width":p.body_width,
+                "move_delay":move_delay(p.body_width),"catch_window":catch_window(p.body_width),
+                "perfect_window":precision_window(p.body_width,0.14)})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.places.clone()
@@ -224,6 +241,51 @@ mod tests {
     }
     fn at_lane(game: &mut ParcelPanic, seat: u8, lane: u8) {
         game.sorters[seat as usize].lane = lane;
+    }
+
+    #[test]
+    fn body_width_trades_slide_speed_for_catch_reach() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = ParcelPanic::new(&[small, broad], 3);
+        assert!(move_delay(game.sorters[0].body_width) < move_delay(game.sorters[1].body_width));
+        assert!(
+            catch_window(game.sorters[0].body_width) < catch_window(game.sorters[1].body_width)
+        );
+        let chute = game.chute;
+        at_lane(&mut game, 0, chute);
+        at_lane(&mut game, 1, chute);
+        game.time = ARRIVAL + 0.48 - 0.01;
+        game.step(
+            &[
+                (
+                    0,
+                    Input {
+                        fire: true,
+                        ..Default::default()
+                    },
+                ),
+                (
+                    1,
+                    Input {
+                        fire: true,
+                        ..Default::default()
+                    },
+                ),
+            ],
+            0.01,
+            &mut Vec::new(),
+        );
+        assert_eq!(game.sorters[0].score, -1);
+        assert_eq!(game.sorters[1].score, 1);
+        assert_eq!(
+            game.snapshot()["players"][0]["body_width"]
+                .as_f64()
+                .unwrap() as f32,
+            0.7
+        );
     }
 
     #[test]
@@ -338,6 +400,43 @@ mod tests {
             low += game.sorters[1].score;
         }
         assert!(top > low + 30, "top {top} low {low}");
+    }
+
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0i32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = ParcelPanic::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.sorters {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.sorters.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Prism Foundry mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 400);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 20);
     }
 
     #[test]

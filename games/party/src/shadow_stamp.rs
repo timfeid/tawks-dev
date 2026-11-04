@@ -1,5 +1,5 @@
 //! Move a projected shadow tip onto drifting seals, then stamp to score.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
@@ -16,12 +16,10 @@ const LEAVE_AFTER: f32 = 4.0;
 fn lamp_angle(seed: u64, time: f32) -> f32 {
     seed as f32 * 0.41 + time * 0.47
 }
-fn shadow_tip(x: f32, z: f32, seed: u64, time: f32) -> (f32, f32) {
+fn shadow_tip(x: f32, z: f32, seed: u64, time: f32, width: f32) -> (f32, f32) {
     let angle = lamp_angle(seed, time);
-    (
-        x + angle.sin() * SHADOW_LENGTH,
-        z + angle.cos() * SHADOW_LENGTH,
-    )
+    let length = SHADOW_LENGTH * BodyProfile::new(width).radius;
+    (x + angle.sin() * length, z + angle.cos() * length)
 }
 fn seal_pos(id: usize, time: f32) -> (f32, f32) {
     let angle = TAU * id as f32 / SEALS as f32 + time * (0.20 + id as f32 * 0.035);
@@ -33,6 +31,7 @@ fn seal_pos(id: usize, time: f32) -> (f32, f32) {
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     yaw: f32,
@@ -63,6 +62,7 @@ impl ShadowStamp {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0., 1.),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x: angle.sin() * 7.5,
                     z: angle.cos() * 7.5,
                     yaw: angle,
@@ -132,6 +132,7 @@ impl Bout for ShadowStamp {
             if p.left {
                 continue;
             }
+            let body = BodyProfile::new(p.body_width);
             let Some(input) = inputs
                 .iter()
                 .find(|(seat, _)| *seat == p.seat)
@@ -147,11 +148,12 @@ impl Bout for ShadowStamp {
             p.missing = 0.;
             p.cooldown = (p.cooldown - dt).max(0.);
             let stick = input.stick.clamped();
-            p.x += stick.x * SPEED * dt;
-            p.z += stick.z * SPEED * dt;
+            p.x += stick.x * SPEED * body.speed * dt;
+            p.z += stick.z * SPEED * body.speed * dt;
             let distance = p.x.hypot(p.z);
-            if distance > RADIUS - 0.45 {
-                let scale = (RADIUS - 0.45) / distance;
+            let edge = RADIUS - 0.45 * body.radius;
+            if distance > edge {
+                let scale = edge / distance;
                 p.x *= scale;
                 p.z *= scale;
             }
@@ -160,14 +162,14 @@ impl Bout for ShadowStamp {
             }
             let fire = input.fire || input.jump;
             if fire && !p.held && p.cooldown == 0. {
-                let (tip_x, tip_z) = shadow_tip(p.x, p.z, self.seed, self.time);
+                let (tip_x, tip_z) = shadow_tip(p.x, p.z, self.seed, self.time, p.body_width);
                 let hit = (0..SEALS)
                     .filter(|id| p.seal_ready[*id] <= self.time)
                     .map(|id| {
                         let (sx, sz) = seal_pos(id, self.time);
                         (id, (tip_x - sx).hypot(tip_z - sz))
                     })
-                    .filter(|(_, distance)| *distance <= HIT_RADIUS)
+                    .filter(|(_, distance)| *distance <= HIT_RADIUS * body.radius)
                     .min_by(|a, b| a.1.total_cmp(&b.1));
                 if let Some((id, distance)) = hit {
                     let perfect = distance <= PERFECT_RADIUS;
@@ -176,7 +178,7 @@ impl Bout for ShadowStamp {
                     if perfect {
                         p.perfects += 1;
                     }
-                    p.cooldown = 0.35;
+                    p.cooldown = 0.35 * body.mass;
                     p.seal_ready[id] = self.time + 2.5;
                     events.push(
                         json!({"kind":"shadow_stamp","seat":p.seat,"seal":id,"perfect":perfect}),
@@ -194,7 +196,8 @@ impl Bout for ShadowStamp {
             return Input::default();
         };
         let angle = lamp_angle(self.seed, self.time);
-        let offset = (angle.sin() * SHADOW_LENGTH, angle.cos() * SHADOW_LENGTH);
+        let length = SHADOW_LENGTH * BodyProfile::new(p.body_width).radius;
+        let offset = (angle.sin() * length, angle.cos() * length);
         let target = (0..SEALS)
             .filter(|id| p.seal_ready[*id] <= self.time)
             .map(|id| {
@@ -219,9 +222,12 @@ impl Bout for ShadowStamp {
             (0., 0.)
         };
         let (sx, sz) = seal_pos(id, self.time);
-        let (tip_x, tip_z) = shadow_tip(p.x, p.z, self.seed, self.time);
+        let (tip_x, tip_z) = shadow_tip(p.x, p.z, self.seed, self.time, p.body_width);
         let error = (tip_x - sx).hypot(tip_z - sz);
-        let fire = error <= HIT_RADIUS * (0.74 + p.skill * 0.18) && !p.held && p.cooldown == 0.;
+        let fire = error
+            <= HIT_RADIUS * BodyProfile::new(p.body_width).radius * (0.74 + p.skill * 0.18)
+            && !p.held
+            && p.cooldown == 0.;
         Input {
             stick: Stick { x, z },
             fire,
@@ -233,9 +239,9 @@ impl Bout for ShadowStamp {
             "lamp_angle":lamp_angle(self.seed,self.time),
             "seals":(0..SEALS).map(|id|{let (x,z)=seal_pos(id,self.time);
                 json!({"id":id,"x":x,"z":z})}).collect::<Vec<_>>(),
-            "players":self.players.iter().map(|p|{let (tip_x,tip_z)=shadow_tip(p.x,p.z,self.seed,self.time);
+            "players":self.players.iter().map(|p|{let (tip_x,tip_z)=shadow_tip(p.x,p.z,self.seed,self.time,p.body_width);
                 json!({"seat":p.seat,"x":p.x,"z":p.z,"yaw":p.yaw,"tip":{"x":tip_x,"z":tip_z},
-                    "points":p.points,"stamps":p.stamps,"perfects":p.perfects,"ready":p.seal_ready,"left":p.left})}).collect::<Vec<_>>()})
+                    "points":p.points,"stamps":p.stamps,"perfects":p.perfects,"ready":p.seal_ready,"left":p.left,"body_width":p.body_width})}).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placed.clone()
@@ -249,12 +255,72 @@ mod tests {
         (0..4).map(|seat| Contestant::bot(seat, 0.5)).collect()
     }
     #[test]
+    fn size_changes_speed_shadow_length_and_stamping_width() {
+        let mut contestants = [Contestant::person(0), Contestant::person(1)];
+        contestants[0].body_width = 0.7;
+        contestants[1].body_width = 1.4;
+        let mut movement = ShadowStamp::new(&contestants, 1);
+        for p in &mut movement.players {
+            p.x = 0.0;
+            p.z = 0.0;
+        }
+        let right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        movement.step(&[(0, right), (1, right)], 0.1, &mut vec![]);
+        assert!(movement.players[0].x > movement.players[1].x);
+        let light_tip = shadow_tip(0.0, 0.0, 1, 0.0, 0.7);
+        let broad_tip = shadow_tip(0.0, 0.0, 1, 0.0, 1.4);
+        assert!(broad_tip.0.hypot(broad_tip.1) > light_tip.0.hypot(light_tip.1));
+
+        let mut reach = ShadowStamp::new(&contestants, 1);
+        let (sx, sz) = seal_pos(0, 0.0);
+        for p in &mut reach.players {
+            let tip = shadow_tip(0.0, 0.0, 1, 0.0, p.body_width);
+            p.x = sx - tip.0 + 0.8;
+            p.z = sz - tip.1;
+        }
+        let stamp = Input {
+            fire: true,
+            ..Default::default()
+        };
+        reach.step(&[(0, stamp), (1, stamp)], 0.0, &mut vec![]);
+        assert_eq!(reach.players[0].points, 0);
+        assert_eq!(reach.players[1].points, 1);
+    }
+    #[test]
+    fn mixed_size_bots_all_find_seals() {
+        let contestants = [0.7, 0.9, 1.2, 1.4]
+            .iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.6);
+                c.body_width = *width;
+                c
+            })
+            .collect::<Vec<_>>();
+        let mut scores = [0u32; 4];
+        for seed in 0..8 {
+            let mut game = ShadowStamp::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut vec![]);
+            }
+            for p in &game.players {
+                scores[p.seat as usize] += p.points;
+            }
+        }
+        assert!(scores.iter().all(|score| *score > 0), "scores={scores:?}");
+    }
+    #[test]
     fn stamp_needs_the_projected_tip_on_a_live_seal() {
         let mut g = ShadowStamp::new(&seats(), 1);
         let (sx, sz) = seal_pos(0, 0.);
         let angle = lamp_angle(g.seed, 0.);
-        g.players[0].x = sx - angle.sin() * SHADOW_LENGTH;
-        g.players[0].z = sz - angle.cos() * SHADOW_LENGTH;
+        let length = SHADOW_LENGTH * BodyProfile::new(g.players[0].body_width).radius;
+        g.players[0].x = sx - angle.sin() * length;
+        g.players[0].z = sz - angle.cos() * length;
         let mut events = Vec::new();
         g.step(
             &[(

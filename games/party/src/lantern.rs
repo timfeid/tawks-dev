@@ -2,7 +2,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 
 pub const KEY: &str = "lantern";
 pub const LIMIT: f32 = 65.0;
@@ -11,9 +11,24 @@ const SPEED: f32 = 6.2;
 const SPARKS: usize = 5;
 const CAPACITY: u8 = 3;
 
+fn pickup_radius(width: f32) -> f32 {
+    let body = BodyProfile::new(width);
+    0.9 * body.radius * body.mass
+}
+
+fn bank_radius(width: f32) -> f32 {
+    2.0 * BodyProfile::new(width).reach
+}
+
+fn carry_speed(width: f32, carried: u8) -> f32 {
+    let body = BodyProfile::new(width);
+    SPEED * body.speed * (1.0 - f32::from(carried) * 0.045 / body.mass)
+}
+
 #[derive(Clone, Debug)]
 struct Runner {
     seat: u8,
+    width: f32,
     x: f32,
     z: f32,
     carried: u8,
@@ -58,6 +73,7 @@ impl LanternRun {
                 let a = i as f32 * std::f32::consts::TAU / contestants.len().max(1) as f32;
                 Runner {
                     seat: c.seat,
+                    width: BodyProfile::new(c.body_width).width,
                     x: a.cos() * 2.8,
                     z: a.sin() * 2.8,
                     carried: 0,
@@ -195,6 +211,90 @@ mod tests {
     }
 
     #[test]
+    fn small_build_runs_faster_and_broad_build_collects_farther() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = LanternRun::new(&[small, broad], 8);
+        for spark in &mut game.sparks {
+            spark.dormant = 10.0;
+        }
+        game.players[0].x = 0.0;
+        game.players[1].x = 0.0;
+        game.players[0].z = 0.0;
+        game.players[1].z = 0.0;
+        for _ in 0..10 {
+            game.step(
+                &[
+                    (0, Input::from_stick(Stick { x: 1.0, z: 0.0 })),
+                    (1, Input::from_stick(Stick { x: 1.0, z: 0.0 })),
+                ],
+                0.05,
+                &mut vec![],
+            );
+        }
+        assert!(game.players[0].x > game.players[1].x);
+        assert!(bank_radius(1.4) > bank_radius(0.7));
+        assert!(
+            carry_speed(0.7, 0) - carry_speed(0.7, CAPACITY)
+                > carry_speed(1.4, 0) - carry_speed(1.4, CAPACITY)
+        );
+        game.players[0].x = 0.88;
+        game.players[1].x = 0.94;
+        game.players[0].z = 0.0;
+        game.players[1].z = 0.0;
+        game.sparks[0].angle = 0.0;
+        game.sparks[0].radius = 0.0;
+        game.sparks[0].dormant = 0.0;
+        game.step(&[], 0.0, &mut vec![]);
+        assert_eq!(game.players[0].carried, 0);
+        assert_eq!(game.players[1].carried, 1);
+    }
+
+    #[test]
+    fn mixed_builds_all_have_scoring_routes() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut points = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128 {
+            let seats = (0..4)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.4);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = LanternRun::new(&seats, seed);
+            for _ in 0..(LIMIT / TICK_DT) as usize + 2 {
+                let inputs = seats
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, TICK_DT)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, TICK_DT, &mut vec![]);
+            }
+            for player in &game.players {
+                let index = widths
+                    .iter()
+                    .position(|width| *width == player.width)
+                    .unwrap();
+                points[index] += player.score;
+            }
+            for seat in &game.placements().unwrap()[0] {
+                let player = game.players.iter().find(|p| p.seat == *seat).unwrap();
+                let index = widths
+                    .iter()
+                    .position(|width| *width == player.width)
+                    .unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("spark courier points by build: {points:?}, wins: {wins:?}");
+        assert!(points.iter().all(|score| *score > 0));
+        assert!(points.iter().max().unwrap() < &(points.iter().min().unwrap() * 5 / 4));
+    }
+
+    #[test]
     #[ignore]
     fn seeded_bot_balance_report() {
         let mut wins = [0u32; 4];
@@ -228,7 +328,7 @@ impl Bout for LanternRun {
 
     fn setup(&self) -> Value {
         json!({"game":KEY,"radius":ARENA,
-        "rule":"Steer through drifting sparks. Carry up to three to the middle and press Space or A to bank them."})
+        "rule":"Steer through drifting sparks. Carry up to three to the middle and press Space or A to bank them. Small builds run faster; broad builds collect from farther away."})
     }
 
     fn step(&mut self, inputs: &[(u8, Input)], dt: f32, events: &mut Vec<Value>) {
@@ -248,14 +348,15 @@ impl Bout for LanternRun {
                 .map(|(_, input)| *input)
                 .unwrap_or_default();
             let stick = input.stick.clamped();
-            p.x += stick.x * SPEED * dt;
-            p.z += stick.z * SPEED * dt;
+            p.x += stick.x * carry_speed(p.width, p.carried) * dt;
+            p.z += stick.z * carry_speed(p.width, p.carried) * dt;
             let length = p.x.hypot(p.z);
-            if length > ARENA - 0.6 {
-                p.x *= (ARENA - 0.6) / length;
-                p.z *= (ARENA - 0.6) / length;
+            let edge = ARENA - 0.6 * BodyProfile::new(p.width).radius;
+            if length > edge {
+                p.x *= edge / length;
+                p.z *= edge / length;
             }
-            if input.fire && p.carried > 0 && p.x.hypot(p.z) < 2.0 {
+            if input.fire && p.carried > 0 && p.x.hypot(p.z) < bank_radius(p.width) {
                 let gained = p.carried as u32 * p.carried as u32;
                 p.score += gained;
                 p.deposits += 1;
@@ -272,17 +373,17 @@ impl Bout for LanternRun {
                 .players
                 .iter()
                 .enumerate()
-                .filter(|(_, p)| p.carried < CAPACITY)
+                .filter(|(_, p)| {
+                    p.carried < CAPACITY && (p.x - x).hypot(p.z - z) < pickup_radius(p.width)
+                })
                 .map(|(i, p)| (i, (p.x - x).hypot(p.z - z)))
                 .min_by(|a, b| a.1.total_cmp(&b.1));
-            if let Some((index, distance)) = nearest {
-                if distance < 0.9 {
-                    let p = &mut self.players[index];
-                    p.carried += 1;
-                    p.pause = 0.15;
-                    events.push(json!({"kind":"spark","seat":p.seat,"carried":p.carried}));
-                    spark.dormant = self.rng.random_range(2.6..3.8);
-                }
+            if let Some((index, _)) = nearest {
+                let p = &mut self.players[index];
+                p.carried += 1;
+                p.pause = 0.15;
+                events.push(json!({"kind":"spark","seat":p.seat,"carried":p.carried}));
+                spark.dormant = self.rng.random_range(2.6..3.8);
             }
         }
         if self.time >= LIMIT {
@@ -295,7 +396,7 @@ impl Bout for LanternRun {
             return Input::default();
         };
         let skill = p.skill;
-        let (x, z, carried, pause) = (p.x, p.z, p.carried, p.pause);
+        let (x, z, carried, pause, width) = (p.x, p.z, p.carried, p.pause, p.width);
         if pause > 0. {
             return Input::default();
         }
@@ -330,14 +431,16 @@ impl Bout for LanternRun {
                 x: dx / len * (0.68 + skill * 0.32),
                 z: dz / len * (0.68 + skill * 0.32),
             },
-            fire: carried > 0 && x.hypot(z) < 1.7 && target == (0., 0.),
+            fire: carried > 0 && x.hypot(z) < bank_radius(width) - 0.25 && target == (0., 0.),
             ..Default::default()
         }
     }
 
     fn snapshot(&self) -> Value {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,
-        "players":self.players.iter().map(|p| json!({"seat":p.seat,"x":p.x,"z":p.z,"score":p.score,"carried":p.carried,"deposits":p.deposits})).collect::<Vec<_>>(),
+        "players":self.players.iter().map(|p| json!({"seat":p.seat,"x":p.x,"z":p.z,"score":p.score,"carried":p.carried,"deposits":p.deposits,"body_width":p.width,
+            "pickup_radius":pickup_radius(p.width),"bank_radius":bank_radius(p.width),
+            "move_speed":carry_speed(p.width,p.carried)})).collect::<Vec<_>>(),
         "sparks":self.sparks.iter().map(|s| { let (x,z)=s.at(self.time); json!({"x":x,"z":z,"live":s.dormant<=0.}) }).collect::<Vec<_>>() })
     }
 

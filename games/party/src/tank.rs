@@ -6,7 +6,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Contestant, Input, Bout, Skill, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill, Stick};
 
 pub const YARD_HALF: f32 = 21.0;
 pub const TANK_RADIUS: f32 = 1.05;
@@ -49,6 +49,7 @@ pub struct Shell {
 #[derive(Clone, Debug)]
 pub struct Tank {
     pub seat: u8,
+    pub body_width: f32,
     pub x: f32,
     pub z: f32,
     pub hull: f32,
@@ -62,6 +63,14 @@ pub struct Tank {
 impl Tank {
     pub fn rolling(&self) -> bool {
         self.wrecked_for <= 0.0
+    }
+
+    fn radius(&self) -> f32 {
+        TANK_RADIUS * BodyProfile::new(self.body_width).radius
+    }
+
+    fn reload_seconds(&self) -> f32 {
+        RELOAD_SECONDS / BodyProfile::new(self.body_width).mass
     }
 }
 
@@ -197,6 +206,7 @@ impl TankClash {
                 let (x, z) = places[i % places.len()];
                 Tank {
                     seat: c.seat,
+                    body_width: BodyProfile::new(c.body_width).width,
                     x,
                     z,
                     hull: x.atan2(z),
@@ -270,6 +280,7 @@ impl TankClash {
         let stick = input.stick.clamped();
         let push = (stick.x * stick.x + stick.z * stick.z).sqrt();
         let tank = &mut self.tanks[index];
+        let body = BodyProfile::new(tank.body_width);
         tank.turret = input.yaw;
         if push < 0.08 {
             return;
@@ -277,7 +288,7 @@ impl TankClash {
         // The hull swings around to the way you are pushing, then rolls.
         let want = stick.x.atan2(stick.z);
         let turn = wrap_angle(want - tank.hull);
-        let step = (HULL_TURN * dt).min(turn.abs());
+        let step = (HULL_TURN * body.speed * dt).min(turn.abs());
         tank.hull += step * turn.signum();
         let lined_up = wrap_angle(want - tank.hull).abs();
         let speed = if lined_up < 0.6 {
@@ -287,18 +298,20 @@ impl TankClash {
         } else {
             DRIVE_SPEED * 0.45
         };
+        let speed = speed * body.speed;
+        let radius = tank.radius();
         let (dx, dz) = (tank.hull.sin(), tank.hull.cos());
         let (here_x, here_z) = (tank.x, tank.z);
         let (nx, nz) = (
             here_x + dx * speed * push * dt,
             here_z + dz * speed * push * dt,
         );
-        let edge = self.half - TANK_RADIUS;
-        if !self.blocked(nx, here_z, TANK_RADIUS) && nx.abs() < edge {
+        let edge = self.half - radius;
+        if !self.blocked(nx, here_z, radius) && nx.abs() < edge {
             self.tanks[index].x = nx;
         }
         let settled_x = self.tanks[index].x;
-        if !self.blocked(settled_x, nz, TANK_RADIUS) && nz.abs() < edge {
+        if !self.blocked(settled_x, nz, radius) && nz.abs() < edge {
             self.tanks[index].z = nz;
         }
     }
@@ -319,8 +332,8 @@ impl TankClash {
         self.shells.push(Shell {
             id,
             by: seat,
-            x: tank.x + dx * (TANK_RADIUS + 0.5),
-            z: tank.z + dz * (TANK_RADIUS + 0.5),
+            x: tank.x + dx * (tank.radius() + 0.5),
+            z: tank.z + dz * (tank.radius() + 0.5),
             vx: dx * SHELL_SPEED,
             vz: dz * SHELL_SPEED,
             life: SHELL_LIFE,
@@ -328,7 +341,7 @@ impl TankClash {
             bounces: 0,
         });
         if let Some(tank) = self.tanks.iter_mut().find(|t| t.seat == seat) {
-            tank.reload = RELOAD_SECONDS;
+            tank.reload = tank.reload_seconds();
         }
         events.push(json!({ "kind": "shell", "seat": seat, "id": id, "x": tank.x, "z": tank.z }));
     }
@@ -400,8 +413,8 @@ impl TankClash {
             }
 
             let shell = self.shells[index].clone();
-            let reach = SHELL_RADIUS + TANK_RADIUS;
             if let Some(mark) = self.tanks.iter().find(|tank| {
+                let reach = SHELL_RADIUS + tank.radius();
                 tank.rolling()
                     && (tank.seat != shell.by || shell.age > OWN_SHELL_GRACE)
                     && (tank.seat == shell.by || !crate::bout::allied(self.allies.get(&shell.by).copied(), self.allies.get(&tank.seat).copied()))
@@ -613,6 +626,8 @@ impl Bout for TankClash {
             "limit": ROUND_SECONDS,
             "players": self.tanks.iter().map(|t| json!({
                 "seat": t.seat,
+                "body_width": t.body_width,
+                "radius": round(t.radius()),
                 "x": round(t.x),
                 "z": round(t.z),
                 "hull": round(t.hull),
@@ -667,6 +682,69 @@ mod tests {
             assert!(!eight.blocked(a.x, a.z, TANK_RADIUS));
             assert!(eight.tanks[i + 1..].iter().all(|b| (a.x - b.x).abs() + (a.z - b.z).abs() > 2.0));
         }
+    }
+    #[test]
+    fn small_hulls_drive_and_dodge_faster_while_broad_hulls_reload_sooner() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = TankClash::new(&[small, broad], 5);
+        game.crates.clear();
+        game.tanks[0].x = 0.0;
+        game.tanks[0].z = 0.0;
+        game.tanks[0].hull = 0.0;
+        game.tanks[1].x = 5.0;
+        game.tanks[1].z = 0.0;
+        game.tanks[1].hull = 0.0;
+        let forward = Input::from_stick(Stick { x: 0.0, z: 1.0 });
+        game.drive(0, forward, 0.1);
+        game.drive(1, forward, 0.1);
+        assert!(game.tanks[0].z > game.tanks[1].z);
+        assert!(game.tanks[0].radius() < game.tanks[1].radius());
+        game.fire(0, &mut Vec::new());
+        game.fire(1, &mut Vec::new());
+        assert!(game.tanks[0].reload > game.tanks[1].reload);
+
+        game.shells.clear();
+        game.tanks[0].x = 10.0;
+        game.tanks[0].z = 10.0;
+        game.tanks[1].x = 0.0;
+        game.tanks[1].z = 0.0;
+        let shell = Shell { id: 99, by: 0, x: 1.36, z: 0.0, vx: 0.0, vz: 0.0,
+            life: 1.0, age: 1.0, bounces: 0 };
+        game.shells.push(shell.clone());
+        game.step_shells(0.0, &mut Vec::new());
+        assert_eq!(game.tanks[1].deaths, 1);
+        game.tanks[1].wrecked_for = 0.0;
+        game.tanks[1].body_width = 0.7;
+        game.shells.push(shell);
+        game.step_shells(0.0, &mut Vec::new());
+        assert_eq!(game.tanks[1].deaths, 1);
+        assert_eq!(game.snapshot()["players"][1]["body_width"].as_f64().unwrap() as f32, 0.7);
+    }
+    #[test]
+    #[ignore = "manual body build balance audit"]
+    fn body_build_balance_audit() {
+        let mut wins = [0u32; 2];
+        let mut ties = 0u32;
+        for seed in 0..24 {
+            let broad_seat = (seed % 2) as usize;
+            let mut contestants = [Contestant::bot(0, 0.7), Contestant::bot(1, 0.7)];
+            contestants[broad_seat].body_width = 1.4;
+            contestants[1 - broad_seat].body_width = 0.7;
+            let mut game = TankClash::new(&contestants, seed);
+            let mut events = Vec::new();
+            for _ in 0..(ROUND_SECONDS as usize * 60 + 2) {
+                let inputs = contestants.iter().map(|c|
+                    (c.seat, game.bot_input(c.seat, 1.0 / 60.0))).collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut events);
+            }
+            let first = &game.placements().unwrap()[0];
+            if first.len() == 2 { ties += 1; }
+            else { wins[usize::from(first[0] != broad_seat as u8)] += 1; }
+        }
+        println!("Tank Clash broad wins={} small wins={} ties={ties}", wins[0], wins[1]);
     }
 }
 

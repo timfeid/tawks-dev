@@ -85,7 +85,7 @@ impl BombRelay {
             .iter()
             .map(|c| Relayer {
                 seat: c.seat,
-                run: Runner::at(0.0, 0.0),
+                run: Runner::at(0.0, 0.0).with_width(c.body_width),
                 out_at: None,
                 passes: 0,
             })
@@ -163,7 +163,8 @@ impl BombRelay {
         let count = self.players.len() as f32;
         let player = &mut self.players[index];
         let side = if player.playing() { 1.0 } else { -1.0 };
-        player.run = Runner::at(side * BENCH_X, (index as f32 - (count - 1.0) / 2.0) * 3.0);
+        player.run = Runner::at(side * BENCH_X, (index as f32 - (count - 1.0) / 2.0) * 3.0)
+            .with_width(player.run.width);
     }
 
     fn pen(&self) -> (f32, f32) {
@@ -174,7 +175,7 @@ impl BombRelay {
         self.receiver = self.next_after(from);
         let pen = self.pen();
         if let Some(index) = self.receiver.and_then(|seat| self.index(seat)) {
-            self.players[index].run = Runner::at(pen.0, pen.1);
+            self.players[index].run = Runner::at(pen.0, pen.1).with_width(self.players[index].run.width);
         }
     }
 
@@ -191,7 +192,8 @@ impl BombRelay {
             self.bench(index);
         }
         if let Some(index) = self.index(seat) {
-            self.players[index].run = Runner::at(0.0, -self.heading * PEN_Z);
+            self.players[index].run = Runner::at(0.0, -self.heading * PEN_Z)
+                .with_width(self.players[index].run.width);
         }
         self.holder = Some(seat);
         self.call_up(seat);

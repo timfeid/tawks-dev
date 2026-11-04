@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Contestant, Input, Bout, Skill};
+use crate::bout::{BodyProfile, Contestant, Input, Bout, Skill};
 
 pub const TRACK_HALF: f32 = 11.0;
 pub const START_Z: f32 = -38.0;
@@ -27,6 +27,7 @@ pub struct Racer {
     pub speed: f32,
     pub bounce: f32,
     pub finished_at: Option<f32>,
+    pub body_width: f32,
     pump_side: i8,
     last_pump: f32,
     boost_mask: u8,
@@ -74,6 +75,7 @@ impl RockerRally {
                 speed: 0.0,
                 bounce: 0.0,
                 finished_at: None,
+                body_width: contestant.body_width,
                 pump_side: 0,
                 last_pump: -10.0,
                 boost_mask: 0,
@@ -167,6 +169,8 @@ impl Bout for RockerRally {
                 continue;
             }
             let input = Self::input(inputs, racer.seat);
+            let body = BodyProfile::new(racer.body_width);
+            let top_speed = MAX_SPEED * body.speed;
             // Up and down, alternated, pump the racer; left and right steer it,
             // the same way round as on screen.
             let side = if input.stick.z > 0.45 {
@@ -183,7 +187,7 @@ impl Bout for RockerRally {
                 if racer.last_pump < 0.0 {
                     racer.last_pump = self.time;
                 } else if since >= MIN_PUMP_GAP && since <= MAX_PUMP_GAP {
-                    racer.speed = (racer.speed + PUMP_SPEED).min(MAX_SPEED);
+                    racer.speed = (racer.speed + PUMP_SPEED * body.mass).min(top_speed);
                     racer.bounce = 1.0;
                     racer.last_pump = self.time;
                     events.push(json!({ "kind": "pump", "seat": racer.seat, "side": side }));
@@ -197,22 +201,22 @@ impl Bout for RockerRally {
             if side != 0 {
                 racer.pump_side = side;
             }
-            racer.x = (racer.x + input.stick.x.clamp(-1.0, 1.0) * STEER_SPEED * dt)
-                .clamp(-half + 0.7, half - 0.7);
+            racer.x = (racer.x + input.stick.x.clamp(-1.0, 1.0) * STEER_SPEED * body.speed * dt)
+                .clamp(-half + 0.7 * body.radius, half - 0.7 * body.radius);
             for (index, &(x, z)) in self.boosts.iter().enumerate() {
                 if racer.boost_mask & (1 << index) == 0
                     && (racer.z - z).abs() < 0.75
-                    && (racer.x - x).abs() < 2.0
+                    && (racer.x - x).abs() < 2.0 * body.radius
                 {
                     racer.boost_mask |= 1 << index;
-                    racer.speed = (racer.speed + 4.2).min(MAX_SPEED + 2.0);
+                    racer.speed = (racer.speed + 4.2).min(top_speed + 2.0);
                     events.push(json!({ "kind": "boost", "seat": racer.seat, "x": x, "z": z }));
                 }
             }
             let muddy = self.mud.iter().any(|&(x, z, radius)| {
                 (racer.x - x).powi(2) + (racer.z - z).powi(2) < radius.powi(2)
             });
-            racer.speed *= (-(COAST_DRAG + if muddy { 3.2 } else { 0.0 }) * dt).exp();
+            racer.speed *= (-((COAST_DRAG * (2.0 - body.mass)) + if muddy { 3.2 } else { 0.0 }) * dt).exp();
             racer.z += racer.speed * dt;
             racer.bounce = (racer.bounce - dt * 4.0).max(0.0);
             if racer.z >= FINISH_Z {
@@ -281,6 +285,8 @@ mod tests {
                 skill: crate::bout::DEFAULT_SKILL,
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect()
     }

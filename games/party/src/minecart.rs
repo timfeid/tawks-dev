@@ -151,6 +151,7 @@ impl Course {
 #[derive(Clone, Debug)]
 pub struct Cart {
     pub seat: u8,
+    pub body_width: f32,
     pub leg: usize,
     /// The branch taken at the last junction, 0 left or 1 right.
     pub side: usize,
@@ -210,6 +211,7 @@ impl MinecartRush {
                 .iter()
                 .map(|one| Cart {
                     seat: one.seat,
+                    body_width: one.body_width,
                     leg: 0,
                     side: 0,
                     along: 0.0,
@@ -279,6 +281,7 @@ impl MinecartRush {
         let time = self.time;
         let course = &self.course;
         let cart = &mut self.carts[index];
+        let body = crate::bout::BodyProfile::new(cart.body_width);
         if !cart.rolling() {
             return;
         }
@@ -296,13 +299,13 @@ impl MinecartRush {
             MAX_SPEED * LOOSE
         } else {
             MAX_SPEED
-        };
+        } * body.speed;
         if input.stick.z > 0.5 {
             cart.speed = (cart.speed - BRAKE * dt).max(0.0);
         } else if cart.speed > top {
             cart.speed = (cart.speed - BRAKE * 0.5 * dt).max(top);
         } else {
-            cart.speed = (cart.speed + ACCEL * dt).min(top);
+            cart.speed = (cart.speed + ACCEL * body.acceleration * dt).min(top);
         }
         cart.along += cart.speed * dt;
         loop {
@@ -376,7 +379,7 @@ impl MinecartRush {
                         let cart = &mut self.carts[index];
                         cart.along = (cart.along - KNOCK).max(0.0);
                         cart.speed = 0.0;
-                        cart.stun = STUN;
+                        cart.stun = STUN * crate::bout::BodyProfile::new(cart.body_width).stun;
                         cart.grace = GRACE;
                         cart.crashes += 1;
                     }
@@ -542,5 +545,20 @@ mod tests {
         assert_eq!(eight.siding, SIDING * 2, "eight get the siding of two fours");
         assert!(eight.siding >= 8 - 1, "room for everyone still waiting");
         assert_eq!(eight.setup()["siding"], json!(eight.siding), "and the client is told");
+    }
+
+    #[test]
+    fn a_light_rider_accelerates_faster_but_takes_longer_to_recover() {
+        let mut narrow = Contestant::person(0);
+        narrow.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = MinecartRush::new(&[narrow, broad], 7);
+        for cart in &mut game.carts { cart.released_at = Some(0.0); }
+        game.ride(0, Input::default(), 0.1, &mut Vec::new());
+        game.ride(1, Input::default(), 0.1, &mut Vec::new());
+        assert!(game.carts[0].speed > game.carts[1].speed);
+        assert!(crate::bout::BodyProfile::new(game.carts[0].body_width).stun
+            > crate::bout::BodyProfile::new(game.carts[1].body_width).stun);
     }
 }

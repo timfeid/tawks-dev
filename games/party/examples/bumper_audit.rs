@@ -26,6 +26,8 @@ fn sample(games: u64, offset: u64, players: u8, top: f32, field: f32) {
                 skill: if seat == star { top } else { field },
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect();
         let mut game = BumperBalls::new(&on_form_scaled(&seats, seed, 1.), seed);

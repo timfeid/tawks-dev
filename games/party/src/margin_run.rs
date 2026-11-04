@@ -1,5 +1,5 @@
 //! Moving ink marks draw players through an unfolding page maze.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 
 pub const KEY: &str = "margin_run";
@@ -36,6 +36,7 @@ pub fn mark_position(section: usize, phase: f32, speed: f32, time: f32) -> (f32,
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     vx: f32,
@@ -85,6 +86,7 @@ impl MarginRun {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0.0, 1.0),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x,
                     z,
                     vx: 0.,
@@ -185,15 +187,18 @@ impl Bout for MarginRun {
                 continue;
             };
             p.missing = 0.;
+            let body = BodyProfile::new(p.body_width);
             let stick = input.stick.clamped();
-            p.vx = stick.x * SPEED;
-            p.vz = stick.z * SPEED;
+            let pace = 1. + (body.speed - 1.) * 0.1;
+            p.vx = stick.x * SPEED * pace;
+            p.vz = stick.z * SPEED * pace;
             let old_x = p.x;
-            let mut x = (p.x + p.vx * dt).clamp(-HALF_X, HALF_X);
-            let z = (p.z + p.vz * dt).clamp(-HALF_Z, HALF_Z);
+            let edge = (body.radius - 1.).max(0.) * 0.35;
+            let mut x = (p.x + p.vx * dt).clamp(-HALF_X + edge, HALF_X - edge);
+            let z = (p.z + p.vz * dt).clamp(-HALF_Z + edge, HALF_Z - edge);
             for (index, seam) in SEAMS.iter().enumerate() {
                 if (old_x < *seam && x >= *seam || old_x > *seam && x <= *seam)
-                    && (z - gap(index, self.time)).abs() > GAP_HALF
+                    && (z - gap(index, self.time)).abs() > GAP_HALF - (body.radius - 1.) * 0.25
                 {
                     x = if old_x < *seam {
                         *seam - 0.05
@@ -218,12 +223,19 @@ impl Bout for MarginRun {
                 .players
                 .iter()
                 .filter(|p| !p.left)
-                .map(|p| (p.x - x).hypot(p.z - z))
+                .filter_map(|p| {
+                    let distance = (p.x - x).hypot(p.z - z);
+                    (distance <= MARK_RADIUS + (BodyProfile::new(p.body_width).radius - 1.) * 0.5)
+                        .then_some(distance)
+                })
                 .fold(f32::INFINITY, f32::min);
-            if closest <= MARK_RADIUS {
+            if closest.is_finite() {
                 // Contacts in the same tick share a catch; seat iteration order cannot break a tie.
                 for player in self.players.iter_mut().filter(|p| !p.left) {
-                    if (player.x - x).hypot(player.z - z) > closest + 0.03 {
+                    let distance = (player.x - x).hypot(player.z - z);
+                    let reach =
+                        MARK_RADIUS + (BodyProfile::new(player.body_width).radius - 1.) * 0.5;
+                    if distance > reach || distance > closest + 0.03 {
                         continue;
                     }
                     player.score += 2;
@@ -295,7 +307,7 @@ impl Bout for MarginRun {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"done":self.placed.is_some(),
             "gaps":[gap(0,self.time),gap(1,self.time)],
             "marks":self.marks.iter().enumerate().map(|(i,m)|{let (x,z)=m.pos(self.time);json!({"id":i,"x":x,"z":z,"section":m.section,"phase":m.phase,"speed":m.speed})}).collect::<Vec<_>>(),
-            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.yaw,"score":p.score,"catches":p.catches,"left":p.left})).collect::<Vec<_>>()
+            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.yaw,"score":p.score,"catches":p.catches,"left":p.left,"body_width":p.body_width})).collect::<Vec<_>>()
         })
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
@@ -308,6 +320,61 @@ mod tests {
     use super::*;
     fn game() -> MarginRun {
         MarginRun::new(&[Contestant::person(0), Contestant::person(1)], 9)
+    }
+    #[test]
+    fn broad_build_catches_farther_while_light_build_runs_faster() {
+        let mut seats = [Contestant::person(0), Contestant::person(1)];
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut game = MarginRun::new(&seats, 9);
+        let (x, z) = game.marks[0].pos(0.);
+        for p in &mut game.players {
+            p.x = x + 0.85;
+            p.z = z;
+        }
+        game.step(
+            &[(0, Input::default()), (1, Input::default())],
+            1. / 60.,
+            &mut vec![],
+        );
+        assert_eq!(game.players[0].catches, 0);
+        assert_eq!(game.players[1].catches, 1);
+        for p in &mut game.players {
+            p.x = 0.;
+            p.z = 0.;
+        }
+        let right = Input::from_stick(Stick { x: 1., z: 0. });
+        game.step(&[(0, right), (1, right)], 0.1, &mut vec![]);
+        assert!(game.players[0].x > game.players[1].x);
+    }
+    #[test]
+    fn mixed_size_bots_all_find_ink() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        for seed in 0..160 {
+            let seats = (0..4)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.6);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = MarginRun::new(&seats, seed);
+            while game.placements().is_none() {
+                let inputs = seats
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1. / 60.)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1. / 60., &mut vec![]);
+            }
+            for p in &game.players {
+                scores[(p.seat as usize + seed as usize) % 4] += p.score;
+            }
+        }
+        let least = *scores.iter().min().unwrap();
+        let most = *scores.iter().max().unwrap();
+        println!("Margin Run mixed-size scores: {scores:?}");
+        assert!(least > 0 && most < least * 2, "scores={scores:?}");
     }
     #[test]
     fn folds_block_except_at_the_moving_gap() {

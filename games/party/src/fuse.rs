@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Press, Skill};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Press, Skill};
 
 pub const KEY: &str = "fuse";
 pub const FUSES: u32 = 5;
@@ -33,6 +33,14 @@ pub const PAY_RAMP: f32 = 5.0;
 pub const LIMIT: f32 = 110.0;
 pub const TABLE_RADIUS: f32 = 2.6;
 pub const SEAT_RADIUS: f32 = 3.7;
+
+pub fn swat_window(width: f32) -> f32 {
+    SWAT_WINDOW * BodyProfile::new(width).reach.powi(4)
+}
+
+fn whiff_recovery(width: f32) -> f32 {
+    WHIFF_FLINCH / BodyProfile::new(width).speed.powi(3)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Ball {
@@ -79,6 +87,7 @@ impl Ball {
 #[derive(Clone, Debug)]
 pub struct Seat {
     pub seat: u8,
+    pub body_width: f32,
     pub angle: f32,
     pub x: f32,
     pub z: f32,
@@ -149,6 +158,7 @@ impl OvercookedFuse {
                     std::f32::consts::TAU * i as f32 / count as f32 + std::f32::consts::FRAC_PI_2;
                 Seat {
                     seat: c.seat,
+                    body_width: BodyProfile::new(c.body_width).width,
                     angle,
                     x: angle.cos() * radius,
                     z: angle.sin() * radius,
@@ -427,7 +437,7 @@ impl OvercookedFuse {
                 to,
                 t,
                 swatted: false,
-            } if to == seat && t >= FLIGHT - SWAT_WINDOW => {
+            } if to == seat && t >= FLIGHT - swat_window(self.seats[i].body_width) => {
                 self.ball = Ball::Flight {
                     from: seat,
                     to: from,
@@ -439,7 +449,7 @@ impl OvercookedFuse {
                 events.push(json!({ "kind": "swat", "seat": seat, "to": from }));
             }
             _ => {
-                self.seats[i].flinch = WHIFF_FLINCH;
+                self.seats[i].flinch = whiff_recovery(self.seats[i].body_width);
                 events.push(json!({ "kind": "whiff", "seat": seat }));
             }
         }
@@ -718,7 +728,7 @@ impl Bout for OvercookedFuse {
         let scale = self.table_scale();
         json!({
             "game": KEY,
-            "rule": "Hold the lit cannonball to earn. Pass before it blows or lose what you earned this fuse.",
+            "rule": "Hold the lit cannonball to earn. Pass before it blows. Broad builds have a wider swat window; small builds recover faster from a miss.",
             "radius": SEAT_RADIUS * scale + 3.0,
             "table_radius": TABLE_RADIUS * scale,
             "seat_radius": SEAT_RADIUS * scale,
@@ -789,6 +799,9 @@ impl Bout for OvercookedFuse {
         let skill = self.mind_skill(seat);
         let spark = self.spark();
         let throw_id = self.throw_id;
+        let seat_swat_window = self
+            .seat(seat)
+            .map_or(SWAT_WINDOW, |s| swat_window(s.body_width));
         let mut input = Input::default();
         {
             let Some(mind) = self.minds.get_mut(&seat) else {
@@ -823,7 +836,8 @@ impl Bout for OvercookedFuse {
                     if let Some(mind) = self.minds.get_mut(&seat) {
                         mind.swat_for = Some(throw_id);
                         if commit {
-                            mind.swat_in = Some((WINDUP - t) + FLIGHT - SWAT_WINDOW * 0.5 + noise);
+                            mind.swat_in =
+                                Some((WINDUP - t) + FLIGHT - seat_swat_window * 0.5 + noise);
                         }
                     }
                 }
@@ -841,7 +855,8 @@ impl Bout for OvercookedFuse {
                     if let Some(mind) = self.minds.get_mut(&seat) {
                         mind.swat_for = Some(throw_id);
                         if commit && mind.swat_in.is_none() {
-                            mind.swat_in = Some((FLIGHT - SWAT_WINDOW * 0.5 - t + noise).max(0.0));
+                            mind.swat_in =
+                                Some((FLIGHT - seat_swat_window * 0.5 - t + noise).max(0.0));
                         }
                     }
                 }
@@ -898,6 +913,7 @@ impl Bout for OvercookedFuse {
                 };
                 json!({
                     "seat": s.seat,
+                    "body_width": s.body_width,
                     "x": round(s.x),
                     "z": round(s.z),
                     "yaw": round(facing),
@@ -923,6 +939,40 @@ impl Bout for OvercookedFuse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn broad_seat_swats_earlier_and_small_seat_recovers_from_a_whiff_sooner() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = OvercookedFuse::new(&[small, broad], 3);
+        let mut events = Vec::new();
+        game.ball = Ball::Flight {
+            from: 0,
+            to: 1,
+            t: FLIGHT - 0.19,
+            swatted: false,
+        };
+        game.try_swat(1, &mut events);
+        assert_eq!(game.seat(1).unwrap().swats, 1);
+        assert!(events.iter().any(|e| e["kind"] == "swat"));
+
+        game.ball = Ball::Flight {
+            from: 1,
+            to: 0,
+            t: FLIGHT - 0.19,
+            swatted: false,
+        };
+        game.try_swat(0, &mut events);
+        assert_eq!(game.seat(0).unwrap().swats, 0);
+        let small_recovery = game.seat(0).unwrap().flinch;
+        game.ball = Ball::Out;
+        game.try_swat(1, &mut events);
+        assert!(small_recovery < game.seat(1).unwrap().flinch);
+        let width = game.snapshot()["players"][0]["body_width"].as_f64().unwrap();
+        assert!((width - 0.7).abs() < 1e-5);
+    }
     use crate::bout::{Contestant, TICK_DT};
 
     fn people(count: u8) -> Vec<Contestant> {
@@ -1368,6 +1418,23 @@ mod tests {
             share > 0.25,
             "a sharp bot should beat the 25% baseline, got {share}"
         );
+    }
+
+    #[test]
+    fn mixed_size_bots_both_win_over_rotated_seats() {
+        let mut wins = [0.0f32; 2];
+        for seed in 0..64 {
+            let mut field = bots(2, 0.5);
+            field[(seed as usize) % 2].body_width = 0.7;
+            field[(seed as usize + 1) % 2].body_width = 1.4;
+            let (game, _) = play(&field, seed);
+            let first = &game.placements().unwrap()[0];
+            for &seat in first {
+                let size = usize::from(field[seat as usize].body_width > 1.0);
+                wins[size] += 1.0 / first.len() as f32;
+            }
+        }
+        assert!(wins[0] >= 20.0 && wins[1] >= 20.0, "small/broad wins: {wins:?}");
     }
 
     #[test]

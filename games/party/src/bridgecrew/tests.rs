@@ -124,6 +124,73 @@ fn four_players_make_one_crew_a_side_and_odd_sides_get_stand_ins() {
 }
 
 #[test]
+fn crew_body_load_trades_gust_stability_for_weak_plank_time() {
+    let mut small = people(4);
+    let mut broad = people(4);
+    for rider in &mut small { rider.body_width = 0.7; }
+    for rider in &mut broad { rider.body_width = 1.4; }
+    let mut light = BridgeCrew::new(&small, 19);
+    let mut heavy = BridgeCrew::new(&broad, 19);
+    assert!(light.crews[0].load < 1.0);
+    assert!(heavy.crews[0].load > 1.0);
+
+    let gust = light.course().gusts.first().expect("course has a gust");
+    let time = (0..200).map(|tick| tick as f32 * 0.05)
+        .find(|&time| gust.state(time).0 == Blow::Blow).unwrap();
+    let z = (gust.z0 + gust.z1) * 0.5;
+    for game in [&mut light, &mut heavy] {
+        game.time = time;
+        game.crews[0].cart.x = 0.0;
+        game.crews[0].cart.z = z;
+        game.crews[0].cart.speed = MAX_SPEED;
+        game.drive(0, Input::default(), TICK_DT, &mut Vec::new());
+    }
+    assert!(light.crews[0].cart.x.abs() > heavy.crews[0].cart.x.abs());
+
+    let weak = light.course().spans.iter().enumerate()
+        .find(|(_, span)| span.kind == Kind::Weak)
+        .map(|(index, span)| (index, span.weak_delay(), span.at(0.5)))
+        .expect("course has a weak plank");
+    for game in [&mut light, &mut heavy] {
+        game.time = weak.1;
+        game.crews[0].cart.x = weak.2.0;
+        game.crews[0].cart.z = weak.2.1;
+        game.crews[0].cart.speed = 0.0;
+        game.crews[0].cart.falling = None;
+        game.crews[0].cart.weak_since[weak.0] = Some(0.0);
+        game.drive(0, Input::default(), 0.0, &mut Vec::new());
+    }
+    assert!(!light.crews[0].cart.collapsed[weak.0]);
+    assert!(heavy.crews[0].cart.collapsed[weak.0]);
+}
+
+#[test]
+fn mixed_load_bridge_crews_can_both_win() {
+    let mut wins = [0u32; 2];
+    for seed in 0..24 {
+        let broad_team = (seed % 2) as u8;
+        let field = (0..4).map(|seat| {
+            let team = seat % 2;
+            let mut rider = Contestant::bot(seat, 0.7).on_team(team);
+            rider.body_width = if team == broad_team { 1.4 } else { 0.7 };
+            rider
+        }).collect::<Vec<_>>();
+        let mut game = BridgeCrew::new(&field, seed);
+        play(&mut game, all_bots, 60 * 200);
+        assert!(game.placements().is_some());
+        for result in &game.results {
+            if let Some(team) = result.winner {
+                wins[usize::from(team == broad_team)] += 1;
+            }
+        }
+    }
+    println!("Bridge Crew mixed load rounds: small={}, broad={}", wins[0], wins[1]);
+    let finished = wins[0] + wins[1];
+    assert!(wins[0] * 3 >= finished && wins[1] * 3 >= finished,
+        "both load profiles need a meaningful winning share: {wins:?}");
+}
+
+#[test]
 fn partners_from_a_pairs_party_share_a_cart() {
     let mut field = people(4);
     field[0].ally = Some(0);

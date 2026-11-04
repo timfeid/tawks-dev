@@ -85,6 +85,35 @@ fn every_raft_gets_the_same_queue_and_sea() {
 }
 
 #[test]
+fn small_builders_place_sooner_and_broad_builders_lower_pieces_gently() {
+    let mut field = people(2);
+    field[0].body_width = 0.7;
+    field[1].body_width = 1.4;
+    let mut game = TowerTeeter::new(&field, 5);
+    let small = &game.rafts[0];
+    let broad = &game.rafts[1];
+    assert!(small.hold(5, 0.0, 0.0).center().y > broad.hold(5, 0.0, 0.0).center().y);
+    game.step(
+        &[(0, aim(0.0, 0.0, true)), (1, aim(0.0, 0.0, true))],
+        TICK_DT,
+        &mut Vec::new(),
+    );
+    assert!(game.rafts[0].cooldown < game.rafts[1].cooldown);
+    tick(&mut game, &[], 0.85, &mut Vec::new());
+    game.step(
+        &[(0, aim(0.0, 0.0, true)), (1, aim(0.0, 0.0, true))],
+        TICK_DT,
+        &mut Vec::new(),
+    );
+    assert_eq!((game.rafts[0].placed, game.rafts[1].placed), (2, 1));
+    let snapshot = game.snapshot();
+    assert!(
+        snapshot["players"][0]["drop_interval"].as_f64().unwrap()
+            < snapshot["players"][1]["drop_interval"].as_f64().unwrap()
+    );
+}
+
+#[test]
 fn a_careful_human_builds_and_a_dropped_piece_costs_height() {
     let mut game = TowerTeeter::new(&people(2), 3);
     let mut events = Vec::new();
@@ -279,6 +308,41 @@ fn sharper_bots_score_better_and_lose_less_to_the_sea() {
     assert!(
         ruthless.1 < relaxed.1,
         "ruthless {ruthless:?} against relaxed {relaxed:?}"
+    );
+}
+
+#[test]
+#[ignore]
+fn body_size_balance_report() {
+    let widths = [0.7, 0.9, 1.2, 1.4];
+    let mut scores = [0.0f32; 4];
+    let mut wins = [0u32; 4];
+    let mut placed = [0u32; 4];
+    let mut lost = [0u32; 4];
+    let runs = 16;
+    for seed in 0..runs {
+        let field: Vec<Contestant> = (0..4u8)
+            .map(|seat| {
+                let mut c = Contestant::bot(seat, 0.5);
+                c.body_width = widths[(seat as usize + seed) % 4];
+                c
+            })
+            .collect();
+        let mut game = TowerTeeter::new(&field, 400 + seed as u64);
+        run_bots(&mut game, &[0, 1, 2, 3]);
+        for r in &game.rafts {
+            let build = (r.seat as usize + seed) % 4;
+            scores[build] += r.score();
+            placed[build] += r.placed;
+            lost[build] += r.lost;
+            if game.placements().unwrap()[0].contains(&r.seat) {
+                wins[build] += 1;
+            }
+        }
+    }
+    println!(
+        "Tower Teeter body builds: wins={wins:?} mean_scores={:?} placed={placed:?} lost={lost:?}",
+        scores.map(|s| s / runs as f32)
     );
 }
 

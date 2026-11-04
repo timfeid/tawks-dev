@@ -1,5 +1,5 @@
 //! Place three stakes around wandering wind sprites to spring a temporary net.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
@@ -38,11 +38,30 @@ fn inside(p: (f32, f32), a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> bool {
     let z = cross(c, a, p);
     (x >= -0.001 && y >= -0.001 && z >= -0.001) || (x <= 0.001 && y <= 0.001 && z <= 0.001)
 }
+fn distance_to_edge(p: (f32, f32), a: (f32, f32), b: (f32, f32)) -> f32 {
+    let dx = b.0 - a.0;
+    let dz = b.1 - a.1;
+    let length_squared = (dx * dx + dz * dz).max(0.001);
+    let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dz) / length_squared).clamp(0.0, 1.0);
+    (p.0 - a.0 - dx * t).hypot(p.1 - a.1 - dz * t)
+}
+fn inside_net(p: (f32, f32), a: (f32, f32), b: (f32, f32), c: (f32, f32), margin: f32) -> bool {
+    inside(p, a, b, c)
+        || (margin > 0.0
+            && [
+                distance_to_edge(p, a, b),
+                distance_to_edge(p, b, c),
+                distance_to_edge(p, c, a),
+            ]
+            .into_iter()
+            .any(|distance| distance <= margin))
+}
 
 #[derive(Clone)]
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     yaw: f32,
@@ -75,6 +94,7 @@ impl KiteNet {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0., 1.),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x: angle.sin() * 7.6,
                     z: angle.cos() * 7.6,
                     yaw: angle,
@@ -144,6 +164,7 @@ impl Bout for KiteNet {
             if p.left {
                 continue;
             }
+            let body = BodyProfile::new(p.body_width);
             let Some(input) = inputs
                 .iter()
                 .find(|(seat, _)| *seat == p.seat)
@@ -159,11 +180,12 @@ impl Bout for KiteNet {
             p.missing = 0.;
             p.cooldown = (p.cooldown - dt).max(0.);
             let stick = input.stick.clamped();
-            p.x += stick.x * SPEED * dt;
-            p.z += stick.z * SPEED * dt;
+            p.x += stick.x * SPEED * body.speed * dt;
+            p.z += stick.z * SPEED * body.speed * dt;
             let distance = p.x.hypot(p.z);
-            if distance > RADIUS - 0.45 {
-                let scale = (RADIUS - 0.45) / distance;
+            let edge = RADIUS - 0.45 * body.radius;
+            if distance > edge {
+                let scale = edge / distance;
                 p.x *= scale;
                 p.z *= scale;
             }
@@ -173,14 +195,17 @@ impl Bout for KiteNet {
             let fire = input.fire || input.jump;
             if fire && !p.held && p.cooldown == 0. {
                 p.stakes.push((p.x, p.z));
-                p.cooldown = 0.2;
+                p.cooldown = 0.2 * body.mass;
                 events.push(json!({"kind":"kite_stake","seat":p.seat,"index":p.stakes.len()}));
                 if p.stakes.len() == 3 {
                     let [a, b, c] = [p.stakes[0], p.stakes[1], p.stakes[2]];
                     let size = area(a, b, c);
+                    let margin = ((body.radius - 1.0) * 3.0).max(0.0);
                     let caught = if (MIN_AREA..=MAX_AREA).contains(&size) {
                         (0..MOTES)
-                            .filter(|id| inside(mote_pos(*id, self.time, self.seed), a, b, c))
+                            .filter(|id| {
+                                inside_net(mote_pos(*id, self.time, self.seed), a, b, c, margin)
+                            })
                             .count() as u32
                     } else {
                         0
@@ -248,7 +273,7 @@ impl Bout for KiteNet {
             "motes":(0..MOTES).map(|id|{let (x,z)=mote_pos(id,self.time,self.seed);json!({"id":id,"x":x,"z":z})}).collect::<Vec<_>>(),
             "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"yaw":p.yaw,
                 "stakes":p.stakes.iter().map(|(x,z)|json!({"x":x,"z":z})).collect::<Vec<_>>(),
-                "points":p.points,"nets":p.nets,"caught":p.caught,"left":p.left})).collect::<Vec<_>>()})
+                "points":p.points,"nets":p.nets,"caught":p.caught,"left":p.left,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placed.clone()
@@ -260,6 +285,70 @@ mod tests {
     use super::*;
     fn seats() -> Vec<Contestant> {
         (0..4).map(|seat| Contestant::bot(seat, 0.5)).collect()
+    }
+    #[test]
+    fn size_changes_speed_stake_retry_and_net_edge() {
+        let mut contestants = [Contestant::person(0), Contestant::person(1)];
+        contestants[0].body_width = 0.7;
+        contestants[1].body_width = 1.4;
+        let mut game = KiteNet::new(&contestants, 1);
+        for p in &mut game.players {
+            p.x = 0.0;
+            p.z = 0.0;
+        }
+        let right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        game.step(&[(0, right), (1, right)], 0.1, &mut vec![]);
+        assert!(game.players[0].x > game.players[1].x);
+        let place = Input {
+            fire: true,
+            ..Default::default()
+        };
+        game.step(&[(0, place), (1, place)], 1.0 / 60.0, &mut vec![]);
+        assert!(game.players[0].cooldown < game.players[1].cooldown);
+        let triangle = [(0.0, 0.0), (4.0, 0.0), (0.0, 4.0)];
+        let just_outside = (2.0, -0.2);
+        assert!(!inside_net(
+            just_outside,
+            triangle[0],
+            triangle[1],
+            triangle[2],
+            0.0
+        ));
+        let margin = (BodyProfile::new(1.4).radius - 1.0) * 3.0;
+        assert!(inside_net(
+            just_outside,
+            triangle[0],
+            triangle[1],
+            triangle[2],
+            margin
+        ));
+    }
+    #[test]
+    fn mixed_size_bots_all_catch_sprites() {
+        let contestants = [0.7, 0.9, 1.2, 1.4]
+            .iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.6);
+                c.body_width = *width;
+                c
+            })
+            .collect::<Vec<_>>();
+        let mut scores = [0u32; 4];
+        for seed in 0..8 {
+            let mut game = KiteNet::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut vec![]);
+            }
+            for p in &game.players {
+                scores[p.seat as usize] += p.points;
+            }
+        }
+        assert!(scores.iter().all(|score| *score > 0), "scores={scores:?}");
     }
     #[test]
     fn triangle_geometry_rejects_outside_and_degenerate_nets() {

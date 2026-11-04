@@ -51,6 +51,8 @@ fn main() {
                             skill: if mixed && s == sharp { 0.95 } else { 0.4 },
                             team: (s % 2) as u8,
                             ally: None,
+                            body_width: 1.0,
+                            pet: 4,
                         })
                         .collect();
                     let mut game = (spec.create)(&seats, seed);

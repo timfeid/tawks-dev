@@ -4,7 +4,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::cmp::Ordering;
 
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 
 pub const KEY: &str = "rime";
 pub const LIMIT: f32 = 68.0;
@@ -36,6 +36,7 @@ pub struct Skater {
     pub vz: f32,
     pub score: u32,
     pub bells: u32,
+    pub body_width: f32,
     skill: f32,
     bot_at: f32,
     bot_bias: f32,
@@ -65,6 +66,7 @@ impl RimeRink {
                     vz: 0.0,
                     score: 0,
                     bells: 0,
+                    body_width: BodyProfile::new(c.body_width).width,
                     skill: c.skill.clamp(0.0, 1.0),
                     bot_at: rng.random_range(0.0..0.6),
                     bot_bias: rng.random_range(-0.18..0.18),
@@ -120,23 +122,27 @@ impl Bout for RimeRink {
         let dt = dt.clamp(0.0, 0.1);
         self.time += dt;
         for p in &mut self.players {
+            let body = BodyProfile::new(p.body_width);
             let stick = inputs
                 .iter()
                 .find(|(seat, _)| *seat == p.seat)
                 .map(|(_, input)| input.stick.clamped())
                 .unwrap_or_default();
-            p.vx = (p.vx + stick.x * ACCEL * dt) * (1.0 - DRAG * dt);
-            p.vz = (p.vz + stick.z * ACCEL * dt) * (1.0 - DRAG * dt);
+            let drag = (1.0 - DRAG * dt / body.mass).max(0.0);
+            p.vx = (p.vx + stick.x * ACCEL * body.acceleration * dt) * drag;
+            p.vz = (p.vz + stick.z * ACCEL * body.acceleration * dt) * drag;
             let speed = (p.vx * p.vx + p.vz * p.vz).sqrt();
-            if speed > MAX_SPEED {
-                p.vx *= MAX_SPEED / speed;
-                p.vz *= MAX_SPEED / speed;
+            let cap = MAX_SPEED * body.speed;
+            if speed > cap {
+                p.vx *= cap / speed;
+                p.vz *= cap / speed;
             }
             p.x += p.vx * dt;
             p.z += p.vz * dt;
             for (at, velocity) in [(&mut p.x, &mut p.vx), (&mut p.z, &mut p.vz)] {
-                if at.abs() > HALF - SKATER_RADIUS {
-                    *at = at.clamp(-HALF + SKATER_RADIUS, HALF - SKATER_RADIUS);
+                let edge = HALF - SKATER_RADIUS * body.radius;
+                if at.abs() > edge {
+                    *at = at.clamp(-edge, edge);
                     *velocity *= -0.32;
                 }
             }
@@ -146,23 +152,28 @@ impl Bout for RimeRink {
                 let (left, right) = self.players.split_at_mut(b);
                 let p = &mut left[a];
                 let q = &mut right[0];
+                let a_body = BodyProfile::new(p.body_width);
+                let b_body = BodyProfile::new(q.body_width);
                 let dx = q.x - p.x;
                 let dz = q.z - p.z;
                 let d = (dx * dx + dz * dz).sqrt();
-                if d > 0.001 && d < SKATER_RADIUS * 2.0 {
+                let contact = SKATER_RADIUS * (a_body.radius + b_body.radius);
+                if d > 0.001 && d < contact {
                     let nx = dx / d;
                     let nz = dz / d;
-                    let overlap = (SKATER_RADIUS * 2.0 - d) * 0.5;
-                    p.x -= nx * overlap;
-                    q.x += nx * overlap;
-                    p.z -= nz * overlap;
-                    q.z += nz * overlap;
+                    let overlap = contact - d;
+                    let total_mass = a_body.mass + b_body.mass;
+                    p.x -= nx * overlap * b_body.mass / total_mass;
+                    q.x += nx * overlap * a_body.mass / total_mass;
+                    p.z -= nz * overlap * b_body.mass / total_mass;
+                    q.z += nz * overlap * a_body.mass / total_mass;
                     let rel = (p.vx - q.vx) * nx + (p.vz - q.vz) * nz;
                     if rel > 0.0 {
-                        p.vx -= nx * rel * 0.55;
-                        p.vz -= nz * rel * 0.55;
-                        q.vx += nx * rel * 0.55;
-                        q.vz += nz * rel * 0.55;
+                        let impulse = 1.1 * rel / (1.0 / a_body.mass + 1.0 / b_body.mass);
+                        p.vx -= nx * impulse / a_body.mass;
+                        p.vz -= nz * impulse / a_body.mass;
+                        q.vx += nx * impulse / b_body.mass;
+                        q.vz += nz * impulse / b_body.mass;
                     }
                 }
             }
@@ -178,7 +189,8 @@ impl Bout for RimeRink {
             let winner = self
                 .players
                 .iter()
-                .filter(|p| (p.x - bx).hypot(p.z - bz) < BELL_RADIUS)
+                .filter(|p| (p.x - bx).hypot(p.z - bz)
+                    < BELL_RADIUS * BodyProfile::new(p.body_width).reach)
                 .min_by(|a, b| {
                     let da = (a.x - bx).hypot(a.z - bz);
                     let db = (b.x - bx).hypot(b.z - bz);
@@ -226,7 +238,7 @@ impl Bout for RimeRink {
     fn snapshot(&self) -> Value {
         let (bx, bz) = MARKS[self.bell];
         json!({"game":KEY,"time":self.time.min(LIMIT),"limit":LIMIT,"bell":self.bell,"bell_x":bx,"bell_z":bz,"window":self.window.max(0.0),"waiting":self.waiting.max(0.0),
-            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.vx.atan2(p.vz),"score":p.score,"bells":p.bells})).collect::<Vec<_>>()})
+            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.vx.atan2(p.vz),"score":p.score,"bells":p.bells,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.result.clone()
@@ -281,5 +293,72 @@ mod tests {
         }
         assert_eq!(game.placements().unwrap().iter().flatten().count(), 8);
         assert!(game.players.iter().any(|p| p.score > 0));
+    }
+    #[test]
+    fn small_skater_turns_faster_while_broad_skater_glides_and_holds_space() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = RimeRink::new(&[small, broad], 8);
+        game.players[0].x = -4.0;
+        game.players[1].x = 4.0;
+        game.players[0].z = 0.0;
+        game.players[1].z = 0.0;
+        for _ in 0..60 {
+            game.step(&[(0, Input::from_stick(Stick { x: 1.0, z: 0.0 })),
+                (1, Input::from_stick(Stick { x: 1.0, z: 0.0 }))], 1.0 / 60.0, &mut Vec::new());
+        }
+        assert!(game.players[0].vx > game.players[1].vx);
+        let before = [game.players[0].vx, game.players[1].vx];
+        game.step(&[], 0.1, &mut Vec::new());
+        assert!(game.players[1].vx / before[1] > game.players[0].vx / before[0]);
+
+        game.players[0].x = 0.8;
+        game.players[1].x = 0.0;
+        game.players[0].z = 0.0;
+        game.players[1].z = 0.0;
+        game.players[0].vx = 0.0;
+        game.players[1].vx = 0.0;
+        game.step(&[], 0.0, &mut Vec::new());
+        assert!((game.players[1].x).abs() < game.players[0].x - 0.8,
+            "the broad skater yields less space in a collision");
+    }
+    #[test]
+    fn broad_skater_can_ring_a_bell_from_farther_away() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = RimeRink::new(&[small, broad], 8);
+        let (x, z) = MARKS[game.bell];
+        game.players[0].x = x + 1.21;
+        game.players[0].z = z;
+        game.players[1].x = x - 1.21;
+        game.players[1].z = z;
+        game.step(&[], 0.0, &mut Vec::new());
+        assert_eq!(game.players[0].score, 0);
+        assert_eq!(game.players[1].score, 2);
+    }
+    #[test]
+    fn mixed_build_bots_each_find_bells_across_seeds() {
+        let mut totals = [0u32; 4];
+        for seed in 0..8 {
+            let players = (0..4).map(|seat| {
+                let mut c = Contestant::bot(seat, 0.7);
+                c.body_width = [0.7, 0.9, 1.2, 1.4][seat as usize];
+                c
+            }).collect::<Vec<_>>();
+            let mut game = RimeRink::new(&players, seed);
+            for _ in 0..(LIMIT as usize * 60 + 2) {
+                let inputs = players.iter().map(|c|
+                    (c.seat, game.bot_input(c.seat, 1.0 / 60.0))).collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for (total, player) in totals.iter_mut().zip(&game.players) {
+                *total += player.score;
+            }
+        }
+        assert!(totals.iter().all(|&score| score > 0), "mixed builds: {totals:?}");
     }
 }

@@ -5,7 +5,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "hill";
 /// How far the hill reaches before the ground gives out.
@@ -16,6 +16,8 @@ const PEAK: f32 = 7.5;
 const SUMMIT: f32 = 3.6;
 const LIMIT: f32 = 60.0;
 const WALK: f32 = 16.0;
+/// Nearly the full body speed trade keeps arrival time and slope grip in balance.
+const BODY_RUN_POWER: f32 = 0.95;
 const DRAG: f32 = 3.4;
 /// How hard the slope pulls downhill, per unit of steepness. Kept well under
 /// `WALK` so the hill can be climbed, slowly, and standing still loses ground.
@@ -28,6 +30,7 @@ const CLIMB_BACK: f32 = 3.0;
 #[derive(Clone)]
 struct Climber {
     seat: u8,
+    body: BodyProfile,
     x: f32,
     z: f32,
     vx: f32,
@@ -75,6 +78,7 @@ impl KingOfTheHill {
                     let angle = index as f32 / count * std::f32::consts::TAU;
                     Climber {
                         seat: one.seat,
+                        body: BodyProfile::new(one.body_width),
                         x: angle.cos() * (rim - 2.0),
                         z: angle.sin() * (rim - 2.0),
                         vx: 0.0,
@@ -161,8 +165,8 @@ impl Bout for KingOfTheHill {
                 .find(|(seat, _)| *seat == climber.seat)
                 .map(|(_, input)| (input.stick.x, input.stick.z))
                 .unwrap_or((0.0, 0.0));
-            climber.vx += stick.0 * WALK * dt;
-            climber.vz += stick.1 * WALK * dt;
+            climber.vx += stick.0 * WALK * climber.body.acceleration.powf(BODY_RUN_POWER) * dt;
+            climber.vz += stick.1 * WALK * climber.body.acceleration.powf(BODY_RUN_POWER) * dt;
 
             // The ground pushes you off the way it falls, so the steeper it is
             // the harder it is to stand still.
@@ -173,17 +177,23 @@ impl Bout for KingOfTheHill {
             let slope_z = (ground(climber.x, climber.z + step, size)
                 - ground(climber.x, climber.z - step, size))
                 / (2.0 * step);
-            climber.vx -= slope_x * SLIDE * dt;
-            climber.vz -= slope_z * SLIDE * dt;
+            climber.vx -= slope_x * SLIDE * dt / climber.body.mass;
+            climber.vz -= slope_z * SLIDE * dt / climber.body.mass;
 
             let drag = (1.0 - DRAG * dt).max(0.0);
             climber.vx *= drag;
             climber.vz *= drag;
+            let max_speed = WALK * climber.body.speed.powf(BODY_RUN_POWER);
+            let speed = climber.vx.hypot(climber.vz);
+            if speed > max_speed {
+                climber.vx *= max_speed / speed;
+                climber.vz *= max_speed / speed;
+            }
             climber.x += climber.vx * dt;
             climber.z += climber.vz * dt;
 
             if (climber.x * climber.x + climber.z * climber.z).sqrt() > radius {
-                climber.out = CLIMB_BACK;
+                climber.out = CLIMB_BACK * climber.body.stun;
                 events.push(json!({ "kind": "off", "seat": climber.seat }));
             }
         }
@@ -198,23 +208,27 @@ impl Bout for KingOfTheHill {
                 let dx = b.x - a.x;
                 let dz = b.z - a.z;
                 let apart = (dx * dx + dz * dz).sqrt();
-                if apart >= BUMP || apart <= 0.001 {
+                let contact = BUMP * (a.body.radius + b.body.radius) * 0.5;
+                if apart >= contact || apart <= 0.001 {
                     continue;
                 }
                 let nx = dx / apart;
                 let nz = dz / apart;
                 let closing = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
                 let push = SHOVE + closing.max(0.0);
-                self.climbers[i].vx -= nx * push * 0.5;
-                self.climbers[i].vz -= nz * push * 0.5;
-                self.climbers[j].vx += nx * push * 0.5;
-                self.climbers[j].vz += nz * push * 0.5;
+                let total_mass = a.body.mass + b.body.mass;
+                let a_share = b.body.mass / total_mass;
+                let b_share = a.body.mass / total_mass;
+                self.climbers[i].vx -= nx * push * a_share;
+                self.climbers[i].vz -= nz * push * a_share;
+                self.climbers[j].vx += nx * push * b_share;
+                self.climbers[j].vz += nz * push * b_share;
                 // Pull them apart so they do not sit inside one another.
-                let gap = (BUMP - apart) * 0.5;
-                self.climbers[i].x -= nx * gap;
-                self.climbers[i].z -= nz * gap;
-                self.climbers[j].x += nx * gap;
-                self.climbers[j].z += nz * gap;
+                let gap = contact - apart;
+                self.climbers[i].x -= nx * gap * a_share;
+                self.climbers[i].z -= nz * gap * a_share;
+                self.climbers[j].x += nx * gap * b_share;
+                self.climbers[j].z += nz * gap * b_share;
                 events.push(json!({ "kind": "shove", "by": a.seat, "at": b.seat }));
             }
         }
@@ -296,6 +310,7 @@ impl Bout for KingOfTheHill {
                 .iter()
                 .map(|climber| json!({
                     "seat": climber.seat,
+                    "body_width": climber.body.width,
                     "x": climber.x,
                     "z": climber.z,
                     "y": ground(climber.x, climber.z, self.size),
@@ -356,5 +371,59 @@ mod tests {
         );
         assert_eq!(setup["summit"], json!(eight.summit()));
         assert_eq!(setup["peak"], json!(PEAK * eight.size));
+    }
+
+    #[test]
+    fn body_builds_trade_climbing_speed_for_contact_and_recovery() {
+        let mut field = field(2);
+        field[0].body_width = 0.7;
+        field[1].body_width = 1.4;
+        let mut game = KingOfTheHill::new(&field, 4);
+        // Compare a sprint on level ground without a collision.
+        game.climbers[0].x = -8.0;
+        game.climbers[1].x = 8.0;
+        game.step(
+            &[
+                (0, Input::from_stick(crate::bout::Stick { x: 0.0, z: 1.0 })),
+                (1, Input::from_stick(crate::bout::Stick { x: 0.0, z: 1.0 })),
+            ],
+            0.1,
+            &mut Vec::new(),
+        );
+        assert!(game.climbers[0].vz > game.climbers[1].vz);
+
+        // A direct collision pushes the lighter climber farther.
+        game.climbers[0].x = -0.4;
+        game.climbers[1].x = 0.4;
+        for climber in &mut game.climbers {
+            climber.z = 0.0;
+            climber.vx = 0.0;
+            climber.vz = 0.0;
+        }
+        game.step(&[], 0.01, &mut Vec::new());
+        assert!(game.climbers[0].vx.abs() > game.climbers[1].vx.abs());
+
+        assert!(CLIMB_BACK * game.climbers[1].body.stun < CLIMB_BACK * game.climbers[0].body.stun);
+    }
+
+    #[test]
+    fn body_build_bot_balance() {
+        let mut wins = [0usize; 2];
+        for seed in 0..64 {
+            let mut field = field(2);
+            field[seed as usize % 2].body_width = 0.7;
+            field[(seed as usize + 1) % 2].body_width = 1.4;
+            let mut game = KingOfTheHill::new(&field, seed);
+            for _ in 0..((LIMIT / 0.05) as usize + 2) {
+                let inputs = field
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 0.05)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 0.05, &mut Vec::new());
+            }
+            let winner = game.placements().unwrap()[0][0];
+            wins[(field[winner as usize].body_width > 1.0) as usize] += 1;
+        }
+        assert!(wins[0] >= 20 && wins[1] >= 20, "small/broad wins: {wins:?}");
     }
 }

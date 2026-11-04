@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "whirligig";
 pub const SIDE: usize = 4;
@@ -17,6 +17,14 @@ const E: u8 = 2;
 const S: u8 = 4;
 const W: u8 = 8;
 
+fn turn_cooldown(width: f32) -> f32 {
+    TURN_COOLDOWN / BodyProfile::new(width).speed.powi(2)
+}
+
+fn gust_points(width: f32) -> u32 {
+    (100. + (BodyProfile::new(width).width - 1.) * 20.).round() as u32
+}
+
 #[derive(Clone, Copy, Default)]
 pub struct Duct {
     pub ports: u8,
@@ -25,6 +33,7 @@ pub struct Duct {
 
 pub struct Tinker {
     pub seat: u8,
+    pub body_width: f32,
     pub score: u32,
     pub circuits: u32,
     pub turns: u32,
@@ -181,6 +190,7 @@ impl Whirligig {
                 .iter()
                 .map(|c| Tinker {
                     seat: c.seat,
+                    body_width: BodyProfile::new(c.body_width).width,
                     score: 0,
                     circuits: 0,
                     turns: 0,
@@ -245,13 +255,14 @@ impl Bout for Whirligig {
                 };
                 p.board[index].ports = rotated(p.board[index].ports);
                 p.turns += 1;
-                p.cooldown = TURN_COOLDOWN;
-                p.next_bot =
-                    self.time + 0.35 + (1. - p.skill) * 0.08 + self.rng.random_range(0.0..0.18);
+                p.cooldown = turn_cooldown(p.body_width);
+                p.next_bot = self.time
+                    + (0.35 + (1. - p.skill) * 0.08 + self.rng.random_range(0.0..0.18))
+                        / BodyProfile::new(p.body_width).speed;
                 events.push(json!({"kind":"turn","seat":p.seat,"tile":index}));
                 if connected(&p.board).0 {
                     let quick = (30. - (self.time - p.started) * 1.2).max(0.) as u32;
-                    p.score += 100 + quick;
+                    p.score += gust_points(p.body_width) + quick;
                     p.circuits += 1;
                     p.started = self.time;
                     p.board = puzzle(self.seed, p.circuits);
@@ -293,6 +304,8 @@ impl Bout for Whirligig {
                 let (_, reach) = connected(&p.board);
                 json!({"seat":p.seat,"score":p.score,"circuits":p.circuits,"turns":p.turns,
                     "cooldown":p.cooldown,"gone":p.gone,"reach":reach,
+                    "body_width":p.body_width,"turn_cooldown":turn_cooldown(p.body_width),
+                    "gust_points":gust_points(p.body_width),
                     "tiles":p.board.iter().map(|d|d.ports).collect::<Vec<_>>()})
             }).collect::<Vec<_>>()})
     }
@@ -313,6 +326,33 @@ mod tests {
             yaw: turn_code(i),
             ..Default::default()
         }
+    }
+    #[test]
+    fn body_width_trades_turn_speed_for_gust_score() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = Whirligig::new(&[small, broad], 8);
+        for p in &mut game.tinkers {
+            for duct in &mut p.board {
+                if duct.target != 0 {
+                    duct.ports = duct.target;
+                }
+            }
+            for _ in 0..3 {
+                p.board[0].ports = rotated(p.board[0].ports);
+            }
+        }
+        game.step(&[(0, press(0)), (1, press(0))], 0.01, &mut Vec::new());
+        assert_eq!(game.tinkers[0].circuits, 1);
+        assert_eq!(game.tinkers[1].circuits, 1);
+        assert!(game.tinkers[0].cooldown < game.tinkers[1].cooldown);
+        assert!(game.tinkers[0].score < game.tinkers[1].score);
+        assert_eq!(
+            game.snapshot()["players"][1]["gust_points"].as_u64(),
+            Some(108)
+        );
     }
     #[test]
     fn generated_puzzles_are_solvable_and_not_already_complete() {
@@ -406,6 +446,42 @@ mod tests {
             }
             assert!(game.tinkers.iter().all(|p| p.circuits >= 2));
         }
+    }
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = Whirligig::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.tinkers {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.tinkers.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Whirligig mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 3000);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 15);
     }
     #[test]
     #[ignore]

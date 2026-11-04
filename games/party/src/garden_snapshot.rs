@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "gardensnapshot";
 pub const MOTHS: usize = 5;
@@ -17,6 +17,7 @@ const Y_CODE: f32 = 1340.;
 
 pub struct Photographer {
     pub seat: u8,
+    pub body_width: f32,
     pub score: u32,
     pub photos: u32,
     pub perfect: u32,
@@ -71,6 +72,14 @@ pub fn wings_open(id: usize, time: f32) -> bool {
     (time * 4.8 + id as f32 * 1.27).sin() > 0.2
 }
 
+fn frame_radius(width: f32) -> f32 {
+    FRAME_RADIUS * (1.0 + (BodyProfile::new(width).width - 1.0) * 0.35)
+}
+
+fn precision_factor(width: f32) -> f32 {
+    1.0 - (BodyProfile::new(width).width - 1.0) * 0.20
+}
+
 impl GardenSnapshot {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
@@ -86,6 +95,7 @@ impl GardenSnapshot {
             .iter()
             .map(|c| Photographer {
                 seat: c.seat,
+                body_width: BodyProfile::new(c.body_width).width,
                 score: 0,
                 photos: 0,
                 perfect: 0,
@@ -166,8 +176,11 @@ impl Bout for GardenSnapshot {
                     })
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                     .unwrap();
-                let points = if nearest.0 == target && nearest.1 <= FRAME_RADIUS {
-                    ((1. - nearest.1 / FRAME_RADIUS) * 65.).round() as u32
+                let radius = frame_radius(p.body_width);
+                let points = if nearest.0 == target && nearest.1 <= radius {
+                    ((1. - nearest.1 / radius) * 65. * precision_factor(p.body_width))
+                        .round()
+                        .clamp(0.0, 65.0) as u32
                         + if wings_open(target, self.time) { 35 } else { 0 }
                 } else {
                     0
@@ -218,7 +231,9 @@ impl Bout for GardenSnapshot {
             "target":self.target[self.round as usize],
             "butterflies":(0..MOTHS).map(|id|{let (x,y)=position(id,self.time,self.round);json!({"id":id,"x":x,"y":y,"open":wings_open(id,self.time)})}).collect::<Vec<_>>(),
             "players":self.photographers.iter().map(|p|json!({"seat":p.seat,"score":p.score,"photos":p.photos,
-                "perfect":p.perfect,"last":p.last,"shot":p.shot_round==self.round,"gone":p.gone})).collect::<Vec<_>>()})
+                "perfect":p.perfect,"last":p.last,"shot":p.shot_round==self.round,"gone":p.gone,
+                "body_width":p.body_width,"frame_radius":frame_radius(p.body_width),
+                "precision":precision_factor(p.body_width)})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.places.clone()
@@ -230,6 +245,28 @@ mod tests {
     use super::*;
     fn people(n: u8) -> Vec<Contestant> {
         (0..n).map(Contestant::person).collect()
+    }
+    #[test]
+    fn body_width_trades_frame_reach_for_focus_precision() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = GardenSnapshot::new(&[small, broad], 3);
+        assert!(
+            frame_radius(game.photographers[0].body_width)
+                < frame_radius(game.photographers[1].body_width)
+        );
+        assert!(
+            precision_factor(game.photographers[0].body_width)
+                > precision_factor(game.photographers[1].body_width)
+        );
+        let target = game.target[0] as usize;
+        let (x, y) = position(target, 0.01, 0);
+        let shot = shot_input((x + 0.05).min(1.0), y);
+        game.step(&[(0, shot), (1, shot)], 0.01, &mut Vec::new());
+        assert!(game.photographers[0].score > game.photographers[1].score);
+        assert!(game.photographers[1].score > 0);
     }
     #[test]
     fn targets_change_and_moths_stay_on_screen() {
@@ -341,5 +378,41 @@ mod tests {
             }
             println!("Garden Snapshot {favorite} vs {field}: {wins}/1000 favorite wins");
         }
+    }
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = GardenSnapshot::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.photographers {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.photographers.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Garden Snapshot mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 2500);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 20);
     }
 }

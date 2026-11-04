@@ -123,7 +123,7 @@ impl TitanSiege {
             .enumerate()
             .map(|(i, c)| Raider {
                 seat: c.seat,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 hits: 0,
                 downs: 0,
                 down_for: 0.0,
@@ -201,12 +201,13 @@ impl TitanSiege {
             if !raider.up() {
                 return;
             }
-            raider.down_for = DOWN_SECONDS;
+            let body = crate::bout::BodyProfile::new(raider.run.width);
+            raider.down_for = DOWN_SECONDS * body.stun;
             raider.downs += 1;
             let (dx, dz) = (raider.run.x - tx, raider.run.z - tz);
             let away = (dx * dx + dz * dz).sqrt().max(0.01);
-            raider.run.vx = dx / away * 12.0;
-            raider.run.vz = dz / away * 12.0;
+            raider.run.vx = dx / away * 12.0 / body.mass;
+            raider.run.vz = dz / away * 12.0 / body.mass;
         }
         events.push(json!({ "kind": "floored", "seat": seat, "by": how }));
     }

@@ -8,7 +8,7 @@ mod physics;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Skill};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill};
 use physics::{Body, V2, World};
 
 pub const KEY: &str = "teeter";
@@ -31,6 +31,12 @@ pub const LANE_SPACING: f32 = 11.0;
 pub const WATER_LINE: f32 = -0.6;
 /// How far above the tallest point a new piece hangs before it is let go.
 pub const DROP_GAP: f32 = 0.35;
+fn hand_gap(width: f32) -> f32 {
+    DROP_GAP / BodyProfile::new(width).reach.powi(10)
+}
+fn drop_interval(width: f32) -> f32 {
+    DROP_COOLDOWN / BodyProfile::new(width).speed.powi(3)
+}
 /// A piece counts toward the tower for a moment after its last contact, so a
 /// small bounce at the bell does not erase it.
 const STANDING_GRACE: f32 = 0.35;
@@ -257,6 +263,7 @@ pub struct Piece {
 pub struct Raft {
     pub seat: u8,
     pub lane: usize,
+    pub body_width: f32,
     pub world: World,
     /// One per body after the raft itself, in the same order.
     pub pieces: Vec<Piece>,
@@ -275,7 +282,7 @@ pub struct Raft {
 }
 
 impl Raft {
-    fn new(seat: u8, lane: usize) -> Self {
+    fn new(seat: u8, lane: usize, body_width: f32) -> Self {
         let mut world = World::new(ITERATIONS);
         let mut raft = Body::kinematic(V2::new(RAFT_HALF_WIDTH, RAFT_HALF_HEIGHT), 0.9);
         raft.pos = V2::new(0.0, 0.0);
@@ -283,6 +290,7 @@ impl Raft {
         Raft {
             seat,
             lane,
+            body_width: BodyProfile::new(body_width).width,
             world,
             pieces: Vec::new(),
             next_id: 0,
@@ -325,7 +333,7 @@ impl Raft {
         body.angle = angle;
         let k = &KINDS[kind];
         let reach = angle.cos().abs() * k.half_height + angle.sin().abs() * k.half_width;
-        let center = V2::new(cursor, self.top() + DROP_GAP + reach);
+        let center = V2::new(cursor, self.top() + hand_gap(self.body_width) + reach);
         body.pos = V2::new(center.x, center.y) - rotate(body.offset, angle);
         body
     }
@@ -474,7 +482,7 @@ impl TowerTeeter {
         let rafts = seats
             .iter()
             .enumerate()
-            .map(|(lane, c)| Raft::new(c.seat, lane))
+            .map(|(lane, c)| Raft::new(c.seat, lane, c.body_width))
             .collect();
         let brains = seats
             .iter()
@@ -545,7 +553,7 @@ impl TowerTeeter {
         raft.next_id = raft.next_id.wrapping_add(1);
         raft.dealt += 1;
         raft.placed += 1;
-        raft.cooldown = DROP_COOLDOWN;
+        raft.cooldown = drop_interval(raft.body_width);
         events.push(json!({
             "kind": "drop",
             "seat": raft.seat,
@@ -963,6 +971,9 @@ impl Bout for TowerTeeter {
                 let hold = r.hold(held, r.cursor, r.angle);
                 json!({
                     "seat": r.seat,
+                    "body_width": r.body_width,
+                    "hand_gap": r2(hand_gap(r.body_width)),
+                    "drop_interval": r2(drop_interval(r.body_width)),
                     // The player stands on a jetty beside their raft.
                     "x": r2(lane - RAFT_HALF_WIDTH - 1.4),
                     "z": 0.0,

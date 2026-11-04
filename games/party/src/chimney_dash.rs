@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "chimneydash";
 pub const LANES: usize = 4;
@@ -24,6 +24,7 @@ pub struct Patch {
 
 pub struct Sweep {
     pub seat: u8,
+    pub body_width: f32,
     pub lane: u8,
     pub score: u32,
     pub hits: u32,
@@ -66,6 +67,14 @@ fn next_ready(patch: &Patch, skill: f32, rng: &mut StdRng) -> f32 {
     patch.due + rng.random_range(-spread..spread)
 }
 
+fn hit_window(width: f32) -> f32 {
+    HIT_WINDOW + (BodyProfile::new(width).width - 1.0) * 0.005
+}
+
+fn swipe_cooldown(width: f32) -> f32 {
+    SWIPE_COOLDOWN / BodyProfile::new(width).speed
+}
+
 impl ChimneyDash {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
@@ -93,6 +102,7 @@ impl ChimneyDash {
                 let skill = c.skill.clamp(0., 1.);
                 Sweep {
                     seat: c.seat,
+                    body_width: BodyProfile::new(c.body_width).width,
                     lane: 0,
                     score: 0,
                     hits: 0,
@@ -159,13 +169,13 @@ impl Bout for ChimneyDash {
                     continue;
                 };
                 p.lane = lane;
-                p.cooldown = SWIPE_COOLDOWN;
+                p.cooldown = swipe_cooldown(p.body_width);
                 let nearest = self
                     .patches
                     .iter()
                     .enumerate()
                     .filter(|(_, patch)| patch.lane == lane && patch.claimed & (1 << p.seat) == 0)
-                    .filter(|(_, patch)| (patch.due - self.time).abs() <= HIT_WINDOW)
+                    .filter(|(_, patch)| (patch.due - self.time).abs() <= hit_window(p.body_width))
                     .min_by(|a, b| {
                         (a.1.due - self.time)
                             .abs()
@@ -189,7 +199,7 @@ impl Bout for ChimneyDash {
             }
         }
         while self.expired < self.patches.len()
-            && self.patches[self.expired].due + HIT_WINDOW < self.time
+            && self.patches[self.expired].due + hit_window(1.4) < self.time
         {
             let claimed = self.patches[self.expired].claimed;
             for p in &mut self.sweeps {
@@ -238,7 +248,9 @@ impl Bout for ChimneyDash {
             "patches":self.patches.iter().filter(|p|p.due>=self.time-0.5&&p.due<=self.time+2.7)
                 .map(|p|json!({"id":p.id,"lane":p.lane,"due":p.due,"worth":p.worth,"claimed":p.claimed})).collect::<Vec<_>>(),
             "players":self.sweeps.iter().map(|p|json!({"seat":p.seat,"lane":p.lane,"score":p.score,"hits":p.hits,
-                "misses":p.misses,"combo":p.combo,"cooldown":p.cooldown,"gone":p.gone})).collect::<Vec<_>>()})
+                "misses":p.misses,"combo":p.combo,"cooldown":p.cooldown,"gone":p.gone,
+                "body_width":p.body_width,"hit_window":hit_window(p.body_width),
+                "swipe_cooldown":swipe_cooldown(p.body_width)})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.places.clone()
@@ -257,6 +269,35 @@ mod tests {
             yaw: swipe_code(lane),
             ..Default::default()
         }
+    }
+    #[test]
+    fn body_width_trades_timing_window_for_retry_speed() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = ChimneyDash::new(&[small, broad], 3);
+        assert!(hit_window(game.sweeps[0].body_width) < hit_window(game.sweeps[1].body_width));
+        assert!(
+            swipe_cooldown(game.sweeps[0].body_width) < swipe_cooldown(game.sweeps[1].body_width)
+        );
+        let patch = game.patches[0];
+        game.time = patch.due + 0.250;
+        game.step(
+            &[
+                (0, swipe(patch.lane as usize)),
+                (1, swipe(patch.lane as usize)),
+            ],
+            0.001,
+            &mut Vec::new(),
+        );
+        assert_eq!((game.sweeps[0].hits, game.sweeps[1].hits), (0, 1));
+        assert_eq!(
+            game.snapshot()["players"][0]["body_width"]
+                .as_f64()
+                .unwrap() as f32,
+            game.sweeps[0].body_width
+        );
     }
     #[test]
     fn patch_schedule_is_bounded_and_changes_lanes() {
@@ -374,5 +415,41 @@ mod tests {
             }
             println!("Chimney Dash {favorite} vs {field}: {wins}/1000 favorite wins");
         }
+    }
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = ChimneyDash::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.sweeps {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.sweeps.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Chimney Dash mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 1800);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 20);
     }
 }

@@ -162,6 +162,7 @@ pub struct GhostGallery {
     seats: Vec<u8>,
     rng: StdRng,
     skills: HashMap<u8, Skill>,
+    widths: HashMap<u8, f32>,
     /// Creaks so far, frame and time, as any guard could hear them.
     creaks: Vec<(usize, f32)>,
     brains: HashMap<u8, bots::Brain>,
@@ -223,6 +224,7 @@ impl GhostGallery {
                 .iter()
                 .map(|c| (c.seat, Skill(c.skill)))
                 .collect(),
+            widths: contestants.iter().map(|c| (c.seat, c.body_width)).collect(),
             creaks: Vec::new(),
             brains: HashMap::new(),
             placements: None,
@@ -243,7 +245,8 @@ impl GhostGallery {
         let corner = corners[self.rng.random_range(0..corners.len())];
         self.ghost = ghost.map(|seat| Ghost {
             seat,
-            run: Runner::at(corner.0 * s, corner.1 * s),
+            run: Runner::at(corner.0 * s, corner.1 * s)
+                .with_width(*self.widths.get(&seat).unwrap_or(&1.0)),
             yaw: heading(corner, (0.0, 0.0)),
             lit: false,
             meter: 0.0,
@@ -264,7 +267,8 @@ impl GhostGallery {
             .enumerate()
             .map(|(i, seat)| Guard {
                 seat,
-                run: Runner::at((i as f32 - (count - 1.0) / 2.0) * 1.6 * s, -8.0 * s),
+                run: Runner::at((i as f32 - (count - 1.0) / 2.0) * 1.6 * s, -8.0 * s)
+                    .with_width(*self.widths.get(&seat).unwrap_or(&1.0)),
                 yaw: 0.0,
                 chill: 0.0,
                 on_ghost: false,

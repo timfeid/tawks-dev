@@ -36,7 +36,7 @@ pub const MAX_SEATS: usize = 8;
 pub const NATIVE_BOUTS: &[&str] = &[
     "bumper", "race", "shooter", "coins", "titan", "stencil", "teeter", "glass", "lineup",
     "echo", "lastfloor", "fuse", crate::mugshot::KEY, "blueprints", crate::diner::KEY,
-    "bridgecrew", crate::gallery::KEY,
+    "bridgecrew", crate::gallery::KEY, crate::tug::KEY,
     crate::lantern::KEY, crate::beacon::KEY, crate::cue_crowd::KEY, crate::flux_skip::KEY,
     crate::parcel_panic::KEY, crate::pigeon::KEY, crate::rime::KEY, crate::margin_run::KEY,
     crate::reef_bloom::KEY, crate::orbit::KEY, crate::crowd_current::KEY,
@@ -45,6 +45,11 @@ pub const NATIVE_BOUTS: &[&str] = &[
     crate::shadow_stamp::KEY, crate::garden_snapshot::KEY, crate::powder::KEY,
     crate::kite_net::KEY, crate::dockside_tangle::KEY, crate::mirth::KEY,
     crate::mixer_circuit::KEY,
+    crate::pet_arcade::KEYS[0], crate::pet_arcade::KEYS[1], crate::pet_arcade::KEYS[2],
+    crate::pet_arcade::KEYS[3], crate::pet_arcade::KEYS[4], crate::pet_arcade::KEYS[5],
+    crate::pet_arcade::KEYS[6], crate::pet_arcade::KEYS[7], crate::pet_arcade::KEYS[8],
+    crate::pet_arcade::KEYS[9],
+    crate::pet_arena::KEYS[0], crate::pet_arena::KEYS[1],
 ];
 const COUNTDOWN_TICKS: u32 = TICK_HZ * 3;
 /// More taps than a hand can make in a few ticks are a flood, not play.
@@ -109,6 +114,56 @@ pub enum DevAction {
     BoardSandbox,
     /// Plays one bout straight away, with no ballot.
     Bout { key: String },
+}
+
+#[cfg(test)]
+mod body_and_pet_bout_tests {
+    use super::*;
+
+    #[test]
+    fn bout_contestants_freeze_validated_build_and_selected_pet() {
+        let mut room = Room::new("build-room", 2);
+        room.connect("alice", "Alice", "").unwrap();
+        let mut costume = crate::roster::Costume::default();
+        costume.body_width = Some(1.4);
+        costume.pet.id = Some("pet-fizz".into());
+        room.apply_costume("alice", costume);
+        let contestant = room.contestants(true).remove(0);
+        assert_eq!(contestant.body_width, 1.4);
+        assert_eq!(contestant.pet, 3);
+    }
+    #[test]
+    fn garden_snapshot_photo_survives_room_input_transport() {
+        let mut room = Room::new("garden-photo-room", 4);
+        room.connect("alice", "Alice", "").unwrap();
+        room.add_bot("alice").unwrap();
+        room.choose_game("alice", crate::garden_snapshot::KEY).unwrap();
+        room.start("alice").unwrap();
+        let shot = crate::garden_snapshot::shot_input(0.5, 0.5);
+        room.queue_fire("alice", shot.yaw, shot.pitch);
+        room.step();
+        let seat = room.members.iter().find(|m| m.user_id == "alice").unwrap().seat;
+        let game = room.snapshot().unwrap();
+        let me = game["players"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["seat"].as_u64() == Some(u64::from(seat)))
+            .unwrap();
+        assert_eq!(me["photos"].as_u64(), Some(1));
+    }
+    #[test]
+    fn crownfall_standalone_fills_both_teams_with_bots() {
+        let mut room = Room::new("crownfall-room", 3);
+        room.connect("alice", "Alice", "").unwrap();
+        room.choose_game("alice", crate::pet_arena::KEYS[1]).unwrap();
+        room.start("alice").unwrap();
+        assert_eq!(room.members.len(),8);
+        assert!(matches!(room.phase,Phase::Countdown { .. }));
+        let game = room.snapshot().unwrap();
+        let players = game["players"].as_array().unwrap();
+        assert_eq!(players.len(),8);
+    }
 }
 pub const COVEN_KEY: &str = crate::coven::KEY;
 const LOBBY_DROP_TICKS: u64 = TICK_HZ as u64 * 20;
@@ -736,12 +791,14 @@ impl Room {
     pub fn queue_fire(&mut self, user_id: &str, yaw: f32, pitch: f32) {
         if self.board_paused(){return;}
 
+        let garden_shot = self.minigame == crate::garden_snapshot::KEY
+            && matches!(self.phase, Phase::Practice { .. } | Phase::Playing);
         if let Some(member) = self.members.iter_mut().find(|m| m.user_id == user_id) {
             if yaw.is_finite() {
                 member.yaw = yaw;
             }
             if pitch.is_finite() {
-                member.pitch = pitch.clamp(-1.4, 1.4);
+                member.pitch = if garden_shot { pitch } else { pitch.clamp(-1.4, 1.4) };
             }
             member.fire = true;
         }
@@ -1059,6 +1116,11 @@ impl Room {
         if self.table_spec().is_some() {
             return self.start_table();
         }
+        if self.minigame == crate::pet_arena::KEYS[1] {
+            while self.members.len() < 8 {
+                self.add_bot(user_id)?;
+            }
+        }
         if self.members.len() < 2 {
             return Err(RoomError::NotEnoughPlayers);
         }
@@ -1072,6 +1134,14 @@ impl Room {
 
     /// A free go at the bout before it counts.
     fn start_practice(&mut self) {
+        if self.minigame == crate::pet_arena::KEYS[1] {
+            self.phase_ticks = COUNTDOWN_TICKS;
+            self.phase = Phase::Countdown {
+                seconds: COUNTDOWN_TICKS as f32 / TICK_HZ as f32,
+            };
+            self.dirty = true;
+            return;
+        }
         for member in self.members.iter_mut() {
             member.ready = false;
         }
@@ -2119,6 +2189,10 @@ impl Room {
                     .unwrap_or((index % 2) as u8),
                 // In pairs, partners are allies even in a free-for-all.
                 ally: self.pairs.iter().position(|&(a, b)| a == m.seat || b == m.seat).map(|index| index as u8),
+                body_width: m.costume.as_ref().and_then(|costume| costume.body_width)
+                    .filter(|width| width.is_finite() && (0.7..=1.4).contains(width))
+                    .unwrap_or(1.0),
+                pet: crate::pets::species_for(&m.user_id, m.costume.as_ref().and_then(|costume| costume.pet.id.as_deref())),
             })
             .collect()
     }

@@ -1,6 +1,6 @@
 //! Everyone can move one heavy parade float. A moving arch scores a delivery;
 //! recent push contribution determines who earns it.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
@@ -27,6 +27,7 @@ fn angle_delta(a: f32, b: f32) -> f32 {
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     vx: f32,
@@ -68,6 +69,7 @@ impl CrowdCurrent {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0., 1.),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x: angle.sin() * 5.1,
                     z: angle.cos() * 5.1,
                     vx: 0.,
@@ -152,6 +154,7 @@ impl Bout for CrowdCurrent {
             if p.left {
                 continue;
             }
+            let body = BodyProfile::new(p.body_width);
             p.credit *= (-0.36 * dt).exp();
             let Some(input) = inputs
                 .iter()
@@ -169,13 +172,14 @@ impl Bout for CrowdCurrent {
             };
             p.missing = 0.;
             let stick = input.stick.clamped();
-            p.vx = stick.x * WALK_SPEED;
-            p.vz = stick.z * WALK_SPEED;
+            p.vx = stick.x * WALK_SPEED * body.speed;
+            p.vz = stick.z * WALK_SPEED * body.speed;
             p.x += p.vx * dt;
             p.z += p.vz * dt;
             let distance = p.x.hypot(p.z);
-            if distance > RADIUS - 0.5 {
-                let s = (RADIUS - 0.5) / distance;
+            let edge = RADIUS - 0.5 * body.radius;
+            if distance > edge {
+                let s = edge / distance;
                 p.x *= s;
                 p.z *= s;
             }
@@ -186,12 +190,12 @@ impl Bout for CrowdCurrent {
             let dz = self.float_z - p.z;
             let distance = dx.hypot(dz);
             let (nx, nz) = norm(dx, dz);
-            let contact = FLOAT_RADIUS + 0.52;
+            let contact = FLOAT_RADIUS + 0.52 * body.radius;
             if distance < contact {
                 p.x = self.float_x - nx * contact;
                 p.z = self.float_z - nz * contact;
                 let drive = (p.vx * nx + p.vz * nz).max(0.);
-                let force = drive * dt * 3.6;
+                let force = drive * dt * 3.6 * body.mass;
                 impulse.0 += nx * force;
                 impulse.1 += nz * force;
                 p.credit += force;
@@ -199,10 +203,10 @@ impl Bout for CrowdCurrent {
             let fire = input.fire || input.jump;
             if fire
                 && !p.held_fire
-                && self.time - p.last_shove >= SHOVE_COOLDOWN
-                && distance < contact + 0.55
+                && self.time - p.last_shove >= SHOVE_COOLDOWN * body.mass
+                && distance < contact + 0.55 * body.reach
             {
-                let force = 3.2;
+                let force = 3.2 * body.mass;
                 impulse.0 += nx * force;
                 impulse.1 += nz * force;
                 p.credit += force;
@@ -300,8 +304,10 @@ impl Bout for CrowdCurrent {
             (self.float_x + gx * 1.4, self.float_z + gz * 1.4)
         };
         let (x, z) = norm(target.0 - p.x, target.1 - p.z);
-        let near = (p.x - self.float_x).hypot(p.z - self.float_z) < FLOAT_RADIUS + 1.0;
-        let fire = near && self.time - p.last_shove >= SHOVE_COOLDOWN + 0.12 && !p.held_fire;
+        let body = BodyProfile::new(p.body_width);
+        let near = (p.x - self.float_x).hypot(p.z - self.float_z) < FLOAT_RADIUS + body.reach;
+        let fire =
+            near && self.time - p.last_shove >= SHOVE_COOLDOWN * body.mass + 0.12 && !p.held_fire;
         Input {
             stick: Stick { x, z },
             fire,
@@ -313,7 +319,7 @@ impl Bout for CrowdCurrent {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"done":self.placed.is_some(),
             "arch_angle":self.arch(),"deliveries":self.deliveries,
             "float":{"x":self.float_x,"z":self.float_z,"vx":self.float_vx,"vz":self.float_vz},
-            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.yaw,"points":p.points,"deliveries":p.deliveries,"credit":p.credit,"left":p.left})).collect::<Vec<_>>()
+            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.yaw,"points":p.points,"deliveries":p.deliveries,"credit":p.credit,"left":p.left,"body_width":p.body_width})).collect::<Vec<_>>()
         })
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
@@ -326,6 +332,58 @@ mod tests {
     use super::*;
     fn game() -> CrowdCurrent {
         CrowdCurrent::new(&[Contestant::person(0), Contestant::person(1)], 7)
+    }
+    #[test]
+    fn size_changes_run_speed_push_force_and_retry() {
+        let mut seats = [Contestant::person(0), Contestant::person(1)];
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut movement = CrowdCurrent::new(&seats, 7);
+        movement.float_x = 8.0;
+        for p in &mut movement.players {
+            p.x = 0.0;
+            p.z = 0.0;
+        }
+        let move_right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        movement.step(&[(0, move_right), (1, move_right)], 0.1, &mut vec![]);
+        assert!(movement.players[0].x > movement.players[1].x);
+
+        let shove = Input {
+            fire: true,
+            ..Default::default()
+        };
+        let mut force = [0.0; 2];
+        for (index, seat) in seats.iter().enumerate() {
+            let mut game = CrowdCurrent::new(&[seat.clone()], 7);
+            game.players[0].x = -2.1;
+            game.players[0].z = 0.0;
+            game.step(&[(seat.seat, shove)], 1.0 / 60.0, &mut vec![]);
+            force[index] = game.float_vx;
+        }
+        assert!(
+            force[1] > force[0] * 1.2,
+            "light={}, broad={}",
+            force[0],
+            force[1]
+        );
+
+        let mut cooldown = CrowdCurrent::new(&seats, 7);
+        for p in &mut cooldown.players {
+            p.x = if p.seat == 0 { -2.1 } else { 2.1 };
+            p.z = 0.0;
+            p.last_shove = 0.0;
+        }
+        cooldown.time = 1.05;
+        let mut events = Vec::new();
+        cooldown.step(&[(0, shove), (1, shove)], 1.0 / 60.0, &mut events);
+        assert_eq!(
+            events.iter().filter(|e| e["kind"] == "crowd_shove").count(),
+            1
+        );
+        assert_eq!(
+            events.iter().find(|e| e["kind"] == "crowd_shove").unwrap()["seat"],
+            0
+        );
     }
     #[test]
     fn untrusted_motion_is_clamped_and_leaver_places_last() {

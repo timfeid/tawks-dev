@@ -90,6 +90,10 @@ pub struct Contestant {
     /// free-for-all bout too, and a bout that lets players hurt each other
     /// skips their partner. None plays alone.
     pub ally: Option<u8>,
+    /// Frozen character build for this bout. The room validates 0.7..=1.4.
+    pub body_width: f32,
+    /// Server-selected pet species: ember, puddle, sprout, fizz, mochi.
+    pub pet: u8,
 }
 
 /// Whether two contestants are partners, by their allies.
@@ -98,6 +102,10 @@ pub fn allied(a: Option<u8>, b: Option<u8>) -> bool {
 }
 
 impl Contestant {
+    pub fn body(&self) -> BodyProfile {
+        BodyProfile::new(self.body_width)
+    }
+
     /// The same contestant on a given side.
     pub fn on_team(self, team: u8) -> Self {
         Contestant { team, ..self }
@@ -110,6 +118,8 @@ impl Contestant {
             skill: 1.0,
             team: 0,
             ally: None,
+            body_width: 1.0,
+            pet: 4,
         }
     }
 
@@ -120,6 +130,37 @@ impl Contestant {
             skill: skill.clamp(0.0, 1.0),
             team: 0,
             ally: None,
+            body_width: 1.0,
+            pet: 4,
+        }
+    }
+}
+
+/// Small builds accelerate and run a little faster; broad builds occupy more
+/// space, resist contact and recover sooner. Both extremes have a tradeoff.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BodyProfile {
+    pub width: f32,
+    pub speed: f32,
+    pub acceleration: f32,
+    pub radius: f32,
+    pub mass: f32,
+    pub stun: f32,
+    pub reach: f32,
+}
+
+impl BodyProfile {
+    pub fn new(width: f32) -> Self {
+        let width = if width.is_finite() { width.clamp(0.7, 1.4) } else { 1.0 };
+        let delta = width - 1.0;
+        Self {
+            width,
+            speed: 1.0 - delta * 0.18,
+            acceleration: 1.0 - delta * 0.22,
+            radius: 1.0 + delta * 0.22,
+            mass: 1.0 + delta * 0.50,
+            stun: 1.0 - delta * 0.27,
+            reach: 1.0 + delta * 0.12,
         }
     }
 }

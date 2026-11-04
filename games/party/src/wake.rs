@@ -1,6 +1,6 @@
 //! Wake Mosaic: steer skiffs through shifting currents to color water tiles.
 //! A wake fades within seconds, and another skiff can claim it sooner.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
@@ -14,6 +14,9 @@ const ACCEL: f32 = 11.0;
 const DRAG: f32 = 1.2;
 const MAX_SPEED: f32 = 7.2;
 const CURRENT: f32 = 1.35;
+fn wake_life(width: f32) -> f32 {
+    WAKE_SECONDS * (0.90 + (width.clamp(0.7, 1.4) - 0.7) / 0.7 * 0.20)
+}
 
 #[derive(Clone, Copy)]
 struct Tile {
@@ -30,6 +33,7 @@ pub struct Skiff {
     pub vz: f32,
     pub held: u32,
     pub points: u32,
+    pub body_width: f32,
     skill: f32,
     goal: usize,
     plan_at: f32,
@@ -77,6 +81,7 @@ impl WakeMosaic {
                     vz: 0.0,
                     held: 0,
                     points: 0,
+                    body_width: BodyProfile::new(c.body_width).width,
                     skill: c.skill.clamp(0.0, 1.0),
                     goal: rng.random_range(0..GRID * GRID),
                     plan_at: rng.random_range(0.0..0.8),
@@ -152,26 +157,29 @@ impl Bout for WakeMosaic {
             }
         }
         for p in &mut self.players {
+            let body = BodyProfile::new(p.body_width);
             let input = inputs
                 .iter()
                 .find(|(s, _)| *s == p.seat)
                 .map(|(_, i)| i.stick.clamped())
                 .unwrap_or_default();
             let (cx, cz) = current(p.x, p.z, self.time);
-            p.vx = (p.vx + (input.x * ACCEL + cx) * dt) * (1.0 - DRAG * dt);
-            p.vz = (p.vz + (input.z * ACCEL + cz) * dt) * (1.0 - DRAG * dt);
+            let drag = (1.0 - DRAG * dt / body.mass).max(0.0);
+            p.vx = (p.vx + (input.x * ACCEL * body.acceleration + cx / body.mass) * dt) * drag;
+            p.vz = (p.vz + (input.z * ACCEL * body.acceleration + cz / body.mass) * dt) * drag;
             let speed = p.vx.hypot(p.vz);
-            let cap = MAX_SPEED;
+            let cap = MAX_SPEED * body.speed;
             if speed > cap {
                 p.vx *= cap / speed;
                 p.vz *= cap / speed;
             }
-            p.x = (p.x + p.vx * dt).clamp(-HALF + 0.25, HALF - 0.25);
-            p.z = (p.z + p.vz * dt).clamp(-HALF + 0.25, HALF - 0.25);
-            if p.x.abs() >= HALF - 0.25 {
+            let edge = HALF - 0.25 * body.radius;
+            p.x = (p.x + p.vx * dt).clamp(-edge, edge);
+            p.z = (p.z + p.vz * dt).clamp(-edge, edge);
+            if p.x.abs() >= edge {
                 p.vx *= -0.35;
             }
-            if p.z.abs() >= HALF - 0.25 {
+            if p.z.abs() >= edge {
                 p.vz *= -0.35;
             }
         }
@@ -181,14 +189,15 @@ impl Bout for WakeMosaic {
             for n in 0..count {
                 let p = &mut self.players[(start + n) % count];
                 let tile = &mut self.tiles[index(p.x, p.z)];
+                let life = wake_life(p.body_width);
                 if tile.owner != Some(p.seat) && tile.lock <= 0.0 {
                     tile.owner = Some(p.seat);
                     tile.lock = 0.75;
-                    tile.ttl = WAKE_SECONDS;
+                    tile.ttl = life;
                     p.points += 1;
                     events.push(json!({"kind":"wake_claim","seat":p.seat}));
                 } else if tile.owner == Some(p.seat) {
-                    tile.ttl = WAKE_SECONDS;
+                    tile.ttl = life;
                 }
             }
         }
@@ -285,7 +294,7 @@ impl Bout for WakeMosaic {
     fn snapshot(&self) -> Value {
         json!({"game":KEY,"time":self.time.min(LIMIT),"limit":LIMIT,"grid":GRID,
             "tiles":self.tiles.iter().map(|t|json!({"owner":t.owner,"ttl":t.ttl})).collect::<Vec<_>>(),
-            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"y":0.43,"yaw":p.vx.atan2(p.vz),"held":p.held,"points":p.points})).collect::<Vec<_>>()})
+            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"y":0.43,"yaw":p.vx.atan2(p.vz),"held":p.held,"points":p.points,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.result.clone()
@@ -354,5 +363,50 @@ mod tests {
         }
         assert_eq!(game.placements().unwrap().iter().flatten().count(), 8);
         assert!(game.players.iter().any(|p| p.held > 0));
+    }
+    #[test]
+    fn light_skiff_turns_faster_but_broad_wake_lasts_longer() {
+        let mut light = Contestant::person(0);
+        light.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = WakeMosaic::new(&[light, broad], 4);
+        game.players[0].x = -5.0;
+        game.players[0].z = -5.0;
+        game.players[1].x = 5.0;
+        game.players[1].z = 5.0;
+        game.step(&[], 0.0, &mut Vec::new());
+        assert!(game.tiles[index(-5.0, -5.0)].ttl < game.tiles[index(5.0, 5.0)].ttl);
+
+        game.players[0].x = 0.0;
+        game.players[1].x = 0.0;
+        game.players[0].z = 0.0;
+        game.players[1].z = 0.0;
+        for _ in 0..45 {
+            let steer = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+            game.step(&[(0, steer), (1, steer)], 1.0 / 60.0, &mut Vec::new());
+        }
+        assert!(game.players[0].vx > game.players[1].vx);
+    }
+    #[test]
+    fn mixed_build_skiffs_each_claim_tiles_across_seeds() {
+        let mut points = [0u32; 4];
+        for seed in 0..8 {
+            let players = (0..4).map(|seat| {
+                let mut c = Contestant::bot(seat, 0.7);
+                c.body_width = [0.7, 0.9, 1.2, 1.4][seat as usize];
+                c
+            }).collect::<Vec<_>>();
+            let mut game = WakeMosaic::new(&players, seed);
+            for _ in 0..(LIMIT as usize * 60 + 2) {
+                let inputs = players.iter().map(|c|
+                    (c.seat, game.bot_input(c.seat, 1.0 / 60.0))).collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for (total, skiff) in points.iter_mut().zip(&game.players) {
+                *total += skiff.points;
+            }
+        }
+        assert!(points.iter().all(|&score| score > 0), "mixed builds: {points:?}");
     }
 }

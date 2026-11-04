@@ -10,7 +10,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Skill, TICK_DT};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill, TICK_DT};
 
 pub const KEY: &str = "lastfloor";
 pub const TOP: u32 = 40;
@@ -293,6 +293,7 @@ struct Mind {
 #[derive(Clone, Debug)]
 pub struct Rider {
     pub seat: u8,
+    pub width: f32,
     pub slot: usize,
     pub ride: Ride,
     /// Released the button since boarding, so a held key cannot jump.
@@ -334,10 +335,13 @@ impl LastFloor {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
         let plans: Vec<Plan> = PROFILES.iter().map(|p| Plan::roll(p, &mut rng)).collect();
-        let limit = plans
+        let slowest_mass = contestants.iter().map(|c| BodyProfile::new(c.body_width).mass)
+            .fold(1.0_f32, f32::min);
+        let limit = (plans
             .iter()
             .map(|p| BOARDING_SECONDS + p.seconds + REVEAL_SECONDS)
             .sum::<f32>()
+            / (1.0 + (slowest_mass - 1.0) * 0.5))
             .ceil();
         let bots = contestants.iter().filter(|c| c.is_bot).count().max(1);
         let mut nerves: Vec<f32> = (0..bots)
@@ -349,6 +353,7 @@ impl LastFloor {
             .enumerate()
             .map(|(slot, c)| Rider {
                 seat: c.seat,
+                width: BodyProfile::new(c.body_width).width,
                 slot,
                 ride: Ride::Aboard,
                 armed: false,
@@ -391,6 +396,18 @@ impl LastFloor {
 
     fn plan(&self) -> &Plan {
         &self.plans[self.ride.min(RIDES - 1)]
+    }
+
+    fn car_load(&self) -> f32 {
+        let aboard = self.riders.iter().filter(|r| r.ride == Ride::Aboard);
+        let (total, count) = aboard.fold((0.0, 0u32), |(total, count), rider| {
+            (total + BodyProfile::new(rider.width).mass, count + 1)
+        });
+        if count == 0 { 1.0 } else { total / count as f32 }
+    }
+
+    fn load_factor(&self) -> f32 {
+        1.0 + (self.car_load() - 1.0) * 0.5
     }
 
     pub fn rider(&self, seat: u8) -> Option<&Rider> {
@@ -578,7 +595,7 @@ impl LastFloor {
         let holding = self.car.hold > 0.0;
         let shown = self.shown();
         let roll: f64 = self.rng.random();
-        let cruise = self.profile().speed;
+        let cruise = self.profile().speed * self.load_factor();
         let Some(mind) = self.riders[index].mind.as_mut() else {
             return false;
         };
@@ -662,9 +679,13 @@ impl Bout for LastFloor {
             }
             Stage::Falling => {
                 let empty = !self.riders.iter().any(|r| r.ride == Ride::Aboard);
-                let profile = self.profile();
+                let factor = self.load_factor();
+                let mut profile = *self.profile();
+                profile.speed *= factor;
+                profile.accel *= factor;
+                profile.max_speed *= factor;
                 let stutters = self.plans[self.ride].stutters.clone();
-                match self.car.step(profile, &stutters, dt, empty) {
+                match self.car.step(&profile, &stutters, dt, empty) {
                     Some(CarEvent::Stutter) => {
                         events.push(json!({ "kind": "stutter", "floor": landing(self.car.height) }))
                     }
@@ -740,6 +761,7 @@ impl Bout for LastFloor {
             "floor_height": FLOOR_HEIGHT,
             "height": round(self.car.height.max(0.0)),
             "speed": round(self.car.speed),
+            "load": round(self.car_load()),
             "shown": self.shown(),
             "stutter": self.car.hold > 0.0,
             "lurch": self.car.lurch > 0.0,
@@ -835,6 +857,33 @@ mod tests {
         assert_eq!(landing(0.2), 1);
         assert_eq!(landing(7.0), 7);
         assert_eq!(landing(7.01), 8);
+    }
+
+    #[test]
+    fn heavier_riders_speed_the_shared_car_until_they_jump() {
+        let field = |width| (0..4).map(|seat| {
+            let mut rider = Contestant::person(seat);
+            rider.body_width = width;
+            rider
+        }).collect::<Vec<_>>();
+        let mut light = LastFloor::new(&field(0.7), 9);
+        let mut heavy = LastFloor::new(&field(1.4), 9);
+        until(&mut light, 4, |g| g.stage == Stage::Falling);
+        until(&mut heavy, 4, |g| g.stage == Stage::Falling);
+        tick(&mut light, &[]);
+        tick(&mut heavy, &[]);
+        assert!(heavy.car.speed > light.car.speed);
+        assert!(heavy.car.height < light.car.height);
+        assert!(light.limit >= heavy.limit);
+
+        let mut mixed = field(0.7);
+        mixed[0].body_width = 1.4;
+        let mut game = LastFloor::new(&mixed, 9);
+        until(&mut game, 4, |g| g.stage == Stage::Falling);
+        let before = game.snapshot()["load"].as_f64().unwrap();
+        game.riders[0].armed = true;
+        tick(&mut game, &[(0, press())]);
+        assert!(game.snapshot()["load"].as_f64().unwrap() < before);
     }
 
     #[test]

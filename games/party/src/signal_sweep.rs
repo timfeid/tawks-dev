@@ -1,5 +1,5 @@
 //! Race a personal alarm by disarming the lit signal stations in order.
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
@@ -40,6 +40,7 @@ fn route(seed: u64, seat: u8, round: u32) -> [usize; 3] {
 struct Player {
     seat: u8,
     skill: f32,
+    body_width: f32,
     x: f32,
     z: f32,
     yaw: f32,
@@ -51,6 +52,7 @@ struct Player {
     chains: u32,
     misses: u32,
     held: bool,
+    action_cooldown: f32,
     missing: f32,
     left: bool,
 }
@@ -72,6 +74,7 @@ impl SignalSweep {
                 Player {
                     seat: c.seat,
                     skill: c.skill.clamp(0., 1.),
+                    body_width: BodyProfile::new(c.body_width).width,
                     x: angle.sin() * 8.,
                     z: angle.cos() * 8.,
                     yaw: angle,
@@ -83,6 +86,7 @@ impl SignalSweep {
                     chains: 0,
                     misses: 0,
                     held: false,
+                    action_cooldown: 0.0,
                     missing: 0.,
                     left: false,
                 }
@@ -142,6 +146,7 @@ impl Bout for SignalSweep {
             if p.left {
                 continue;
             }
+            let body = BodyProfile::new(p.body_width);
             let Some(input) = inputs
                 .iter()
                 .find(|(seat, _)| *seat == p.seat)
@@ -155,12 +160,14 @@ impl Bout for SignalSweep {
                 continue;
             };
             p.missing = 0.;
+            p.action_cooldown = (p.action_cooldown - dt).max(0.0);
             let stick = input.stick.clamped();
-            p.x += stick.x * SPEED * dt;
-            p.z += stick.z * SPEED * dt;
+            p.x += stick.x * SPEED * body.speed * dt;
+            p.z += stick.z * SPEED * body.speed * dt;
             let distance = p.x.hypot(p.z);
-            if distance > RADIUS - 0.45 {
-                let scale = (RADIUS - 0.45) / distance;
+            let edge = RADIUS - 0.45 * body.radius;
+            if distance > edge {
+                let scale = edge / distance;
                 p.x *= scale;
                 p.z *= scale;
             }
@@ -177,10 +184,11 @@ impl Bout for SignalSweep {
                 events.push(json!({"kind":"signal_timeout","seat":p.seat}));
             }
             let fire = input.fire || input.jump;
-            if fire && !p.held {
+            if fire && p.action_cooldown <= 0.0 {
                 let target = p.route[p.stage];
                 let (tx, tz) = station(target);
-                if (p.x - tx).hypot(p.z - tz) <= REACH {
+                if (p.x - tx).hypot(p.z - tz) <= REACH * body.reach * body.radius {
+                    p.action_cooldown = 0.35;
                     p.points += 1;
                     p.stage += 1;
                     events.push(json!({"kind":"signal_disarm","seat":p.seat,"station":target}));
@@ -219,7 +227,9 @@ impl Bout for SignalSweep {
         } else {
             (0., 0.)
         };
-        let fire = distance <= REACH * (0.78 + p.skill * 0.12) && !p.held;
+        let body = BodyProfile::new(p.body_width);
+        let fire =
+            distance <= REACH * body.reach * body.radius * (0.78 + p.skill * 0.12) && !p.held;
         Input {
             stick: Stick {
                 x: x * pace,
@@ -233,7 +243,7 @@ impl Bout for SignalSweep {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"done":self.placed.is_some(),
             "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"yaw":p.yaw,
                 "route":p.route,"stage":p.stage,"target":p.route[p.stage],"clock":p.clock.max(0.),
-                "points":p.points,"chains":p.chains,"misses":p.misses,"left":p.left})).collect::<Vec<_>>()})
+                "points":p.points,"chains":p.chains,"misses":p.misses,"left":p.left,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.placed.clone()
@@ -245,6 +255,54 @@ mod tests {
     use super::*;
     fn seats() -> Vec<Contestant> {
         (0..4).map(|s| Contestant::bot(s, 0.5)).collect()
+    }
+    #[test]
+    fn size_changes_run_speed_and_disarm_reach() {
+        let mut seats = [Contestant::person(0), Contestant::person(1)];
+        seats[0].body_width = 0.7;
+        seats[1].body_width = 1.4;
+        let mut movement = SignalSweep::new(&seats, 7);
+        for p in &mut movement.players {
+            p.x = 0.0;
+            p.z = 0.0;
+        }
+        let move_right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        movement.step(&[(0, move_right), (1, move_right)], 0.1, &mut vec![]);
+        assert!(movement.players[0].x > movement.players[1].x);
+
+        let mut reach = SignalSweep::new(&seats, 7);
+        for p in &mut reach.players {
+            p.route = [0, 2, 4];
+            p.x = 0.0;
+            p.z = 7.7;
+        }
+        let disarm = Input {
+            fire: true,
+            ..Default::default()
+        };
+        reach.step(&[(0, disarm), (1, disarm)], 1.0 / 60.0, &mut vec![]);
+        assert_eq!(reach.players[0].stage, 0, "light build is out of reach");
+        assert_eq!(
+            reach.players[1].stage, 1,
+            "broad build can disarm farther away"
+        );
+    }
+    #[test]
+    fn holding_disarm_activates_on_arrival_once() {
+        let mut game = SignalSweep::new(&[Contestant::person(0)], 7);
+        game.players[0].route = [0, 2, 4];
+        game.players[0].x = 0.0;
+        game.players[0].z = 4.0;
+        let input = Input {
+            stick: Stick { x: 0.0, z: 1.0 },
+            fire: true,
+            ..Default::default()
+        };
+        for _ in 0..30 {
+            game.step(&[(0, input)], 1.0 / 60.0, &mut vec![]);
+        }
+        assert_eq!(game.players[0].stage, 1);
+        assert_eq!(game.players[0].points, 1);
     }
     #[test]
     fn routes_have_three_distinct_stations() {

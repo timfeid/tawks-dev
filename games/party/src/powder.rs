@@ -4,7 +4,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 
 pub const KEY: &str = "powder";
 pub const LIMIT: f32 = 67.0;
@@ -32,6 +32,7 @@ pub struct Rider {
     pub landings: u32,
     pub crashes: u32,
     pub air_time: f32,
+    pub body_width: f32,
     takeoff_speed: f32,
     cooldown: f32,
     skill: f32,
@@ -72,6 +73,7 @@ impl PowderPop {
                     landings: 0,
                     crashes: 0,
                     air_time: 0.0,
+                    body_width: BodyProfile::new(c.body_width).width,
                     takeoff_speed: 0.0,
                     cooldown: 0.0,
                     skill: c.skill.clamp(0.0, 1.0),
@@ -121,6 +123,7 @@ impl Bout for PowderPop {
         let dt = dt.clamp(0.0, 0.1);
         self.time += dt;
         for p in &mut self.players {
+            let body = BodyProfile::new(p.body_width);
             let input = inputs
                 .iter()
                 .find(|(s, _)| *s == p.seat)
@@ -130,14 +133,15 @@ impl Bout for PowderPop {
             let tap = input.fire && !p.fire_latched;
             p.fire_latched = input.fire;
             let air = p.height > 0.0 || p.vy > 0.0;
-            let control = if air { 2.2 } else { ACCEL };
-            let drag = if air { 0.12 } else { DRAG };
+            let control = (if air { 2.2 } else { ACCEL }) * body.acceleration;
+            let drag = (if air { 0.12 } else { DRAG }) / body.mass;
             p.vx = (p.vx + stick.x * control * dt) * (1.0 - drag * dt);
             p.vz = (p.vz + stick.z * control * dt) * (1.0 - drag * dt);
             let speed = p.vx.hypot(p.vz);
-            if speed > MAX_SPEED {
-                p.vx *= MAX_SPEED / speed;
-                p.vz *= MAX_SPEED / speed;
+            let cap = MAX_SPEED * body.speed;
+            if speed > cap {
+                p.vx *= cap / speed;
+                p.vz *= cap / speed;
             }
             p.x += p.vx * dt;
             p.z += p.vz * dt;
@@ -149,7 +153,8 @@ impl Bout for PowderPop {
                 if p.height <= 0.0 {
                     p.height = 0.0;
                     p.vy = 0.0;
-                    let clean = p.x.hypot(p.z) < RADIUS - 0.5 && p.vx.hypot(p.vz) > 1.0;
+                    let clean = p.x.hypot(p.z) < RADIUS - 0.5 * body.radius
+                        && p.vx.hypot(p.vz) > 1.0 / body.mass;
                     if clean {
                         p.combo = (p.combo + 1).min(2);
                         p.landings += 1;
@@ -171,14 +176,16 @@ impl Bout for PowderPop {
                     .filter(|i| Some(*i) != p.last_ramp)
                     .map(|i| (i, ramp(i, self.time)))
                     .find(|(_, (x, z))| {
-                        p.x.hypot(p.z) > 4.0 && (p.x - *x).hypot(p.z - *z) < RAMP_RADIUS
+                        p.x.hypot(p.z) > 4.0
+                            && (p.x - *x).hypot(p.z - *z) < RAMP_RADIUS * body.reach
                     })
                 {
                     let radial = p.x.hypot(p.z).max(0.1);
                     p.vx -= p.x / radial * 1.7;
                     p.vz -= p.z / radial * 1.7;
                     p.height = 0.08;
-                    p.vy = 4.8 + speed * 0.1;
+                    p.vy = (4.8 + speed * 0.1)
+                        * (1.12 - (body.width - 0.7) / 0.7 * 0.16);
                     p.air_time = 0.0;
                     p.takeoff_speed = speed;
                     p.cooldown = LAUNCH_COOLDOWN;
@@ -187,12 +194,13 @@ impl Bout for PowderPop {
                 }
             }
             let radius = p.x.hypot(p.z);
-            if radius > RADIUS {
-                let scale = RADIUS / radius;
+            let edge = RADIUS - 0.35 * body.radius;
+            if radius > edge {
+                let scale = edge / radius;
                 p.x *= scale;
                 p.z *= scale;
-                let nx = p.x / RADIUS;
-                let nz = p.z / RADIUS;
+                let nx = p.x / edge;
+                let nz = p.z / edge;
                 let outward = p.vx * nx + p.vz * nz;
                 if outward > 0.0 {
                     p.vx -= nx * outward * 1.4;
@@ -259,7 +267,7 @@ impl Bout for PowderPop {
     fn snapshot(&self) -> Value {
         json!({"game":KEY,"time":self.time.min(LIMIT),"limit":LIMIT,
             "ramps":(0..4).map(|i|{let (x,z)=ramp(i,self.time);json!({"x":x,"z":z})}).collect::<Vec<_>>(),
-            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"y":0.25,"vx":p.vx,"vz":p.vz,"vy":p.vy,"yaw":p.vx.atan2(p.vz),"height":p.height,"score":p.score,"combo":p.combo,"landings":p.landings,"crashes":p.crashes})).collect::<Vec<_>>()})
+            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"y":0.25,"vx":p.vx,"vz":p.vz,"vy":p.vy,"yaw":p.vx.atan2(p.vz),"height":p.height,"score":p.score,"combo":p.combo,"landings":p.landings,"crashes":p.crashes,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.result.clone()
@@ -344,5 +352,53 @@ mod tests {
         }
         assert_eq!(game.placements().unwrap().iter().flatten().count(), 8);
         assert!(game.players.iter().any(|p| p.landings > 0));
+    }
+    #[test]
+    fn light_sleds_jump_higher_and_broad_sleds_catch_ramps_farther_out() {
+        let mut light = Contestant::person(0);
+        light.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = PowderPop::new(&[light.clone(), broad.clone()], 7);
+        let (x, z) = ramp(0, game.time);
+        for p in &mut game.players {
+            p.x = x;
+            p.z = z;
+            p.vx = 4.2;
+        }
+        let fire = Input { fire: true, ..Default::default() };
+        game.step(&[(0, fire), (1, fire)], 1.0 / 60.0, &mut Vec::new());
+        assert!(game.players[0].vy > game.players[1].vy);
+
+        let mut game = PowderPop::new(&[light, broad], 7);
+        for p in &mut game.players {
+            p.x = x + 2.02;
+            p.z = z;
+            p.vz = 4.2;
+        }
+        game.step(&[(0, fire), (1, fire)], 1.0 / 60.0, &mut Vec::new());
+        assert_eq!(game.players[0].height, 0.0);
+        assert!(game.players[1].height > 0.0);
+    }
+    #[test]
+    fn mixed_build_bots_each_land_a_stunt_across_seeds() {
+        let mut landings = [0u32; 4];
+        for seed in 0..8 {
+            let players = (0..4).map(|seat| {
+                let mut c = Contestant::bot(seat, 0.7);
+                c.body_width = [0.7, 0.9, 1.2, 1.4][seat as usize];
+                c
+            }).collect::<Vec<_>>();
+            let mut game = PowderPop::new(&players, seed);
+            for _ in 0..(LIMIT as usize * 60 + 2) {
+                let inputs = players.iter().map(|c|
+                    (c.seat, game.bot_input(c.seat, 1.0 / 60.0))).collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for (total, rider) in landings.iter_mut().zip(&game.players) {
+                *total += rider.landings;
+            }
+        }
+        assert!(landings.iter().all(|&count| count > 0), "mixed builds: {landings:?}");
     }
 }

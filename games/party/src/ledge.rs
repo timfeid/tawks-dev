@@ -227,7 +227,7 @@ impl LedgeShuffle {
             .enumerate()
             .map(|(i, c)| Shover {
                 seat: c.seat,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 y: 0.0,
                 vy: 0.0,
                 facing: (-spread[i].0).atan2(-spread[i].1),
@@ -509,7 +509,7 @@ impl LedgeShuffle {
                 let me = &mut self.players[index];
                 me.run.vx = -nx * RECOIL_SPEED;
                 me.run.vz = -nz * RECOIL_SPEED;
-                me.stagger = RECOIL_STAGGER;
+                me.stagger = RECOIL_STAGGER * crate::bout::BodyProfile::new(me.run.width).stun;
                 me.hit_by = Some((other.seat, time));
                 events.push(json!({
                     "kind": "ledge_block",
@@ -523,7 +523,7 @@ impl LedgeShuffle {
                 let them = &mut self.players[target];
                 them.run.vx = nx * SHOVE_SPEED + them.run.vx * 0.2;
                 them.run.vz = nz * SHOVE_SPEED + them.run.vz * 0.2;
-                them.stagger = SHOVE_STAGGER;
+                them.stagger = SHOVE_STAGGER * crate::bout::BodyProfile::new(them.run.width).stun;
                 them.windup = 0.0;
                 them.still = 0.0;
                 them.hit_by = Some((shover.seat, time));

@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "docksidetangle";
 pub const ROPES: usize = 6;
@@ -12,8 +12,16 @@ pub const LIMIT: f32 = 58.;
 pub const CLICK_COOLDOWN: f32 = 0.10;
 const CODE: f32 = 1480.;
 
+fn hook_cooldown(width: f32, span: usize) -> f32 {
+    let body = BodyProfile::new(width);
+    CLICK_COOLDOWN / body.speed
+        + 0.18 * (span.min(ROPES - 1).saturating_sub(1) as f32 / (ROPES - 2) as f32)
+            / body.reach.powi(6)
+}
+
 pub struct Rigger {
     pub seat: u8,
+    pub body_width: f32,
     pub order: [u8; ROPES],
     pub selected: Option<u8>,
     pub score: u32,
@@ -98,6 +106,7 @@ impl DocksideTangle {
             .iter()
             .map(|c| Rigger {
                 seat: c.seat,
+                body_width: BodyProfile::new(c.body_width).width,
                 order,
                 selected: None,
                 score: 0,
@@ -163,8 +172,9 @@ impl Bout for DocksideTangle {
                 let Some(hook) = decode(input) else {
                     continue;
                 };
-                p.cooldown = CLICK_COOLDOWN;
                 if let Some(first) = p.selected.take() {
+                    let span = first.abs_diff(hook as u8) as usize;
+                    p.cooldown = hook_cooldown(p.body_width, span);
                     if first as usize == hook {
                         events.push(json!({"kind":"unselect","seat":p.seat,"hook":hook}));
                         continue;
@@ -176,8 +186,12 @@ impl Bout for DocksideTangle {
                     if after >= before {
                         p.wrong += 1;
                     }
-                    p.bot_time =
-                        self.time + 0.58 + (1. - p.skill) * 0.35 + self.rng.random_range(0.0..0.28);
+                    p.bot_time = self.time
+                        + 0.58
+                        + (1. - p.skill) * 0.35
+                        + self.rng.random_range(0.0..0.28)
+                        + hook_cooldown(p.body_width, span)
+                        - CLICK_COOLDOWN;
                     events.push(
                         json!({"kind":"swap","seat":p.seat,"a":first,"b":hook,"crossings":after}),
                     );
@@ -192,8 +206,13 @@ impl Bout for DocksideTangle {
                     }
                 } else {
                     p.selected = Some(hook as u8);
-                    p.bot_time =
-                        self.time + 0.19 + (1. - p.skill) * 0.08 + self.rng.random_range(0.0..0.1);
+                    p.cooldown = hook_cooldown(p.body_width, 0);
+                    p.bot_time = self.time
+                        + 0.19
+                        + (1. - p.skill) * 0.08
+                        + self.rng.random_range(0.0..0.1)
+                        + p.cooldown
+                        - CLICK_COOLDOWN;
                     events.push(json!({"kind":"select","seat":p.seat,"hook":hook}));
                 }
             } else if self.time - p.seen > 1. {
@@ -240,7 +259,9 @@ impl Bout for DocksideTangle {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,
             "players":self.riggers.iter().map(|p|json!({"seat":p.seat,"order":p.order,"selected":p.selected,
                 "crossings":crossings(&p.order),"score":p.score,"knots":p.knots,"swaps":p.swaps,
-                "wrong":p.wrong,"cooldown":p.cooldown,"gone":p.gone})).collect::<Vec<_>>()})
+                "wrong":p.wrong,"cooldown":p.cooldown,"gone":p.gone,
+                "body_width":p.body_width,"near_pull":hook_cooldown(p.body_width,1),
+                "far_pull":hook_cooldown(p.body_width,ROPES-1)})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.places.clone()
@@ -268,6 +289,28 @@ mod tests {
                 &mut Vec::new(),
             );
         }
+    }
+    #[test]
+    fn body_width_trades_near_grabs_for_far_reach() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = DocksideTangle::new(&[small, broad], 3);
+        assert!(hook_cooldown(0.7, 1) < hook_cooldown(1.4, 1));
+        assert!(hook_cooldown(1.4, ROPES - 1) < hook_cooldown(0.7, ROPES - 1));
+        game.riggers[0].selected = Some(0);
+        game.riggers[1].selected = Some(0);
+        game.step(&[(0, press(5)), (1, press(5))], 0.01, &mut Vec::new());
+        assert_eq!(game.riggers[0].swaps, 1);
+        assert_eq!(game.riggers[1].swaps, 1);
+        assert!(game.riggers[1].cooldown < game.riggers[0].cooldown);
+        assert_eq!(
+            game.snapshot()["players"][0]["body_width"]
+                .as_f64()
+                .unwrap() as f32,
+            0.7
+        );
     }
     #[test]
     fn puzzles_are_valid_and_tangled() {
@@ -375,6 +418,42 @@ mod tests {
             }
             assert!(game.riggers.iter().all(|p| p.knots >= 1));
         }
+    }
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0u32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = DocksideTangle::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.riggers {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.riggers.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Dockside Tangle mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 1500);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 15);
     }
     #[test]
     #[ignore]

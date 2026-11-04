@@ -89,7 +89,7 @@ impl Sumo {
             .enumerate()
             .map(|(i, c)| Fighter {
                 seat: c.seat,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 y: 0.0,
                 vy: 0.0,
                 stagger: 0.0,
@@ -218,7 +218,8 @@ impl Sumo {
                     a.run.z -= nz * apart;
                     a.run.vx += nx * hit_a;
                     a.run.vz += nz * hit_a;
-                    a.stagger = a.stagger.max(stagger_for(hit_a));
+                    let body = crate::bout::BodyProfile::new(a.run.width);
+                    a.stagger = a.stagger.max(stagger_for(hit_a) * body.stun);
                 }
                 {
                     let b = &mut self.players[j];
@@ -226,7 +227,8 @@ impl Sumo {
                     b.run.z += nz * apart;
                     b.run.vx += nx * hit_b;
                     b.run.vz += nz * hit_b;
-                    b.stagger = b.stagger.max(stagger_for(hit_b));
+                    let body = crate::bout::BodyProfile::new(b.run.width);
+                    b.stagger = b.stagger.max(stagger_for(hit_b) * body.stun);
                 }
                 if closing <= SHOVE_FLOOR {
                     continue;

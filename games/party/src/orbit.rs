@@ -3,7 +3,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::f32::consts::TAU;
 
-use crate::bout::{Bout, Contestant, Input, Stick};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
 
 pub const KEY: &str = "orbit";
 pub const JOB_SECONDS: f32 = 22.0;
@@ -26,6 +26,7 @@ pub struct Worker {
     pub grabs: u32,
     pub patches: u32,
     pub recycled: u32,
+    pub body_width: f32,
     charge: f32,
     cooldown: f32,
     skill: f32,
@@ -74,6 +75,7 @@ impl OrbitOddjobs {
                     grabs: 0,
                     patches: 0,
                     recycled: 0,
+                    body_width: BodyProfile::new(c.body_width).width,
                     charge: 0.0,
                     cooldown: 0.0,
                     skill: c.skill.clamp(0.0, 1.0),
@@ -162,37 +164,42 @@ impl Bout for OrbitOddjobs {
             events.push(json!({"kind":"orbit_job","job":self.job}));
         }
         for p in &mut self.players {
+            let body = BodyProfile::new(p.body_width);
             let input = inputs
                 .iter()
                 .find(|(s, _)| *s == p.seat)
                 .map(|(_, v)| *v)
                 .unwrap_or_default();
             let stick = input.stick.clamped();
-            p.vx = (p.vx + stick.x * ACCEL * dt) * (1.0 - DRAG * dt);
-            p.vz = (p.vz + stick.z * ACCEL * dt) * (1.0 - DRAG * dt);
+            let drag = (1.0 - DRAG * dt / body.mass).max(0.0);
+            p.vx = (p.vx + stick.x * ACCEL * body.acceleration * dt) * drag;
+            p.vz = (p.vz + stick.z * ACCEL * body.acceleration * dt) * drag;
             let speed = p.vx.hypot(p.vz);
-            if speed > SPEED {
-                p.vx *= SPEED / speed;
-                p.vz *= SPEED / speed;
+            let cap = SPEED * body.speed;
+            if speed > cap {
+                p.vx *= cap / speed;
+                p.vz *= cap / speed;
             }
-            p.x = (p.x + p.vx * dt).clamp(-HALF, HALF);
-            p.z = (p.z + p.vz * dt).clamp(-HALF, HALF);
-            if p.x.abs() >= HALF {
+            let edge = HALF - 0.35 * body.radius;
+            p.x = (p.x + p.vx * dt).clamp(-edge, edge);
+            p.z = (p.z + p.vz * dt).clamp(-edge, edge);
+            if p.x.abs() >= edge {
                 p.vx *= -0.2;
             }
-            if p.z.abs() >= HALF {
+            if p.z.abs() >= edge {
                 p.vz *= -0.2;
             }
             p.cooldown = (p.cooldown - dt).max(0.0);
             if self.job == 1 {
                 let close = (0..3).any(|i| {
                     let (x, z) = panel(i, self.time);
-                    distance(p.x, p.z, x, z) < PANEL_RADIUS
+                    distance(p.x, p.z, x, z) < PANEL_RADIUS * body.reach
                 });
                 if input.jump && close {
                     p.charge += dt;
-                    if p.charge >= 1.65 {
-                        p.charge -= 1.65;
+                    let steady = 1.65 * body.stun;
+                    if p.charge >= steady {
+                        p.charge -= steady;
                         p.patches += 1;
                         p.score += 1;
                         events.push(json!({"kind":"orbit_patch","seat":p.seat}));
@@ -220,6 +227,7 @@ impl Bout for OrbitOddjobs {
             }
             for index in 0..self.props.len() {
                 for player in &mut self.players {
+                    let body = BodyProfile::new(player.body_width);
                     let input = inputs
                         .iter()
                         .find(|(s, _)| *s == player.seat)
@@ -229,11 +237,11 @@ impl Bout for OrbitOddjobs {
                     if !input.jump
                         || player.cooldown > 0.0
                         || distance(player.x, player.z, prop.x, prop.z)
-                            > if self.job == 0 { 1.1 } else { SCRAP_RADIUS }
+                            > (if self.job == 0 { 1.1 } else { SCRAP_RADIUS }) * body.reach
                     {
                         continue;
                     }
-                    player.cooldown = if self.job == 0 { 0.45 } else { 0.62 };
+                    player.cooldown = (if self.job == 0 { 0.45 } else { 0.62 }) * body.mass;
                     if self.job == 0 {
                         player.score += 1;
                         player.grabs += 1;
@@ -242,8 +250,8 @@ impl Bout for OrbitOddjobs {
                         break;
                     }
                     let r = prop.x.hypot(prop.z).max(0.1);
-                    prop.vx += -prop.x / r * 7.5 + player.vx * 0.4;
-                    prop.vz += -prop.z / r * 7.5 + player.vz * 0.4;
+                    prop.vx += -prop.x / r * 7.5 * body.mass + player.vx * 0.4;
+                    prop.vz += -prop.z / r * 7.5 * body.mass + player.vz * 0.4;
                     prop.owner = Some(player.seat);
                     events.push(json!({"kind":"orbit_shove","seat":player.seat}));
                     break;
@@ -312,7 +320,7 @@ impl Bout for OrbitOddjobs {
         let stage = ["salvage", "stabilize", "recycle"][self.job];
         json!({"game":KEY,"time":self.time.min(LIMIT),"limit":LIMIT,"job":self.job,"stage":stage,"stage_time":self.time-self.job as f32*JOB_SECONDS,
             "props":if self.job==1{(0..3).map(|i|{let (x,z)=panel(i,self.time);json!({"x":x,"z":z})}).collect::<Vec<_>>()}else{self.props.iter().map(|q|json!({"x":q.x,"z":q.z,"owner":q.owner})).collect()},
-            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.vx.atan2(p.vz),"score":p.score,"grabs":p.grabs,"patches":p.patches,"recycled":p.recycled,"charge":p.charge})).collect::<Vec<_>>()})
+            "players":self.players.iter().map(|p|json!({"seat":p.seat,"x":p.x,"z":p.z,"vx":p.vx,"vz":p.vz,"yaw":p.vx.atan2(p.vz),"score":p.score,"grabs":p.grabs,"patches":p.patches,"recycled":p.recycled,"charge":p.charge,"body_width":p.body_width})).collect::<Vec<_>>()})
     }
     fn placements(&self) -> Option<Vec<Vec<u8>>> {
         self.result.clone()
@@ -323,6 +331,84 @@ mod tests {
     use super::*;
     fn players() -> Vec<Contestant> {
         vec![Contestant::person(0), Contestant::person(1)]
+    }
+    #[test]
+    fn size_changes_movement_and_scrap_shove() {
+        let mut contestants = players();
+        contestants[0].body_width = 0.7;
+        contestants[1].body_width = 1.4;
+        let mut game = OrbitOddjobs::new(&contestants, 19);
+        for p in &mut game.players {
+            p.x = 0.0;
+            p.z = -5.0;
+        }
+        let move_right = Input::from_stick(Stick { x: 1.0, z: 0.0 });
+        for _ in 0..30 {
+            game.step(&[(0, move_right), (1, move_right)], 1.0 / 60.0, &mut vec![]);
+        }
+        assert!(
+            game.players[0].x > game.players[1].x + 0.06,
+            "light={}, broad={}",
+            game.players[0].x,
+            game.players[1].x
+        );
+
+        let shove = Input {
+            jump: true,
+            ..Default::default()
+        };
+        let mut impulse = [0.0; 2];
+        for (index, contestant) in contestants.iter().enumerate() {
+            let mut job = OrbitOddjobs::new(&[contestant.clone()], 19);
+            job.job = 2;
+            job.players[0].x = 4.0;
+            job.players[0].z = 0.0;
+            job.props[0] = Prop {
+                x: 3.0,
+                z: 0.0,
+                vx: 0.0,
+                vz: 0.0,
+                owner: None,
+            };
+            for prop in &mut job.props[1..] {
+                prop.x = -8.0;
+                prop.z = 0.0;
+                prop.vx = 0.0;
+                prop.vz = 0.0;
+            }
+            job.step(&[(contestant.seat, shove)], 1.0 / 60.0, &mut vec![]);
+            impulse[index] = job.props[0].vx.abs();
+            assert_eq!(job.props[0].owner, Some(contestant.seat));
+        }
+        assert!(impulse[1] > impulse[0] * 1.2);
+    }
+    #[test]
+    fn mixed_size_bots_all_find_scoring_opportunities() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let contestants = widths
+            .iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.6);
+                c.body_width = *width;
+                c
+            })
+            .collect::<Vec<_>>();
+        let mut scores = [0u32; 4];
+        for seed in 0..8 {
+            let mut game = OrbitOddjobs::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut vec![]);
+            }
+            for p in &game.players {
+                scores[p.seat as usize] += p.score;
+            }
+        }
+        assert!(scores.iter().all(|score| *score > 0), "scores={scores:?}");
     }
     #[test]
     fn salvage_needs_nearby_action_and_respects_cooldown() {

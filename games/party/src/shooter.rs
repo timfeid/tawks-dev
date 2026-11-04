@@ -387,6 +387,7 @@ pub struct Fighter {
     pub crouching: bool,
     pub dive_for: f32,
     pub dive_cooldown: f32,
+    pub body_width: f32,
     dive_held: bool,
 }
 
@@ -462,6 +463,7 @@ impl PaintBlasters {
             .map(|(i, c)| {
                 let (x, z) = spawns[i % spawns.len()];
                 let mut fighter = blank(c.seat);
+                fighter.body_width = c.body_width;
                 fighter.x = x;
                 fighter.z = z;
                 fighter.yaw = facing_center(x, z);
@@ -722,6 +724,7 @@ impl PaintBlasters {
                 yaw: facing_center(x, z),
                 kills: fighter.kills,
                 deaths: fighter.deaths,
+                body_width: fighter.body_width,
                 ..blank(seat)
             };
         }
@@ -784,7 +787,8 @@ impl PaintBlasters {
             movement.jump = false;
             movement.crouch = true;
         }
-        fpmove::step_body(&mut body, movement, dt, &blocks, self.half_x, self.half_z);
+        fpmove::step_body_profile(&mut body, movement, dt, &blocks, self.half_x, self.half_z,
+            crate::bout::BodyProfile::new(fighter.body_width));
         fighter.x = body.x;
         fighter.y = body.y;
         fighter.z = body.z;
@@ -944,7 +948,8 @@ impl PaintBlasters {
                 )
             })
             .filter_map(|f| {
-                fpmove::ray_player(origin, dir, (f.x, f.y, f.z), PLAYER_RADIUS, f.height())
+                fpmove::ray_player(origin, dir, (f.x, f.y, f.z),
+                    PLAYER_RADIUS * crate::bout::BodyProfile::new(f.body_width).radius, f.height())
                     .map(|t| (f.seat, t))
             })
             .filter(|(_, t)| *t <= limit)
@@ -970,13 +975,14 @@ impl PaintBlasters {
         series.break_left = 0.0;
         for (index, fighter) in self.fighters.iter_mut().enumerate() {
             let (x, z) = self.spawns[index % self.spawns.len()];
-            let (seat, kills, deaths) = (fighter.seat, fighter.kills, fighter.deaths);
+            let (seat, kills, deaths, body_width) = (fighter.seat, fighter.kills, fighter.deaths, fighter.body_width);
             *fighter = Fighter {
                 x,
                 z,
                 yaw: facing_center(x, z),
                 kills,
                 deaths,
+                body_width,
                 ..blank(seat)
             };
         }
@@ -1086,6 +1092,7 @@ fn blank(seat: u8) -> Fighter {
         crouching: false,
         dive_for: 0.0,
         dive_cooldown: 0.0,
+        body_width: 1.0,
         dive_held: false,
     }
 }

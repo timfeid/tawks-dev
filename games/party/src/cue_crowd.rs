@@ -4,7 +4,7 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input};
+use crate::bout::{BodyProfile, Bout, Contestant, Input};
 
 pub const KEY: &str = "cuecrowd";
 pub const LIMIT: f32 = 60.0;
@@ -15,6 +15,7 @@ const CODE_BASE: f32 = 410.0;
 #[derive(Clone)]
 pub struct Performer {
     pub seat: u8,
+    body_width: f32,
     pub score: i32,
     pub correct: u32,
     pub last: Option<u8>,
@@ -48,6 +49,11 @@ fn decode(input: &Input) -> Option<u8> {
     (0..3).find(|choice| (input.yaw - action_code(*choice)).abs() < 0.01)
 }
 
+fn timing_windows(width: f32) -> (f32, f32) {
+    let delta = BodyProfile::new(width).width - 1.0;
+    (0.35 - delta * 0.04, 0.9 + delta * 0.12)
+}
+
 impl CueCrowd {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
@@ -56,6 +62,7 @@ impl CueCrowd {
             .iter()
             .map(|c| Performer {
                 seat: c.seat,
+                body_width: BodyProfile::new(c.body_width).width,
                 score: 0,
                 correct: 0,
                 last: None,
@@ -156,11 +163,12 @@ impl Bout for CueCrowd {
                 };
                 p.answered = true;
                 p.last = Some(choice);
+                let (perfect, good) = timing_windows(p.body_width);
                 let points = if choice == self.target {
                     p.correct += 1;
-                    if (within - 2.7).abs() <= 0.35 {
+                    if (within - 2.7).abs() <= perfect {
                         5
-                    } else if (within - 2.7).abs() <= 0.9 {
+                    } else if (within - 2.7).abs() <= good {
                         3
                     } else {
                         1
@@ -200,6 +208,8 @@ impl Bout for CueCrowd {
         json!({"game":KEY,"time":self.time,"limit":LIMIT,"cue":self.cue,"target":self.target,
             "pulse":self.time - self.cue as f32 * CUE_SECONDS,"players":self.performers.iter().map(|p| json!({
                 "seat":p.seat,"score":p.score,"correct":p.correct,"last":p.last,
+                "body_width":p.body_width,"perfect_window":timing_windows(p.body_width).0,
+                "good_window":timing_windows(p.body_width).1,
                 "last_points":p.last_points,"answered":p.answered,"gone":p.gone
             })).collect::<Vec<_>>()})
     }
@@ -221,6 +231,33 @@ mod tests {
             yaw: action_code(choice),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn body_width_changes_perfect_and_good_spotlight_timing() {
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = CueCrowd::new(&[small.clone(), broad.clone()], 4);
+        let target = game.target;
+        game.time = 2.7 + 0.345;
+        game.step(&[(0, tap(target)), (1, tap(target))], 0.01, &mut Vec::new());
+        assert_eq!((game.performers[0].score, game.performers[1].score), (5, 3));
+        let players = game.snapshot()["players"].as_array().unwrap().clone();
+        assert!(
+            players[0]["perfect_window"].as_f64().unwrap()
+                > players[1]["perfect_window"].as_f64().unwrap()
+        );
+        assert!(
+            players[0]["good_window"].as_f64().unwrap()
+                < players[1]["good_window"].as_f64().unwrap()
+        );
+        let mut game = CueCrowd::new(&[small, broad], 4);
+        let target = game.target;
+        game.time = 2.7 + 0.895;
+        game.step(&[(0, tap(target)), (1, tap(target))], 0.01, &mut Vec::new());
+        assert_eq!((game.performers[0].score, game.performers[1].score), (1, 3));
     }
 
     #[test]
@@ -335,5 +372,42 @@ mod tests {
                 score_edge as f32 / 200.
             );
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn mixed_body_balance_report() {
+        let widths = [0.7, 0.9, 1.2, 1.4];
+        let mut scores = [0i32; 4];
+        let mut wins = [0u32; 4];
+        for seed in 0..128u64 {
+            let contestants = (0..4u8)
+                .map(|seat| {
+                    let mut c = Contestant::bot(seat, 0.5);
+                    c.body_width = widths[(seat as usize + seed as usize) % 4];
+                    c
+                })
+                .collect::<Vec<_>>();
+            let mut game = CueCrowd::new(&contestants, seed);
+            while game.placements().is_none() {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut Vec::new());
+            }
+            for p in &game.performers {
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                scores[index] += p.score;
+            }
+            for &seat in &game.placements().unwrap()[0] {
+                let p = game.performers.iter().find(|p| p.seat == seat).unwrap();
+                let index = widths.iter().position(|w| *w == p.body_width).unwrap();
+                wins[index] += 1;
+            }
+        }
+        println!("Cue Crowd mixed builds: widths={widths:?} scores={scores:?} wins={wins:?}");
+        assert!(*scores.iter().max().unwrap() - *scores.iter().min().unwrap() <= 250);
+        assert!(*wins.iter().max().unwrap() - *wins.iter().min().unwrap() <= 20);
     }
 }

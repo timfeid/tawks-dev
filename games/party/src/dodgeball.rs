@@ -8,7 +8,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
 use crate::fpmove::{self, Block, Body, EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS};
-use crate::bout::{Contestant, Input, Bout, Skill, Stick};
+use crate::bout::{BodyProfile, Contestant, Input, Bout, Skill, Stick};
 
 pub const COURT_HALF_X: f32 = 12.0;
 pub const COURT_HALF_Z: f32 = 16.0;
@@ -51,6 +51,7 @@ pub struct Ball {
 pub struct Player {
     pub seat: u8,
     pub body: Body,
+    pub body_width: f32,
     pub yaw: f32,
     pub pitch: f32,
     pub hits: u32,
@@ -132,6 +133,7 @@ impl Dodgeball {
                 let mut player = Player {
                     seat: c.seat,
                     body: Body::default(),
+                    body_width: c.body_width,
                     yaw: if end < 0.0 { std::f32::consts::PI } else { 0.0 },
                     pitch: 0.0,
                     hits: 0,
@@ -280,7 +282,7 @@ impl Dodgeball {
                 }
                 let dx = ball.x - player.body.x;
                 let dz = ball.z - player.body.z;
-                let reach = BALL_RADIUS + PLAYER_RADIUS;
+                let reach = BALL_RADIUS + PLAYER_RADIUS * BodyProfile::new(player.body_width).radius;
                 let low = player.body.y - BALL_RADIUS;
                 let high = player.body.y + PLAYER_HEIGHT + BALL_RADIUS;
                 if dx * dx + dz * dz <= reach * reach && ball.y >= low && ball.y <= high {
@@ -308,7 +310,7 @@ impl Dodgeball {
             dropped.vz = 0.0;
         }
         if let Some(player) = self.players.iter_mut().find(|p| p.seat == seat) {
-            player.out_for = OUT_SECONDS;
+            player.out_for = OUT_SECONDS * BodyProfile::new(player.body_width).stun;
             player.outs += 1;
             player.body.vx = 0.0;
             player.body.vz = 0.0;
@@ -326,7 +328,7 @@ impl Dodgeball {
         let Some(player) = self.player(seat).cloned() else {
             return;
         };
-        let reach = PICKUP_RANGE * PICKUP_RANGE;
+        let reach = (PICKUP_RANGE * BodyProfile::new(player.body_width).reach).powi(2);
         let found = self.balls.iter().position(|b| {
             b.state == BallState::Idle
                 && (b.x - player.body.x).powi(2) + (b.z - player.body.z).powi(2) <= reach
@@ -376,7 +378,7 @@ impl Dodgeball {
                     let dz = ball.z - player.body.z;
                     let distance = (dx * dx + dz * dz).sqrt();
                     let closing = ball.vx * -dx + ball.vz * -dz > 0.0;
-                    if distance <= CATCH_RANGE && closing {
+                    if distance <= CATCH_RANGE * BodyProfile::new(player.body_width).reach && closing {
                         Some((i, by, distance))
                     } else {
                         None
@@ -544,13 +546,14 @@ impl Bout for Dodgeball {
             }
             let blocks = self.blocks.clone();
             let player = &mut self.players[index];
-            fpmove::step_body(
+            fpmove::step_body_profile(
                 &mut player.body,
                 input,
                 dt,
                 &blocks,
                 self.half_x,
                 self.half_z,
+                BodyProfile::new(player.body_width),
             );
             self.pick_up(seat, events);
             if input.fire {
@@ -747,5 +750,20 @@ mod tests {
         assert!(eight.balls.iter().all(|b| b.x.abs() < eight.half_x - BALL_RADIUS));
         assert!(eight.players.iter().all(|p| p.body.x.abs() < eight.half_x - 1.0), "everyone starts on court");
         assert!((eight.blocks[0].x / court()[0].x - grow).abs() < 1e-4, "the crates spread out");
+    }
+
+    #[test]
+    fn build_changes_the_ball_hitbox_and_recovery_time() {
+        let mut narrow = Contestant::person(0);
+        narrow.body_width = 0.7;
+        let mut broad = Contestant::person(1);
+        broad.body_width = 1.4;
+        let mut game = Dodgeball::new(&[narrow, broad], 3);
+        game.knock_out(0, 1, 0, &mut Vec::new());
+        let narrow_out = game.player(0).unwrap().out_for;
+        game.knock_out(1, 0, 0, &mut Vec::new());
+        let broad_out = game.player(1).unwrap().out_for;
+        assert!(broad_out < narrow_out);
+        assert!(BodyProfile::new(1.4).radius > BodyProfile::new(0.7).radius);
     }
 }

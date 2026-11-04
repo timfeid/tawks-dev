@@ -12,7 +12,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::f32::consts::{PI, TAU};
 
-use crate::bout::{Bout, Contestant, Input, Skill, round_form};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill, round_form};
 
 pub const KEY: &str = "stencil";
 pub const HALF_W: f32 = 1.0;
@@ -27,6 +27,11 @@ pub const PREVIEW_SECONDS: f32 = 3.0;
 pub const CUT_SECONDS: f32 = 14.0;
 pub const TALLY_SECONDS: f32 = 3.0;
 pub const TORCH_SPEED: f32 = 1.15;
+/// A smaller cutter can sweep the torch faster; larger cutters move it with
+/// more deliberate hands, matching the shared body movement profile.
+pub fn torch_speed(width: f32) -> f32 {
+    TORCH_SPEED * BodyProfile::new(width).speed
+}
 /// Within this of the line a cut is perfect.
 pub const LINE_TOLERANCE: f32 = 0.015;
 /// Past this the torch throws sparks.
@@ -305,6 +310,7 @@ struct Hand {
 #[derive(Clone, Debug)]
 pub struct Cutter {
     pub seat: u8,
+    pub width: f32,
     pub torch: (f32, f32),
     pub aim: (f32, f32),
     /// Distance cut along the outline in the settled direction.
@@ -385,6 +391,7 @@ impl StencilRush {
             .iter()
             .map(|c| Cutter {
                 seat: c.seat,
+                width: BodyProfile::new(c.body_width).width,
                 torch: start,
                 aim: start,
                 progress: 0.0,
@@ -507,7 +514,7 @@ impl StencilRush {
         }
         let to = (player.aim.0 - player.torch.0, player.aim.1 - player.torch.1);
         let far = to.0.hypot(to.1);
-        let step = far.min(TORCH_SPEED * dt);
+        let step = far.min(torch_speed(player.width) * dt);
         if step <= 1e-6 {
             player.spark = player.gap > SPARK_DISTANCE;
             return;
@@ -683,7 +690,7 @@ impl StencilRush {
             return hand.aim;
         }
         let length = shape.length;
-        let pace = TORCH_SPEED * hand.pace;
+        let pace = torch_speed(p.width) * hand.pace;
         if let Some((from, way, left, resume)) = hand.overshoot {
             let left = left - pace * 0.8 * dt;
             let run = dist(from, hand.aim) + pace * 0.8 * dt;
@@ -818,6 +825,8 @@ impl Bout for StencilRush {
                 let (x, _) = sheet_to_world(bx, bz, p.torch.0 * 0.6, 0.0);
                 json!({
                     "seat": p.seat,
+                    "body_width": p.width,
+                    "torch_speed": round3(torch_speed(p.width)),
                     "tx": round3(p.torch.0),
                     "ty": round3(p.torch.1),
                     "ax": round3(p.aim.0),

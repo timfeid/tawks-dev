@@ -20,6 +20,8 @@ fn run(games: u64, favorite_skill: f32, field_skill: f32) {
                 },
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect();
         let mut game = create("mirth", &seats, 41_000 + index).unwrap();

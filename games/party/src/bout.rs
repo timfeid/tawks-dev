@@ -147,7 +147,7 @@ pub static BOUTS: &[BoutSpec] = &[
     spec(
         crate::hill::KEY,
         "King of the Hill",
-        "Hold the summit while the slope and everyone else push you off.",
+        "Hold the summit while the slope and everyone else push you off. Small builds climb faster; broad builds hold ground and recover sooner.",
         Controls::Move,
         |c, s| Box::new(crate::hill::KingOfTheHill::new(c, s)),
     ),
@@ -164,14 +164,14 @@ pub static BOUTS: &[BoutSpec] = &[
     spec(
         crate::memory::KEY,
         "Memory Tiles",
-        "Watch the tiles light up, then walk them back in order and stomp each one. One wrong tile and you are out.",
+        "Watch the tiles light up, then walk them back in order and stomp each one. Small builds move faster; broad builds have a wider stomp. One wrong tile and you are out.",
         Controls::MoveAction,
         |c, s| Box::new(crate::memory::MemoryTiles::new(c, s)),
     ),
     spec(
         crate::rising::KEY,
         "Rising Water",
-        "The arena is flooding. Jump up the platforms before they crumble. Last one above water wins.",
+        "The arena is flooding. Jump up the platforms before they crumble. Small builds jump higher and leave pads standing longer; broad builds land and hold their ground more easily.",
         Controls::MoveAction,
         |c, s| Box::new(crate::rising::RisingWater::new(c, s)),
     ),
@@ -185,7 +185,7 @@ pub static BOUTS: &[BoutSpec] = &[
     spec(
         "tank",
         "Tank Clash",
-        "Bounce shells off the walls. Most wrecks wins.",
+        "Bounce shells off the walls. Small hulls drive and turn faster; broad hulls reload sooner. Most wrecks wins.",
         Controls::MoveAim,
         |c, s| Box::new(crate::tank::TankClash::new(c, s)),
     ),
@@ -201,7 +201,7 @@ pub static BOUTS: &[BoutSpec] = &[
         ..spec(
             crate::tug::KEY,
             "Tug of War",
-            "Alternate your presses to heave the rope. The side it hauls over the water goes in.",
+            "Alternate your presses to heave the rope. Broad pullers haul farther; small pullers keep a faster rhythm.",
             Controls::MoveAction,
             |c, s| Box::new(crate::tug::TugOfWar::new(c, s)),
         )
@@ -244,7 +244,7 @@ pub static BOUTS: &[BoutSpec] = &[
     spec(
         crate::glass::KEY,
         "Glass Cannon",
-        "Shoot marbles at the panes in your color. Hit a rival's color and they get the point.",
+        "Shoot panes in your color. Small builds fire sooner; broad marbles forgive lead. A rival's pane gives them the point.",
         Controls::FirstPerson,
         |c, s| Box::new(crate::glass::GlassCannon::new(c, s)),
     ),
@@ -265,7 +265,7 @@ pub static BOUTS: &[BoutSpec] = &[
     spec(
         crate::fuse::KEY,
         "Overcooked Fuse",
-        "Hold the lit cannonball to earn. Pass it before it blows, or lose this fuse's haul.",
+        "Hold the lit cannonball to earn. Pass it before it blows. Broad builds swat more easily; small builds recover faster.",
         Controls::MoveAim,
         |c, s| Box::new(crate::fuse::OvercookedFuse::new(c, s)),
     ),
@@ -356,7 +356,7 @@ pub static BOUTS: &[BoutSpec] = &[
     spec(
         crate::pigeon::KEY,
         "Pigeon Post",
-        "Watch the marked letters reach the mailboxes. When the birds fly off, pick the box that received the called letter.",
+        "Watch the marked letters reach the mailboxes. Pick the called letter's box, then race to deliver your answer before time runs out. Small pets run faster; broad pets can deliver from farther away.",
         Controls::MoveAction,
         |c, s| Box::new(crate::pigeon::PigeonPost::new(c, s)),
     ),
@@ -479,6 +479,18 @@ pub static BOUTS: &[BoutSpec] = &[
         Controls::MoveAction,
         |c, s| Box::new(crate::mixer_circuit::MixerCircuit::new(c, s)),
     ),
+    spec(crate::pet_arcade::KEYS[0], crate::pet_arcade::NAMES[0], crate::pet_arcade::RULES[0], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(0, c, s))),
+    spec(crate::pet_arcade::KEYS[1], crate::pet_arcade::NAMES[1], crate::pet_arcade::RULES[1], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(1, c, s))),
+    spec(crate::pet_arcade::KEYS[2], crate::pet_arcade::NAMES[2], crate::pet_arcade::RULES[2], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(2, c, s))),
+    spec(crate::pet_arcade::KEYS[3], crate::pet_arcade::NAMES[3], crate::pet_arcade::RULES[3], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(3, c, s))),
+    spec(crate::pet_arcade::KEYS[4], crate::pet_arcade::NAMES[4], crate::pet_arcade::RULES[4], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(4, c, s))),
+    spec(crate::pet_arcade::KEYS[5], crate::pet_arcade::NAMES[5], crate::pet_arcade::RULES[5], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(5, c, s))),
+    spec(crate::pet_arcade::KEYS[6], crate::pet_arcade::NAMES[6], crate::pet_arcade::RULES[6], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(6, c, s))),
+    spec(crate::pet_arcade::KEYS[7], crate::pet_arcade::NAMES[7], crate::pet_arcade::RULES[7], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(7, c, s))),
+    spec(crate::pet_arcade::KEYS[8], crate::pet_arcade::NAMES[8], crate::pet_arcade::RULES[8], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(8, c, s))),
+    spec(crate::pet_arcade::KEYS[9], crate::pet_arcade::NAMES[9], crate::pet_arcade::RULES[9], Controls::MoveAction, |c, s| Box::new(crate::pet_arcade::PetArcade::new(9, c, s))),
+    spec(crate::pet_arena::KEYS[0], crate::pet_arena::NAMES[0], crate::pet_arena::RULES[0], Controls::MoveAim, |c, s| Box::new(crate::pet_arena::PetArena::new(0, c, s))),
+    BoutSpec { format: Format::Teams, min_players: 8, ..spec(crate::pet_arena::KEYS[1], crate::pet_arena::NAMES[1], crate::pet_arena::RULES[1], Controls::MoveAim, |c, s| Box::new(crate::pet_arena::PetArena::new(1, c, s))) },
 ];
 
 pub fn find(key: &str) -> Option<&'static BoutSpec> {

@@ -101,6 +101,8 @@ fn run(games: u64, top: f32, field: f32, base: u64) -> [Falls; 2] {
                 skill: if seat == star { top } else { field },
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect();
         let seed = base + seed;

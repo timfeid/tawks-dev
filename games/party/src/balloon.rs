@@ -61,7 +61,7 @@ impl BalloonBrawl {
             .enumerate()
             .map(|(i, c)| Brawler {
                 seat: c.seat,
-                run: Runner::at(spread[i].0, spread[i].1),
+                run: Runner::at(spread[i].0, spread[i].1).with_width(c.body_width),
                 balloons: BALLOONS,
                 dash: 0.0,
                 cooldown: 0.0,
@@ -101,7 +101,8 @@ impl BalloonBrawl {
             .map(|p| (p.seat, p.run.x, p.run.z, p.run.vx, p.run.vz))
             .collect();
         for (seat, x, z, vx, vz) in dashers {
-            let reach = POP_RANGE + ground::RUNNER_RADIUS;
+            let attacker = self.players.iter().find(|p| p.seat == seat).unwrap();
+            let reach = POP_RANGE * crate::bout::BodyProfile::new(attacker.run.width).reach;
             let hit = self
                 .players
                 .iter()
@@ -113,7 +114,10 @@ impl BalloonBrawl {
                         ((p.run.x - x).powi(2) + (p.run.z - z).powi(2)).sqrt(),
                     )
                 })
-                .filter(|(_, away)| *away <= reach)
+                .filter(|(seat, away)| {
+                    let victim = self.players.iter().find(|p| p.seat == *seat).unwrap();
+                    *away <= reach + ground::RUNNER_RADIUS * crate::bout::BodyProfile::new(victim.run.width).radius
+                })
                 .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             let Some((mark, _)) = hit else { continue };
             let time = self.time;
@@ -121,10 +125,11 @@ impl BalloonBrawl {
             let mut out = false;
             if let Some(target) = self.players.iter_mut().find(|p| p.seat == mark) {
                 target.balloons = target.balloons.saturating_sub(1);
-                target.safe = SAFE_SECONDS;
+                let body = crate::bout::BodyProfile::new(target.run.width);
+                target.safe = SAFE_SECONDS * body.stun;
                 let push = (vx * vx + vz * vz).sqrt().max(1.0);
-                target.run.vx += vx / push * KNOCKBACK;
-                target.run.vz += vz / push * KNOCKBACK;
+                target.run.vx += vx / push * KNOCKBACK / body.mass;
+                target.run.vz += vz / push * KNOCKBACK / body.mass;
                 popped = target.balloons;
                 if !target.playing() {
                     target.out_at = Some(time);
@@ -221,8 +226,9 @@ impl Bout for BalloonBrawl {
                 }
                 .clamped();
                 let length = (aim.x * aim.x + aim.z * aim.z).sqrt().max(0.01);
-                player.run.vx = aim.x / length * ground::RUN_SPEED * DASH_SPEED;
-                player.run.vz = aim.z / length * ground::RUN_SPEED * DASH_SPEED;
+                let speed = crate::bout::BodyProfile::new(player.run.width).speed;
+                player.run.vx = aim.x / length * ground::RUN_SPEED * DASH_SPEED * speed;
+                player.run.vz = aim.z / length * ground::RUN_SPEED * DASH_SPEED * speed;
             }
             let speed = if player.dashing() {
                 ground::RUN_SPEED * DASH_SPEED

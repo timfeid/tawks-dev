@@ -146,6 +146,8 @@ mod tests {
                 skill: crate::bout::DEFAULT_SKILL,
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect()
     }

@@ -34,6 +34,8 @@ fn winners(spec: &BoutSpec, skills: &[f32], seed: u64) -> Option<Vec<u8>> {
             skill,
             team: (s % 2) as u8,
             ally: None,
+            body_width: 1.0,
+            pet: 4,
         })
         .collect();
     let scale = std::env::var("FORM_SCALE")

@@ -29,6 +29,8 @@ fn run(games: u64, top: f32, field: f32, offset: u64) -> Tally {
                 skill: if seat == favorite { top } else { field },
                 team: seat % 2,
                 ally: None,
+                body_width: 1.0,
+                pet: 4,
             })
             .collect();
         let seed = 10_000 + offset + index;

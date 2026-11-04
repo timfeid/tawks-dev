@@ -82,6 +82,8 @@ pub mod orbit;
 pub mod wake;
 pub mod powder;
 pub mod mirth;
+pub mod pet_arcade;
+pub mod pet_arena;
 pub mod tug;
 pub mod workflows;
 

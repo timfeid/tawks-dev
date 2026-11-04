@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use serde_json::{Value, json};
 
-use crate::bout::{Bout, Contestant, Input, Skill};
+use crate::bout::{BodyProfile, Bout, Contestant, Input, Skill};
 
 pub const KEY: &str = "glass";
 pub const ROUND_SECONDS: f32 = 75.0;
@@ -29,6 +29,7 @@ pub const SHRINK: f32 = 0.45;
 pub const EYE_HEIGHT: f32 = 1.6;
 pub const LANE_SPACING: f32 = 1.8;
 pub const MARBLE_SPEED: f32 = 48.0;
+pub const MARBLE_RADIUS: f32 = 0.11;
 pub const MARBLE_LIFE: f32 = 1.4;
 pub const FIRE_COOLDOWN: f32 = 0.2;
 pub const WAVE_SECONDS: f32 = 7.5;
@@ -40,6 +41,14 @@ pub const LEAD: f32 = 0.07;
 pub const FRENZY_FROM: f32 = ROUND_SECONDS - 12.0;
 /// A seat the room has stopped sending input for this long has left.
 const GONE_AFTER: f32 = 1.0;
+
+fn fire_interval(width: f32) -> f32 {
+    FIRE_COOLDOWN / BodyProfile::new(width).speed.powi(2)
+}
+
+fn marble_radius(width: f32) -> f32 {
+    MARBLE_RADIUS * BodyProfile::new(width).width
+}
 
 pub const PALETTE: [&str; 8] = [
     "#ff4d5e", "#3d8bff", "#ffc93d", "#3ddc84", "#b45cff", "#ff7a1a", "#2fe0e0", "#ff6fcf",
@@ -76,6 +85,7 @@ pub struct Pane {
 #[derive(Clone, Debug)]
 pub struct Shooter {
     pub seat: u8,
+    pub body_width: f32,
     pub x: f32,
     pub yaw: f32,
     pub pitch: f32,
@@ -93,6 +103,7 @@ pub struct Shooter {
 pub struct Marble {
     pub id: u32,
     pub by: u8,
+    pub radius: f32,
     pub pos: [f32; 3],
     pub vel: [f32; 3],
     pub life: f32,
@@ -173,6 +184,7 @@ impl GlassCannon {
                 let (yaw, pitch) = aim_at([x, EYE_HEIGHT, 0.0], [0.0, center_y, WINDOW_Z]);
                 Shooter {
                     seat: c.seat,
+                    body_width: BodyProfile::new(c.body_width).width,
                     x,
                     yaw,
                     pitch,
@@ -344,8 +356,13 @@ impl GlassCannon {
     /// The pane under a point on the window, or None for empty air. Lead
     /// between panes counts as a pane-less hit.
     pub fn pane_at(&self, x: f32, y: f32) -> PaneHit {
+        self.pane_at_with_radius(x, y, MARBLE_RADIUS)
+    }
+
+    fn pane_at_with_radius(&self, x: f32, y: f32, radius: f32) -> PaneHit {
         let (_, w, h) = self.window();
         let (cw, ch) = self.cell_size();
+        let lead_margin = (LEAD / 2.0 - (radius - MARBLE_RADIUS) / cw).clamp(0.005, 0.06);
         let u = (x + w / 2.0) / cw;
         let v = (self.center_y + h / 2.0 - y) / ch;
         if !(0.0..self.cols as f32).contains(&u) || !(0.0..self.rows as f32).contains(&v) {
@@ -370,7 +387,7 @@ impl GlassCannon {
             }
         }
         match best {
-            Some((_, edge)) if edge < LEAD / 2.0 => PaneHit::Lead,
+            Some((_, edge)) if edge < lead_margin => PaneHit::Lead,
             Some((index, _)) => PaneHit::Pane(index),
             None => PaneHit::Hole,
         }
@@ -390,11 +407,12 @@ impl GlassCannon {
         let id = self.next_marble;
         self.next_marble += 1;
         let shooter = &mut self.shooters[index];
-        shooter.cooldown = FIRE_COOLDOWN;
+        shooter.cooldown = fire_interval(shooter.body_width);
         shooter.shots += 1;
         self.marbles.push(Marble {
             id,
             by: seat,
+            radius: marble_radius(shooter.body_width),
             pos: [
                 eye[0] + dir[0] * 0.6,
                 eye[1] - 0.15 + dir[1] * 0.6,
@@ -429,7 +447,8 @@ impl GlassCannon {
             }
         }
         for entry in landed.iter_mut() {
-            entry.1 = self.pane_at(entry.2[0], entry.2[1]);
+            entry.1 =
+                self.pane_at_with_radius(entry.2[0], entry.2[1], self.marbles[entry.0].radius);
         }
         let mut spent: Vec<usize> = Vec::new();
         for (index, hit, at) in landed {
@@ -697,7 +716,7 @@ impl Bout for GlassCannon {
     fn setup(&self) -> Value {
         json!({
             "game": KEY,
-            "rule": "Break the panes in your color. Break a rival's and they get the point.",
+            "rule": "Break the panes in your color. Small builds fire sooner; broad marbles break panes closer to the lead. Break a rival's and they get the point.",
             "cols": self.cols,
             "rows": self.rows,
             "window_z": WINDOW_Z,
@@ -705,6 +724,7 @@ impl Bout for GlassCannon {
             "cell": CELL,
             "eye": EYE_HEIGHT,
             "cooldown": FIRE_COOLDOWN,
+            "marble_radius": MARBLE_RADIUS,
             "speed": MARBLE_SPEED,
             "lead": LEAD,
             "frenzy_from": FRENZY_FROM,
@@ -833,6 +853,8 @@ impl Bout for GlassCannon {
             },
             "players": self.shooters.iter().map(|s| json!({
                 "seat": s.seat,
+                "body_width": s.body_width,
+                "fire_interval": round(fire_interval(s.body_width)),
                 "x": round(s.x),
                 "z": 0.0,
                 "yaw": round(s.yaw),
@@ -861,6 +883,7 @@ impl Bout for GlassCannon {
             "marbles": self.marbles.iter().map(|m| json!({
                 "id": m.id,
                 "by": m.by,
+                "radius": round(m.radius),
                 "pos": [round(m.pos[0]), round(m.pos[1]), round(m.pos[2])],
                 "vel": [round(m.vel[0]), round(m.vel[1]), round(m.vel[2])],
             })).collect::<Vec<_>>(),
@@ -1001,6 +1024,40 @@ mod tests {
         fire_and_land(&mut game, 1, above);
         assert!(game.shooters.iter().all(|s| s.score == 0));
         assert!(game.panes.iter().all(|p| !p.broken));
+    }
+
+    #[test]
+    fn small_builds_fire_faster_and_broad_marbles_break_near_lead() {
+        let mut field = people(2);
+        field[0].body_width = 0.7;
+        field[1].body_width = 1.4;
+        let mut game = GlassCannon::new(&field, 3);
+        let edge = game.cell_to_world((-0.475, 0.0));
+        assert_eq!(
+            game.pane_at_with_radius(edge[0], edge[1], marble_radius(0.7)),
+            PaneHit::Lead
+        );
+        assert!(matches!(
+            game.pane_at_with_radius(edge[0], edge[1], marble_radius(1.4)),
+            PaneHit::Pane(_)
+        ));
+        let small_events = fire_and_land(&mut game, 0, edge);
+        assert!(small_events.iter().any(|event| event["kind"] == "clink"));
+        let broad_events = fire_and_land(&mut game, 1, edge);
+        assert!(broad_events.iter().any(|event| event["kind"] == "shatter"));
+
+        let mut game = GlassCannon::new(&field, 4);
+        let held = Input {
+            yaw: std::f32::consts::PI,
+            pitch: 0.2,
+            fire: true,
+            ..Default::default()
+        };
+        for _ in 0..60 {
+            game.step(&[(0, held), (1, held)], TICK_DT, &mut Vec::new());
+        }
+        assert!(game.shooters[0].shots > game.shooters[1].shots);
+        assert!(game.snapshot()["marbles"].is_array());
     }
 
     #[test]
@@ -1198,6 +1255,27 @@ mod tests {
             }
         }
         assert!(sharp_wins >= 8, "ruthless won {sharp_wins} of 12");
+    }
+
+    #[test]
+    fn mixed_body_builds_both_win_with_rotated_seats() {
+        let mut wins = [0.0f32; 2];
+        for seed in 0..64 {
+            let mut field = bots(2, 0.5);
+            field[seed as usize % 2].body_width = 0.7;
+            field[(seed as usize + 1) % 2].body_width = 1.4;
+            let mut game = GlassCannon::new(&field, seed);
+            run(&mut game);
+            let first = &game.placements().unwrap()[0];
+            for &seat in first {
+                let size = usize::from(field[seat as usize].body_width > 1.0);
+                wins[size] += 1.0 / first.len() as f32;
+            }
+        }
+        assert!(
+            wins[0] >= 16.0 && wins[1] >= 16.0,
+            "small/broad wins: {wins:?}"
+        );
     }
 
     #[test]
