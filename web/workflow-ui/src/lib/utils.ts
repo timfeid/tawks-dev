@@ -288,6 +288,14 @@ export function formatDate(
 }
 
 /** Bots may link out over http(s) or to an in-app path; nothing else. */
+/** "Wild Card" is `wild-card`: what a page's address names a tab by, as the server does. */
+export function tabKey(label: string): string {
+  return label.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).join('-');
+}
+
+/** The host's ask to open a tab by its key once the page draws its tab bar. */
+export type OpenTabRequest = { readonly wanted: string | null; opened(): void };
+
 export function safeHref(href: string | null | undefined): string | null {
   if (!href || /\{[^{}]+\}/.test(href)) return null;
   const trimmed = href.trim();

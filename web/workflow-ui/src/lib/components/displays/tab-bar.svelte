@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { evaluateCondition, safeHref } from '../../utils';
+  import { evaluateCondition, safeHref, tabKey, type OpenTabRequest } from '../../utils';
   import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import { pressable } from '../../act.svelte';
   import type { Props } from '../workflow-display.svelte';
   import { LUCIDE_REGISTRY } from './icon/registry.js';
-  import { getContext } from 'svelte';
+  import { getContext, untrack } from 'svelte';
 
   let { display, inputs, workflow }: Props = $props();
   let bar = $derived(typeof display.type !== 'string' && 'TabBar' in display.type ? display.type.TabBar : null);
@@ -13,6 +13,18 @@
   let style = $derived(docked ? look.dockedTabs : look.tabs[bar?.style ?? 'Underline']);
   const press = pressable(() => ({ workflow, inputs }));
   let active = $derived(bar ? bar.tabs.findIndex((tab) => evaluateCondition(tab.active, inputs)) : -1);
+
+  const openTab = getContext<OpenTabRequest | undefined>('open-tab');
+  $effect(() => {
+    const wanted = openTab?.wanted;
+    if (!bar || !wanted) return;
+    untrack(() => {
+      const tab = bar.tabs.find((tab) => tab.act && tabKey(shown(inputs, tab.label)) === wanted);
+      if (!tab) return;
+      if (!evaluateCondition(tab.active, inputs)) press.runLatest(tab.act);
+      openTab!.opened();
+    });
+  });
 
   // Arrow keys, Home and End move between tabs and open them, like every other Tawks tab list.
   function onkeydown(event: KeyboardEvent) {

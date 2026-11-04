@@ -5,7 +5,7 @@ use specta::Type;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    AttachedWorkflowMeta, WorkflowRuntimeStatus, WorkflowVisual,
+    AttachedWorkflowMeta, WorkflowDefinition, WorkflowRuntimeStatus, WorkflowVisual,
     error::{AppResult, WorkflowError},
     path::{get_path_any, get_path_from_value},
     schedule::ScheduledJob,
@@ -109,6 +109,62 @@ pub struct WorkflowDefinitionAvailabilityResource {
     pub workflow_id: String,
     pub available_now: bool,
     pub unavailable_reason: Option<String>,
+}
+
+/// A tab a page's tab bar offers, which `?tab=<key>` on the page's address opens.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct PageTab {
+    pub key: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct WorkflowPageTabsResource {
+    pub workflow_id: String,
+    pub tabs: Vec<PageTab>,
+}
+
+/// The tabs of every tab bar the definition draws, in node order. Labels
+/// filled in at run time are left out, since nothing could name them ahead.
+pub fn page_tabs(definition: &WorkflowDefinition) -> Vec<PageTab> {
+    let mut tabs: Vec<PageTab> = Vec::new();
+    for node in definition.nodes.0.values() {
+        if let Ok(value) = serde_json::to_value(node) {
+            collect_tabs(&value, &mut tabs);
+        }
+    }
+    tabs
+}
+
+fn collect_tabs(value: &Value, out: &mut Vec<PageTab>) {
+    match value {
+        Value::Object(map) => {
+            if let Some(Value::Array(tabs)) = map.get("TabBar").and_then(|bar| bar.get("tabs")) {
+                for tab in tabs {
+                    let Some(label) = tab.get("label").and_then(Value::as_str) else { continue };
+                    let opens = !tab.get("act").is_none_or(Value::is_null);
+                    let key = tab_key(label);
+                    if !opens || label.contains('{') || key.is_empty() || out.iter().any(|t| t.key == key) {
+                        continue;
+                    }
+                    out.push(PageTab { key, label: label.trim().to_string() });
+                }
+            }
+            map.values().for_each(|child| collect_tabs(child, out));
+        }
+        Value::Array(items) => items.iter().for_each(|child| collect_tabs(child, out)),
+        _ => {}
+    }
+}
+
+/// "Wild Card" is `wild-card`: what the address names a tab by.
+pub fn tab_key(label: &str) -> String {
+    label
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -371,4 +427,32 @@ pub struct StartWorkflowOnBehalfArgs {
     pub context: HashMap<String, Value>,
     pub user_id: String,
     pub inject: Option<InjectWorkflowPlace>,
+}
+
+#[cfg(test)]
+mod page_tab_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn collects_each_tab_once_and_skips_run_time_labels() {
+        let tab = |label: &str, act: Value| json!({ "label": label, "icon": null, "active": null, "act": act, "href": null });
+        let view = json!({ "action": "th_view", "inputs": null, "disabled": null });
+        let node = json!({ "visuals": [
+            { "display": { "type": { "TabBar": { "style": "Segmented", "tabs": [
+                tab("Overview", view.clone()), tab("Wild Card", view.clone()), tab("{name}", view.clone()), tab("Link", Value::Null)
+            ] } } } },
+            { "display": { "type": { "TabBar": { "style": "Segmented", "tabs": [tab("Overview", view.clone())] } } } }
+        ] });
+        let mut out = Vec::new();
+        collect_tabs(&node, &mut out);
+        assert_eq!(
+            out,
+            vec![
+                PageTab { key: "overview".into(), label: "Overview".into() },
+                PageTab { key: "wild-card".into(), label: "Wild Card".into() },
+            ]
+        );
+        assert_eq!(tab_key("  Montréal / News "), "montréal-news");
+    }
 }
