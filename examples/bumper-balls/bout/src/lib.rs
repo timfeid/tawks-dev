@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
-use tawks_bout::{BodyProfile, Bout, BoutSpec, Contestant, Controls, Format, Input, Skill, Stick, crowd_scale};
+use tawks_bout::{
+    BodyProfile, Bout, BoutSpec, Contestant, Controls, Format, Input, Skill, Stick, crowd_scale,
+};
 
 pub const SPEC: BoutSpec = BoutSpec {
     key: "bumper",
@@ -34,6 +36,7 @@ const ROLL_DRAG: f32 = 0.22;
 const OVERSPEED_DRAG: f32 = 2.0;
 const BUMP_EVENT_MIN_SPEED: f32 = 0.4;
 const BUMP_EVENT_COOLDOWN: f32 = 0.15;
+const RECOVERY_SECONDS: f32 = 0.8;
 const GRAVITY: f32 = 22.0;
 const OUT_DEPTH: f32 = -9.0;
 
@@ -56,6 +59,8 @@ pub struct Ball {
     pub state: BallState,
     pub fell_at: Option<f32>,
     pub body_width: f32,
+    /// Brief counter-steering grip after a hit, before the rim can take you.
+    pub recovery: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -109,6 +114,7 @@ impl BumperBalls {
                     state: BallState::Rolling,
                     fell_at: None,
                     body_width: c.body_width,
+                    recovery: 0.0,
                 }
             })
             .collect();
@@ -229,13 +235,20 @@ impl Bout for BumperBalls {
         for ball in self.balls.iter_mut() {
             match ball.state {
                 BallState::Rolling => {
+                    ball.recovery = (ball.recovery - dt).max(0.0);
                     let body = BodyProfile::new(ball.body_width);
                     let stick = inputs
                         .iter()
                         .find(|(s, _)| *s == ball.seat)
                         .map(|(_, input)| input.stick.clamped())
                         .unwrap_or_default();
-                    let (ax, az) = (stick.x * ACCEL * body.acceleration, stick.z * ACCEL * body.acceleration);
+                    let counter_steering =
+                        ball.recovery > 0.0 && ball.vx * stick.x + ball.vz * stick.z < -0.1;
+                    let grip = if counter_steering { 2.8 } else { 1.0 };
+                    let (ax, az) = (
+                        stick.x * ACCEL * body.acceleration * grip,
+                        stick.z * ACCEL * body.acceleration * grip,
+                    );
                     let speed = (ball.vx * ball.vx + ball.vz * ball.vz).sqrt();
                     let top_speed = MAX_SPEED * body.speed;
                     // Input can always steer or brake, but cannot push past top speed.
@@ -296,7 +309,10 @@ impl Bout for BumperBalls {
                     self.allies.get(&a.seat).copied(),
                     self.allies.get(&b.seat).copied(),
                 );
-                let (mass_a, mass_b) = (BodyProfile::new(a.body_width).mass, BodyProfile::new(b.body_width).mass);
+                let (mass_a, mass_b) = (
+                    BodyProfile::new(a.body_width).mass,
+                    BodyProfile::new(b.body_width).mass,
+                );
                 let closing_speed = (-approach).max(0.0);
                 let impulse = if partners {
                     // Partners only roll apart.
@@ -305,7 +321,7 @@ impl Bout for BumperBalls {
                     // A slow touch yields; a fast, direct hit transfers momentum.
                     // Only velocity toward the other ball counts, so glancing
                     // contacts keep their sideways motion.
-                    let restitution = (0.45 + closing_speed / MAX_SPEED * 0.55).clamp(0.45, 1.0);
+                    let restitution = (0.35 + closing_speed / MAX_SPEED * 0.4).clamp(0.35, 0.75);
                     (1.0 + restitution) * closing_speed / (1.0 / mass_a + 1.0 / mass_b)
                 } else {
                     0.0
@@ -316,6 +332,9 @@ impl Bout for BumperBalls {
                     a.z -= nz * push * (2.0 * mass_b / (mass_a + mass_b));
                     a.vx -= nx * impulse / mass_a;
                     a.vz -= nz * impulse / mass_a;
+                    if impulse > 0.0 {
+                        a.recovery = RECOVERY_SECONDS;
+                    }
                 }
                 {
                     let b = &mut self.balls[j];
@@ -323,6 +342,9 @@ impl Bout for BumperBalls {
                     b.z += nz * push * (2.0 * mass_a / (mass_a + mass_b));
                     b.vx += nx * impulse / mass_b;
                     b.vz += nz * impulse / mass_b;
+                    if impulse > 0.0 {
+                        b.recovery = RECOVERY_SECONDS;
+                    }
                 }
                 let pair = (a.seat.min(b.seat), a.seat.max(b.seat));
                 if closing_speed >= BUMP_EVENT_MIN_SPEED
@@ -348,6 +370,15 @@ impl Bout for BumperBalls {
             if ball.state == BallState::Rolling
                 && (ball.x * ball.x + ball.z * ball.z).sqrt() > radius
             {
+                // A fresh bump at the rim grants one short chance to lean back
+                // onto the platform. Letting the grip expire still sends it off.
+                let distance = ball.x.hypot(ball.z);
+                if ball.recovery > 0.0 && distance < radius + 0.45 {
+                    let edge = (radius - 0.02) / distance;
+                    ball.x *= edge;
+                    ball.z *= edge;
+                    continue;
+                }
                 ball.state = BallState::Falling;
                 ball.vy = 1.5;
                 ball.fell_at = Some(time);
@@ -485,6 +516,7 @@ impl Bout for BumperBalls {
                 "y": round(b.y),
                 "vx": round(b.vx),
                 "vz": round(b.vz),
+                "recovery": round(b.recovery),
                 "state": match b.state { BallState::Rolling => "rolling", BallState::Falling => "falling", BallState::Out => "out" },
             })).collect::<Vec<_>>(),
         })
@@ -544,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn a_head_on_bump_sends_both_balls_back() {
+    fn a_head_on_bump_gives_both_riders_a_recovery_window() {
         let mut game = BumperBalls::new(&contestants(2, false), 1);
         game.balls[0].x = -2.0;
         game.balls[0].z = 0.0;
@@ -559,10 +591,8 @@ mod tests {
             ],
         );
         assert!(events.iter().any(|e| e["kind"] == "bump"), "the balls met");
-        assert!(
-            game.balls[0].vx < 0.0 && game.balls[1].vx > 0.0,
-            "each bounced away"
-        );
+        assert!(game.balls.iter().all(|ball| ball.recovery > 0.0),
+            "a hit briefly gives both players extra counter-steering grip");
         assert!(
             game.balls[1].x - game.balls[0].x >= 1.69,
             "the balls do not overlap"

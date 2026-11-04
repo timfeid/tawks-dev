@@ -83,6 +83,8 @@ pub struct CheckView {
     pub time_left: f32,
     pub elapsed: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub wire: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminals: Option<[u8; 4]>,
@@ -111,7 +113,10 @@ pub struct CheckView {
 }
 
 pub const DIAL_TICKS: f32 = 40.;
-const WIRE_SECONDS: [f32; 4] = [1.4, 1.2, 1.0, 0.85];
+// The first wire stays up while the controls lesson is shown. Later wires
+// still need enough time to find the matching terminal and make a deliberate flick.
+const WIRE_SECONDS: [f32; 4] = [4.5, 4.2, 3.8, 3.4];
+const WIRE_INTRO_SECONDS: f32 = 5.0;
 const CAMERA_WIDTHS: [f32; 3] = [0.14, 0.11, 0.08];
 const DIAL_TOLERANCE: [f32; 4] = [1.6, 1.1, 0.75, 0.6];
 const SHOW_SECONDS: f32 = 0.6;
@@ -213,7 +218,8 @@ impl CityGame {
                 c.steps = 4;
                 c.seq = (0..4).map(|i| pick(i, 4)).collect();
                 c.perm = self.shuffle(seat, salt, 0);
-                c.deadline = self.time + WIRE_SECONDS[0] / hard;
+                c.value = WIRE_INTRO_SECONDS + WIRE_SECONDS[0] / hard;
+                c.deadline = self.time + c.value;
             }
             CheckKind::Cameras => {
                 c.steps = 3;
@@ -490,7 +496,8 @@ impl CityGame {
                     if c.step >= c.steps {
                         outcome = Outcome::Pass;
                     } else {
-                        c.deadline = now + WIRE_SECONDS[usize::from(c.step)] / hard;
+                        c.value = WIRE_SECONDS[usize::from(c.step)] / hard;
+                        c.deadline = now + c.value;
                     }
                 } else {
                     outcome = Outcome::Fail(1.5);
@@ -773,6 +780,7 @@ impl CityGame {
             CheckKind::Wires => {
                 v.wire = c.seq.get(usize::from(c.step)).copied();
                 v.terminals = Some(c.perm);
+                v.duration = Some(c.value);
             }
             CheckKind::Cameras => {
                 v.period = Some(1.4 / hard);

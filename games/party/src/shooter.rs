@@ -14,7 +14,7 @@ pub const ARENA_HALF: f32 = 26.0;
 pub const MAX_HP: i16 = 150;
 pub const SHOT_DAMAGE: i16 = 25;
 pub const SHOT_RANGE: f32 = 60.0;
-pub const FIRE_COOLDOWN: f32 = 0.28;
+pub const FIRE_COOLDOWN: f32 = 0.22;
 /// Paintballs travel quickly, but far shots need a little elevation.
 pub const PAINTBALL_SPEED: f32 = 48.0;
 pub const PAINTBALL_GRAVITY: f32 = 9.8;
@@ -26,9 +26,10 @@ pub const DIVE_SECONDS: f32 = 0.38;
 pub const DIVE_COOLDOWN: f32 = 3.0;
 
 /// Mirrored speedball lanes with inflatable bunkers and open flanks.
-pub fn arena() -> Vec<Block> {
+fn arena_layout() -> (Vec<Block>, Vec<&'static str>) {
     let mut blocks = Vec::new();
-    let mut bunker = |x, z, hx, hz, top| {
+    let mut kinds = Vec::new();
+    let mut bunker = |kind, x, z, hx, hz, top| {
         blocks.push(Block {
             x,
             z,
@@ -36,20 +37,25 @@ pub fn arena() -> Vec<Block> {
             hz,
             top,
             bottom: 0.0,
-        })
+        });
+        kinds.push(kind);
     };
-    // Midfield X and mirrored wing bunkers. Gaps allow both lanes to flank.
-    bunker(0.0, 0.0, 1.8, 1.8, 2.2);
+    // Square midfield cover and round wing cans make the speedball lanes readable.
+    bunker("square", 0.0, 0.0, 1.8, 1.8, 2.2);
     for sign in [-1.0f32, 1.0] {
-        bunker(0.0, sign * 9.5, 2.8, 0.9, 1.5);
+        bunker("brick", 0.0, sign * 9.5, 2.8, 0.9, 1.5);
         for wing in [-1.0f32, 1.0] {
-            bunker(wing * 9.0, sign * 6.0, 1.1, 2.5, 2.0);
-            bunker(wing * 16.5, sign * 13.0, 1.6, 1.6, 1.65);
-            bunker(wing * 9.5, sign * 19.5, 2.1, 0.85, 1.4);
-            bunker(wing * 20.5, sign * 2.0, 0.8, 2.6, 1.8);
+            bunker("brick", wing * 9.0, sign * 6.0, 1.1, 2.5, 2.0);
+            bunker("round", wing * 16.5, sign * 13.0, 1.6, 1.6, 1.65);
+            bunker("brick", wing * 9.5, sign * 19.5, 2.1, 0.85, 1.4);
+            bunker("brick", wing * 20.5, sign * 2.0, 0.8, 2.6, 1.8);
         }
     }
-    blocks
+    (blocks, kinds)
+}
+
+pub fn arena() -> Vec<Block> {
+    arena_layout().0
 }
 
 /// A map laid out for four, spread out for a bigger field: every block moves
@@ -456,6 +462,7 @@ pub struct PaintBlasters {
 impl PaintBlasters {
     pub fn new(contestants: &[Contestant], seed: u64) -> Self {
         let size = crate::bout::crowd_scale(contestants.len());
+        let (blocks, block_kinds) = arena_layout();
         let spawns = spread(&spawn_points(), size);
         let fighters = contestants
             .iter()
@@ -509,8 +516,8 @@ impl PaintBlasters {
         PaintBlasters {
             fighters,
             time: 0.0,
-            blocks: stretch(arena(), size),
-            block_kinds: Vec::new(),
+            blocks: stretch(blocks, size),
+            block_kinds,
             spawns,
             rng: StdRng::seed_from_u64(seed),
             brains,
@@ -787,8 +794,15 @@ impl PaintBlasters {
             movement.jump = false;
             movement.crouch = true;
         }
-        fpmove::step_body_profile(&mut body, movement, dt, &blocks, self.half_x, self.half_z,
-            crate::bout::BodyProfile::new(fighter.body_width));
+        fpmove::step_body_profile(
+            &mut body,
+            movement,
+            dt,
+            &blocks,
+            self.half_x,
+            self.half_z,
+            crate::bout::BodyProfile::new(fighter.body_width),
+        );
         fighter.x = body.x;
         fighter.y = body.y;
         fighter.z = body.z;
@@ -948,9 +962,14 @@ impl PaintBlasters {
                 )
             })
             .filter_map(|f| {
-                fpmove::ray_player(origin, dir, (f.x, f.y, f.z),
-                    PLAYER_RADIUS * crate::bout::BodyProfile::new(f.body_width).radius, f.height())
-                    .map(|t| (f.seat, t))
+                fpmove::ray_player(
+                    origin,
+                    dir,
+                    (f.x, f.y, f.z),
+                    PLAYER_RADIUS * crate::bout::BodyProfile::new(f.body_width).radius,
+                    f.height(),
+                )
+                .map(|t| (f.seat, t))
             })
             .filter(|(_, t)| *t <= limit)
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
@@ -975,7 +994,12 @@ impl PaintBlasters {
         series.break_left = 0.0;
         for (index, fighter) in self.fighters.iter_mut().enumerate() {
             let (x, z) = self.spawns[index % self.spawns.len()];
-            let (seat, kills, deaths, body_width) = (fighter.seat, fighter.kills, fighter.deaths, fighter.body_width);
+            let (seat, kills, deaths, body_width) = (
+                fighter.seat,
+                fighter.kills,
+                fighter.deaths,
+                fighter.body_width,
+            );
             *fighter = Fighter {
                 x,
                 z,

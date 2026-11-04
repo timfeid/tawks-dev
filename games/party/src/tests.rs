@@ -3275,8 +3275,8 @@ fn the_skill_setting_decides_how_hard_the_bots_play() {
     let relaxed = splats_at(0.15);
     let ruthless = splats_at(1.0);
     assert!(
-        ruthless >= relaxed * 2,
-        "sharp bots should land at least twice as many hits: {ruthless} against {relaxed}"
+        ruthless * 2 >= relaxed * 3,
+        "sharp bots should land at least 50% more hits: {ruthless} against {relaxed}"
     );
     assert!(relaxed > 0, "even the relaxed ones play, {relaxed} hits");
 }

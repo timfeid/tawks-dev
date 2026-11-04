@@ -89,7 +89,17 @@ fn wires_run_out_of_time() {
     let mut g = game();
     put(&mut g, 1, POWER);
     press_a(&mut g, 1);
-    tick(&mut g, 1.6);
+    let duration = view(&g, 1).duration.unwrap();
+    assert!(
+        duration >= 8.0,
+        "the first wire must outlast the controls lesson"
+    );
+    tick(&mut g, 4.5);
+    assert!(
+        me(&g, 1).check.is_some(),
+        "the tutorial must not consume the check"
+    );
+    tick(&mut g, duration - 4.0);
     assert!(me(&g, 1).check.is_none(), "too slow on the first wire");
     assert_eq!(g.check_fails[CheckKind::Wires as usize], 1);
 }

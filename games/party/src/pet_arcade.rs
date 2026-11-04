@@ -65,7 +65,10 @@ fn bubble_cooldown(width: f32, seats: usize) -> f32 {
 fn scent_crowd_agility(width: f32, seats: usize) -> f32 {
     let compactness = (1.4 - BodyProfile::new(width).width) / 0.7;
     // Compact pets keep some search agility even in a duel.
-    let crowd = (seats.saturating_sub(2) as f32 / 6.0).min(1.0).sqrt().max(0.5);
+    let crowd = (seats.saturating_sub(2) as f32 / 6.0)
+        .min(1.0)
+        .sqrt()
+        .max(0.5);
     1.0 + compactness * crowd * 0.16
 }
 fn rescue_carry_speed(width: f32) -> f32 {
@@ -107,9 +110,9 @@ fn cloud_leap_profile(width: f32) -> (f32, f32, f32) {
     (1.35 - size * 0.35, 1.7 + size * 0.5, 0.72)
 }
 pub fn choir_window(width: f32) -> (f32, f32) {
-    let spread = (width.clamp(0.7, 1.4)-0.7)/0.7;
-    let half = 0.26 + spread*0.10;
-    (0.5-half, 0.5+half)
+    let spread = (width.clamp(0.7, 1.4) - 0.7) / 0.7;
+    let half = 0.26 + spread * 0.10;
+    (0.5 - half, 0.5 + half)
 }
 
 #[derive(Clone, Debug)]
@@ -195,7 +198,8 @@ fn scent_spot(rng: &mut StdRng, pets: &[(f32, f32)], caches: &[(f32, f32)]) -> (
         let radius = rng.random_range(2.4..8.5);
         let spot = (angle.cos() * radius, angle.sin() * radius);
         if pets.iter().all(|&pet| distance(spot, pet) >= 2.7)
-            && caches.iter().all(|&cache| distance(spot, cache) >= 2.1) {
+            && caches.iter().all(|&cache| distance(spot, cache) >= 2.1)
+        {
             return spot;
         }
     }
@@ -280,7 +284,10 @@ impl PetArcade {
             8 => seats * 2,
             _ => 4,
         };
-        let pet_starts = players.iter().map(|p| (p.runner.x, p.runner.z)).collect::<Vec<_>>();
+        let pet_starts = players
+            .iter()
+            .map(|p| (p.runner.x, p.runner.z))
+            .collect::<Vec<_>>();
         let mut cache_spots = Vec::new();
         let props = (0..count)
             .map(|i| {
@@ -304,8 +311,11 @@ impl PetArcade {
                 Prop {
                     x,
                     z,
-                    owner: if kind == 4 { i / 2 % contestants.len().max(1) }
-                        else { i % contestants.len().max(1) },
+                    owner: if kind == 4 {
+                        i / 2 % contestants.len().max(1)
+                    } else {
+                        i % contestants.len().max(1)
+                    },
                     state: if kind == 5 {
                         ((i / seats) % 3) as u8
                     } else {
@@ -425,14 +435,13 @@ impl PetArcade {
         if self.players[index].cooldown > 0.0 {
             return;
         }
-        if matches!(self.kind, 3 | 9)
-            && self.players[index].last_scored_beat == Some(self.beat) {
+        if matches!(self.kind, 3 | 9) && self.players[index].last_scored_beat == Some(self.beat) {
             return;
         }
         let at = (self.players[index].runner.x, self.players[index].runner.z);
         let reach = 1.0 + (self.players[index].width.clamp(0.7, 1.4) - 1.0) * 0.12;
         self.players[index].cooldown = if self.kind == 3 {
-            0.35 + (self.players[index].width.clamp(0.7,1.4)-0.7)/0.7*0.18
+            0.35 + (self.players[index].width.clamp(0.7, 1.4) - 0.7) / 0.7 * 0.18
         } else if self.kind == 2 {
             bark_profile(self.players[index].width).1
         } else if self.kind == 5 {
@@ -442,8 +451,10 @@ impl PetArcade {
         } else if self.kind == 8 {
             cloud_leap_profile(self.players[index].width).2
         } else if self.kind == 9 {
-            0.53 + (self.players[index].width.clamp(0.7,1.4)-0.7)/0.7*0.10
-        } else { ACTION_CD };
+            0.53 + (self.players[index].width.clamp(0.7, 1.4) - 0.7) / 0.7 * 0.10
+        } else {
+            ACTION_CD
+        };
         match self.kind {
             0 => unreachable!(),
             1 => {
@@ -479,7 +490,7 @@ impl PetArcade {
                 let note = input.yaw.round() as isize;
                 let target = (self.beat + self.target) % 4;
                 let phase = (self.time * 1.5).fract();
-                let (early,late) = choir_window(self.players[index].width);
+                let (early, late) = choir_window(self.players[index].width);
                 if note == target as isize && (early..=late).contains(&phase) {
                     self.award(
                         index,
@@ -499,20 +510,24 @@ impl PetArcade {
                     .iter()
                     .enumerate()
                     .filter(|(_, p)| p.owner == index)
-                    .filter(|(_,p)|p.state==0 || p.timer<=0.0
-                        && (p.state==2 || self.players[index].water>0))
-                    .filter_map(|(i, p)| {
-                        let gap=distance(at,(p.x,p.z));
-                        (gap <= garden_tend_range(self.players[index].width)).then_some((i,gap))
+                    .filter(|(_, p)| {
+                        p.state == 0
+                            || p.timer <= 0.0 && (p.state == 2 || self.players[index].water > 0)
                     })
-                    .min_by(|a,b|a.1.total_cmp(&b.1)).map(|(i,_)|i);
+                    .filter_map(|(i, p)| {
+                        let gap = distance(at, (p.x, p.z));
+                        (gap <= garden_tend_range(self.players[index].width)).then_some((i, gap))
+                    })
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .map(|(i, _)| i);
                 if let Some(i) = i {
                     match self.props[i].state {
                         0 => {
                             self.props[i].state = 1;
                             self.props[i].timer = garden_growth_times(self.players[index].width).0;
                             self.players[index].pet_action = 0.5;
-                            self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+                            self.players[index].action_n =
+                                self.players[index].action_n.wrapping_add(1);
                             events.push(json!({"kind":"pet_garden_plant","seat":self.players[index].seat,"prop":i}));
                         }
                         1 if self.props[i].timer <= 0.0 && self.players[index].water > 0 => {
@@ -520,13 +535,18 @@ impl PetArcade {
                             self.props[i].state = 2;
                             self.props[i].timer = garden_growth_times(self.players[index].width).1;
                             self.players[index].pet_action = 0.6;
-                            self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+                            self.players[index].action_n =
+                                self.players[index].action_n.wrapping_add(1);
                             events.push(json!({"kind":"pet_garden_water","seat":self.players[index].seat,"prop":i}));
                         }
                         2 if self.props[i].timer <= 0.0 => {
                             self.props[i].state = 0;
                             self.props[i].timer = 0.0;
-                            let bonus = if self.players[index].golden_water { 2 } else { 0 };
+                            let bonus = if self.players[index].golden_water {
+                                2
+                            } else {
+                                0
+                            };
                             self.players[index].golden_water = false;
                             self.award(index, 4 + bonus, Some(i), events);
                         }
@@ -617,13 +637,14 @@ impl PetArcade {
                 let feet = self.players[index].runner.vx * expected.x
                     + self.players[index].runner.vz * expected.z;
                 if moving.x * expected.x + moving.z * expected.z > 0.6
-                    && feet > parade_step_threshold(self.players[index].width) {
+                    && feet > parade_step_threshold(self.players[index].width)
+                {
                     let quick_step = self.players[index].width <= 0.9
-                        && self.beat % 4 == 0 && (self.time * 0.8).fract() < 0.5;
+                        && self.beat % 4 == 0
+                        && (self.time * 0.8).fract() < 0.5;
                     self.award(
                         index,
-                        1 + i32::from(self.players[index].combo.min(4))
-                            + i32::from(quick_step),
+                        1 + i32::from(self.players[index].combo.min(4)) + i32::from(quick_step),
                         Some(dir),
                         events,
                     );
@@ -641,7 +662,10 @@ impl PetArcade {
         let at = (self.players[index].runner.x, self.players[index].runner.z);
         let attacker_body = BodyProfile::new(self.players[index].width);
         let facing = (self.players[index].facing_x, self.players[index].facing_z);
-        let Some(victim) = self.players.iter().enumerate()
+        let Some(victim) = self
+            .players
+            .iter()
+            .enumerate()
             .filter_map(|(other, player)| {
                 if other == index || player.holding_toy.is_none() {
                     return None;
@@ -650,12 +674,13 @@ impl PetArcade {
                 let gap = delta.0.hypot(delta.1);
                 let defender_body = BodyProfile::new(player.width);
                 let reach = RUNNER_RADIUS * (attacker_body.radius + defender_body.radius) + 0.12;
-                (gap <= reach && (gap < 0.05
-                    || (delta.0 * facing.0 + delta.1 * facing.1) / gap > 0.35))
+                (gap <= reach
+                    && (gap < 0.05 || (delta.0 * facing.0 + delta.1 * facing.1) / gap > 0.35))
                     .then_some((other, gap))
             })
             .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(other, _)| other) else {
+            .map(|(other, _)| other)
+        else {
             return;
         };
         let toy = self.players[victim].holding_toy.take().unwrap();
@@ -718,7 +743,10 @@ impl PetArcade {
         let count = self.props.len();
         let seats = self.players.len().max(1);
         let pet_positions = if self.kind == 1 {
-            self.players.iter().map(|p| (p.runner.x, p.runner.z)).collect::<Vec<_>>()
+            self.players
+                .iter()
+                .map(|p| (p.runner.x, p.runner.z))
+                .collect::<Vec<_>>()
         } else {
             Vec::new()
         };
@@ -858,6 +886,10 @@ impl PetArcade {
                 if self.kind == 3 && beat % 4 == 0 {
                     self.target = self.rng.random_range(0..4);
                 }
+                if self.kind == 3 {
+                    events.push(json!({"kind":"pet_choir_beat","beat":beat,
+                        "note":(beat+self.target)%4}));
+                }
             }
         }
     }
@@ -961,11 +993,12 @@ impl Bout for PetArcade {
                     } else if self.kind == 0 && p.pounce_for > 0.0 {
                         16.0
                     } else {
-                        6.8 * carry * if self.kind == 1 {
-                            scent_crowd_agility(p.width, seats)
-                        } else {
-                            1.0
-                        }
+                        6.8 * carry
+                            * if self.kind == 1 {
+                                scent_crowd_agility(p.width, seats)
+                            } else {
+                                1.0
+                            }
                     },
                 );
             }
@@ -974,8 +1007,10 @@ impl Bout for PetArcade {
             p.runner.z = p.runner.z.clamp(-edge, edge);
             p.pet_x = p.runner.x;
             p.pet_z = p.runner.z;
-            if self.kind == 4 && p.runner.x.hypot(p.runner.z) < 1.6
-                && p.water < garden_capacity(p.width) {
+            if self.kind == 4
+                && p.runner.x.hypot(p.runner.z) < 1.6
+                && p.water < garden_capacity(p.width)
+            {
                 p.water = garden_capacity(p.width);
                 if self.time >= self.golden_water_at && !p.golden_water {
                     p.golden_water = true;
@@ -1039,7 +1074,11 @@ impl Bout for PetArcade {
         };
         if self.kind == 1 {
             let pet = &mut self.players[index];
-            if distance((pet.runner.x, pet.runner.z), scent_waypoint(pet.scent_waypoint)) < 0.9 {
+            if distance(
+                (pet.runner.x, pet.runner.z),
+                scent_waypoint(pet.scent_waypoint),
+            ) < 0.9
+            {
                 pet.scent_waypoint = (pet.scent_waypoint + 1) % 81;
             }
         }
@@ -1096,20 +1135,30 @@ impl Bout for PetArcade {
                 })
                 .unwrap_or((0.0, 0.0)),
             4 => {
-                let owned = self.props.iter().filter(|prop|prop.owner==index);
-                let harvest = owned.clone().find(|prop|prop.state==2 && prop.timer<=0.0);
-                let water = owned.clone().find(|prop|prop.state==1 && prop.timer<=0.0);
-                let plant = owned.clone().find(|prop|prop.state==0);
-                if let Some(prop) = harvest.or_else(|| if p.water>0 { water } else { None })
-                    .or(plant) {
-                    (prop.x,prop.z)
+                let owned = self.props.iter().filter(|prop| prop.owner == index);
+                let harvest = owned
+                    .clone()
+                    .find(|prop| prop.state == 2 && prop.timer <= 0.0);
+                let water = owned
+                    .clone()
+                    .find(|prop| prop.state == 1 && prop.timer <= 0.0);
+                let plant = owned.clone().find(|prop| prop.state == 0);
+                if let Some(prop) = harvest
+                    .or_else(|| if p.water > 0 { water } else { None })
+                    .or(plant)
+                {
+                    (prop.x, prop.z)
                 } else if p.water < garden_capacity(p.width)
-                    && owned.clone().any(|prop|prop.state==1) {
-                    (0.0,0.0)
+                    && owned.clone().any(|prop| prop.state == 1)
+                {
+                    (0.0, 0.0)
                 } else {
-                    owned.min_by(|a,b|distance(at,(a.x,a.z))
-                        .total_cmp(&distance(at,(b.x,b.z))))
-                        .map(|prop|(prop.x,prop.z)).unwrap_or((0.0,0.0))
+                    owned
+                        .min_by(|a, b| {
+                            distance(at, (a.x, a.z)).total_cmp(&distance(at, (b.x, b.z)))
+                        })
+                        .map(|prop| (prop.x, prop.z))
+                        .unwrap_or((0.0, 0.0))
                 }
             }
             // Sweep the field and use the public sniff cue to know when to
@@ -1118,9 +1167,7 @@ impl Bout for PetArcade {
             5 => self
                 .props
                 .iter()
-                .filter(|prop| {
-                    prop.timer <= 0.0 && prop.state == self.target_color
-                })
+                .filter(|prop| prop.timer <= 0.0 && prop.state == self.target_color)
                 .min_by(|a, b| distance(at, (a.x, a.z)).total_cmp(&distance(at, (b.x, b.z))))
                 .map(|prop| (prop.x, prop.z))
                 .unwrap_or((0.0, 0.0)),
@@ -1163,13 +1210,11 @@ impl Bout for PetArcade {
             8 => cloud_leap_profile(p.width).1 * 0.85,
             _ => 1.35,
         };
-        input.fire = p.cooldown <= 0.0
-            && (self.kind == 3 || self.kind == 9 || dist < action_range);
+        input.fire = p.cooldown <= 0.0 && (self.kind == 3 || self.kind == 9 || dist < action_range);
         if self.kind == 1 {
             let clue = self.hint(p)["strength"].as_f64().unwrap_or(0.0) as f32;
             let reach = 1.0 + (p.width - 1.0) * 0.12;
-            input.fire = p.cooldown <= 0.0
-                && clue >= 1.0 - 1.45 * reach / sniff_range(p.width);
+            input.fire = p.cooldown <= 0.0 && clue >= 1.0 - 1.45 * reach / sniff_range(p.width);
         }
         if self.kind == 0 {
             input.fire = if p.holding_toy.is_some() {
@@ -1190,7 +1235,7 @@ impl Bout for PetArcade {
             input.yaw = (-at.0).atan2(-at.1) + variation * 0.32 * (1.0 - p.skill * 0.35);
         }
         if self.kind == 3 {
-            let (early,late) = choir_window(p.width);
+            let (early, late) = choir_window(p.width);
             input.fire &= (early..=late).contains(&(self.time * 1.5).fract());
         }
         if self.kind == 3 {
@@ -1269,40 +1314,59 @@ mod tests {
     use super::*;
     #[test]
     fn bot_reactions_vary_by_match_without_erasing_skill() {
-        let reactions = |seed, skill| (0..64)
-            .map(|tick| bot_reacts(0, tick, seed, skill))
-            .collect::<Vec<_>>();
+        let reactions = |seed, skill| {
+            (0..64)
+                .map(|tick| bot_reacts(0, tick, seed, skill))
+                .collect::<Vec<_>>()
+        };
         let first = reactions(11, 0.7);
         assert_eq!(first, reactions(11, 0.7));
         assert_ne!(first, reactions(12, 0.7));
         let relaxed = reactions(11, 0.15);
         let sharp = reactions(11, 0.9);
-        assert!(relaxed.iter().zip(&sharp).all(|(slow, fast)| !slow || *fast));
-        assert!(sharp.iter().filter(|&&reacts| reacts).count()
-            > relaxed.iter().filter(|&&reacts| reacts).count());
+        assert!(
+            relaxed
+                .iter()
+                .zip(&sharp)
+                .all(|(slow, fast)| !slow || *fast)
+        );
+        assert!(
+            sharp.iter().filter(|&&reacts| reacts).count()
+                > relaxed.iter().filter(|&&reacts| reacts).count()
+        );
     }
     #[test]
     fn rhythm_games_award_only_one_success_per_cue() {
         for kind in [3, 9] {
-            let mut game = PetArcade::new(kind,
-                &[Contestant::person(0), Contestant::person(1)], 4);
+            let mut game = PetArcade::new(kind, &[Contestant::person(0), Contestant::person(1)], 4);
             game.time = if kind == 3 { 1.0 / 3.0 } else { 0.3 };
             game.players[0].runner.vx = 2.0;
-            let mut input = Input { stick: Stick { x: 1.0, z: 0.0 },
-                ..Default::default() };
+            let mut input = Input {
+                stick: Stick { x: 1.0, z: 0.0 },
+                ..Default::default()
+            };
             game.act(0, input, &mut Vec::new());
             let first = game.players[0].score;
             assert!(first > 0, "{}", game.key());
             assert_eq!(game.snapshot()["players"][0]["cue_scored"], true);
             game.players[0].cooldown = 0.0;
             game.act(0, input, &mut Vec::new());
-            assert_eq!(game.players[0].score, first, "{} repeated a cue", game.key());
+            assert_eq!(
+                game.players[0].score,
+                first,
+                "{} repeated a cue",
+                game.key()
+            );
             game.beat = 1;
             game.time = if kind == 3 { 1.0 } else { 1.55 };
             assert_eq!(game.snapshot()["players"][0]["cue_scored"], false);
             input.yaw = if kind == 3 { 1.0 } else { 0.0 };
             game.act(0, input, &mut Vec::new());
-            assert!(game.players[0].score > first, "{} blocked the next cue", game.key());
+            assert!(
+                game.players[0].score > first,
+                "{} blocked the next cue",
+                game.key()
+            );
         }
     }
     #[test]
@@ -1311,20 +1375,32 @@ mod tests {
             for seed in 0..128 {
                 let field = (0..count).map(Contestant::person).collect::<Vec<_>>();
                 let mut game = PetArcade::new(1, &field, seed);
-                let starts = game.players.iter().map(|p| (p.runner.x, p.runner.z)).collect::<Vec<_>>();
+                let starts = game
+                    .players
+                    .iter()
+                    .map(|p| (p.runner.x, p.runner.z))
+                    .collect::<Vec<_>>();
                 for cache in &game.props {
-                    assert!(starts.iter().all(|&pet| distance(pet, (cache.x, cache.z)) >= 2.7));
+                    assert!(
+                        starts
+                            .iter()
+                            .all(|&pet| distance(pet, (cache.x, cache.z)) >= 2.7)
+                    );
                 }
                 for (index, cache) in game.props.iter().enumerate() {
-                    assert!(game.props.iter().skip(index + 1).all(|other| {
-                        distance((cache.x, cache.z), (other.x, other.z)) >= 2.1
-                    }));
+                    assert!(
+                        game.props.iter().skip(index + 1).all(|other| {
+                            distance((cache.x, cache.z), (other.x, other.z)) >= 2.1
+                        })
+                    );
                 }
                 game.props[0].timer = 0.01;
                 game.update_props(0.02, &mut Vec::new());
-                assert!(starts.iter().all(|&pet| {
-                    distance(pet, (game.props[0].x, game.props[0].z)) >= 2.7
-                }));
+                assert!(
+                    starts
+                        .iter()
+                        .all(|&pet| { distance(pet, (game.props[0].x, game.props[0].z)) >= 2.7 })
+                );
             }
         }
     }
@@ -1347,10 +1423,16 @@ mod tests {
                 game.secret = 0;
             }
             let small_hint = game.snapshot_for(Some(0)).unwrap()["hint"]["strength"]
-                .as_f64().unwrap();
+                .as_f64()
+                .unwrap();
             let broad_hint = game.snapshot_for(Some(1)).unwrap()["hint"]["strength"]
-                .as_f64().unwrap();
-            assert!(broad_hint > small_hint, "{}: {broad_hint} <= {small_hint}", KEYS[kind]);
+                .as_f64()
+                .unwrap();
+            assert!(
+                broad_hint > small_hint,
+                "{}: {broad_hint} <= {small_hint}",
+                KEYS[kind]
+            );
         }
     }
 
@@ -1443,9 +1525,16 @@ mod tests {
             game.act(index, Input::default(), &mut events);
         }
         assert!(game.players[0].cooldown < game.players[1].cooldown);
-        assert!(game.props[1].vx.hypot(game.props[1].vz)
-            > game.props[0].vx.hypot(game.props[0].vz));
-        assert_eq!(events.iter().filter(|event| event["kind"] == "pet_herd_bark").count(), 2);
+        assert!(
+            game.props[1].vx.hypot(game.props[1].vz) > game.props[0].vx.hypot(game.props[0].vz)
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event["kind"] == "pet_herd_bark")
+                .count(),
+            2
+        );
     }
     #[test]
     fn cloudbound_scores_during_a_leap_and_size_changes_its_arc() {
@@ -1610,45 +1699,50 @@ mod tests {
     }
     #[test]
     fn garden_water_relay_rewards_capacity_and_requires_a_well_trip() {
-        let mut heavy=Contestant::person(0);
-        heavy.body_width=1.4;
-        let mut light=Contestant::person(1);
-        light.body_width=0.7;
-        let mut game=PetArcade::new(4,&[heavy,light],3);
-        let mut events=Vec::new();
-        for p in &mut game.players { p.runner=Runner::at(0.0,0.0).with_width(p.width); }
-        game.step(&[],1.0/60.0,&mut events);
-        assert_eq!(game.players[0].water,2);
-        assert_eq!(game.players[1].water,1);
-        let (x,z)=(game.props[0].x,game.props[0].z);
-        game.players[0].runner=Runner::at(x,z).with_width(1.4);
-        game.act(0,Input::default(),&mut events);
-        assert_eq!(game.props[0].state,1);
+        let mut heavy = Contestant::person(0);
+        heavy.body_width = 1.4;
+        let mut light = Contestant::person(1);
+        light.body_width = 0.7;
+        let mut game = PetArcade::new(4, &[heavy, light], 3);
+        let mut events = Vec::new();
+        for p in &mut game.players {
+            p.runner = Runner::at(0.0, 0.0).with_width(p.width);
+        }
+        game.step(&[], 1.0 / 60.0, &mut events);
+        assert_eq!(game.players[0].water, 2);
+        assert_eq!(game.players[1].water, 1);
+        let (x, z) = (game.props[0].x, game.props[0].z);
+        game.players[0].runner = Runner::at(x, z).with_width(1.4);
+        game.act(0, Input::default(), &mut events);
+        assert_eq!(game.props[0].state, 1);
         let broad_growth = game.props[0].timer;
-        game.props[0].timer=0.0;
-        game.players[0].cooldown=0.0;
-        game.act(0,Input::default(),&mut events);
-        assert_eq!(game.props[0].state,2);
-        assert_eq!(game.players[0].water,1);
-        game.props[0].timer=0.0;
-        game.players[0].cooldown=0.0;
-        game.act(0,Input::default(),&mut events);
-        assert_eq!(game.players[0].score,4);
-        let (x,z)=(game.props[2].x,game.props[2].z);
-        game.players[1].runner=Runner::at(x,z).with_width(0.7);
-        game.players[1].water=0;
-        game.act(1,Input::default(),&mut events);
+        game.props[0].timer = 0.0;
+        game.players[0].cooldown = 0.0;
+        game.act(0, Input::default(), &mut events);
+        assert_eq!(game.props[0].state, 2);
+        assert_eq!(game.players[0].water, 1);
+        game.props[0].timer = 0.0;
+        game.players[0].cooldown = 0.0;
+        game.act(0, Input::default(), &mut events);
+        assert_eq!(game.players[0].score, 4);
+        let (x, z) = (game.props[2].x, game.props[2].z);
+        game.players[1].runner = Runner::at(x, z).with_width(0.7);
+        game.players[1].water = 0;
+        game.act(1, Input::default(), &mut events);
         assert!(game.props[2].timer < broad_growth);
-        game.props[2].timer=0.0;
-        game.players[1].cooldown=0.0;
-        game.act(1,Input::default(),&mut events);
-        assert_eq!(game.props[2].state,1);
-        assert!(events.iter().any(|event|event["kind"]=="pet_garden_fill"));
+        game.props[2].timer = 0.0;
+        game.players[1].cooldown = 0.0;
+        game.act(1, Input::default(), &mut events);
+        assert_eq!(game.props[2].state, 1);
+        assert!(
+            events
+                .iter()
+                .any(|event| event["kind"] == "pet_garden_fill")
+        );
     }
     #[test]
     fn golden_well_is_shared_and_rewards_only_the_next_harvest() {
-        let mut game = PetArcade::new(4,
-            &[Contestant::person(0), Contestant::person(1)], 9);
+        let mut game = PetArcade::new(4, &[Contestant::person(0), Contestant::person(1)], 9);
         game.time = 5.0;
         for pet in &mut game.players {
             pet.runner = Runner::at(0.0, 0.0).with_width(pet.width);
@@ -1658,8 +1752,13 @@ mod tests {
         assert!(game.players[0].golden_water);
         assert!(!game.players[1].golden_water);
         assert!(game.snapshot()["golden_water_in"].as_f64().unwrap() > 8.0);
-        assert_eq!(events.iter().filter(|event|
-            event["kind"] == "pet_garden_golden_water").count(), 1);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event["kind"] == "pet_garden_golden_water")
+                .count(),
+            1
+        );
 
         for (index, bed) in [(0, 0), (1, 2)] {
             game.props[bed].state = 2;
@@ -1688,25 +1787,24 @@ mod tests {
     }
     #[test]
     fn larger_choir_pets_have_wider_beat_but_longer_recovery() {
-        let (small_early,small_late)=choir_window(0.7);
-        let (large_early,large_late)=choir_window(1.4);
-        assert!(large_early<small_early && large_late>small_late);
-        let mut small=Contestant::person(0);
-        small.body_width=0.7;
-        let mut large=Contestant::person(1);
-        large.body_width=1.4;
-        let mut game=PetArcade::new(3,&[small,large],3);
-        game.time=0.12;
-        game.act(0,Input::default(),&mut Vec::new());
-        game.act(1,Input::default(),&mut Vec::new());
-        assert_eq!(game.players[0].score,0);
-        assert!(game.players[1].score>0);
-        assert!(game.players[0].cooldown<game.players[1].cooldown);
+        let (small_early, small_late) = choir_window(0.7);
+        let (large_early, large_late) = choir_window(1.4);
+        assert!(large_early < small_early && large_late > small_late);
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut large = Contestant::person(1);
+        large.body_width = 1.4;
+        let mut game = PetArcade::new(3, &[small, large], 3);
+        game.time = 0.12;
+        game.act(0, Input::default(), &mut Vec::new());
+        game.act(1, Input::default(), &mut Vec::new());
+        assert_eq!(game.players[0].score, 0);
+        assert!(game.players[1].score > 0);
+        assert!(game.players[0].cooldown < game.players[1].cooldown);
     }
     #[test]
     fn choir_notes_follow_the_controller_dpad_compass() {
-        let game = PetArcade::new(3,
-            &[Contestant::person(0), Contestant::person(1)], 3);
+        let game = PetArcade::new(3, &[Contestant::person(0), Contestant::person(1)], 3);
         assert!(game.props[0].z < -4.0);
         assert!(game.props[1].x > 4.0);
         assert!(game.props[2].z > 4.0);
@@ -1714,41 +1812,50 @@ mod tests {
     }
     #[test]
     fn parade_requires_real_footwork_and_size_changes_the_step_tradeoff() {
-        let mut small=Contestant::person(0);
-        small.body_width=0.7;
-        let mut large=Contestant::person(1);
-        large.body_width=1.4;
-        let mut game=PetArcade::new(9,&[small,large],3);
-        let input=Input { stick:Stick { x:1.0,z:0.0 }, ..Default::default() };
-        game.act(0,input,&mut Vec::new());
-        assert_eq!(game.players[0].score,0);
-        game.players[0].cooldown=0.0;
-        game.players[0].runner.vx=2.0;
-        game.players[1].runner.vx=2.0;
-        game.act(0,input,&mut Vec::new());
-        game.act(1,input,&mut Vec::new());
-        assert_eq!(game.players[0].score,2);
-        assert_eq!(game.players[1].score,1);
-        assert!(game.players[0].cooldown<game.players[1].cooldown);
+        let mut small = Contestant::person(0);
+        small.body_width = 0.7;
+        let mut large = Contestant::person(1);
+        large.body_width = 1.4;
+        let mut game = PetArcade::new(9, &[small, large], 3);
+        let input = Input {
+            stick: Stick { x: 1.0, z: 0.0 },
+            ..Default::default()
+        };
+        game.act(0, input, &mut Vec::new());
+        assert_eq!(game.players[0].score, 0);
+        game.players[0].cooldown = 0.0;
+        game.players[0].runner.vx = 2.0;
+        game.players[1].runner.vx = 2.0;
+        game.act(0, input, &mut Vec::new());
+        game.act(1, input, &mut Vec::new());
+        assert_eq!(game.players[0].score, 2);
+        assert_eq!(game.players[1].score, 1);
+        assert!(game.players[0].cooldown < game.players[1].cooldown);
     }
     #[test]
     fn mixed_size_garden_choir_and_parade_bots_all_stay_in_the_game() {
-        let contestants=[0.7,0.9,1.2,1.4].into_iter().enumerate().map(|(seat,width)| {
-            let mut c=Contestant::bot(seat as u8,0.7);
-            c.body_width=width;
-            c
-        }).collect::<Vec<_>>();
-        for kind in [3,4,9] {
-            let mut game=PetArcade::new(kind,&contestants,29);
-            let mut events=Vec::new();
-            for _ in 0..(LIMIT as usize * 60+2) {
-                let inputs=contestants.iter().map(|c|
-                    (c.seat,game.bot_input(c.seat,1.0/60.0))).collect::<Vec<_>>();
-                game.step(&inputs,1.0/60.0,&mut events);
+        let contestants = [0.7, 0.9, 1.2, 1.4]
+            .into_iter()
+            .enumerate()
+            .map(|(seat, width)| {
+                let mut c = Contestant::bot(seat as u8, 0.7);
+                c.body_width = width;
+                c
+            })
+            .collect::<Vec<_>>();
+        for kind in [3, 4, 9] {
+            let mut game = PetArcade::new(kind, &contestants, 29);
+            let mut events = Vec::new();
+            for _ in 0..(LIMIT as usize * 60 + 2) {
+                let inputs = contestants
+                    .iter()
+                    .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                    .collect::<Vec<_>>();
+                game.step(&inputs, 1.0 / 60.0, &mut events);
             }
-            let scores=game.players.iter().map(|p|p.score).collect::<Vec<_>>();
-            println!("{} mixed widths {:?}",game.key(),scores);
-            assert!(scores.iter().all(|&score|score>0),"{}",game.key());
+            let scores = game.players.iter().map(|p| p.score).collect::<Vec<_>>();
+            println!("{} mixed widths {:?}", game.key(), scores);
+            assert!(scores.iter().all(|&score| score > 0), "{}", game.key());
         }
     }
     #[test]
@@ -1832,9 +1939,10 @@ mod tests {
                     let mut game = PetArcade::new(kind, &contestants, seed);
                     let mut events = Vec::new();
                     for _ in 0..(LIMIT as usize * 60 + 2) {
-                        let inputs = contestants.iter().map(|c| {
-                            (c.seat, game.bot_input(c.seat, 1.0 / 60.0))
-                        }).collect::<Vec<_>>();
+                        let inputs = contestants
+                            .iter()
+                            .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                            .collect::<Vec<_>>();
                         game.step(&inputs, 1.0 / 60.0, &mut events);
                     }
                     let active = game.players.iter().filter(|p| p.score > 0).count();
@@ -1844,10 +1952,20 @@ mod tests {
                     highest_winner = highest_winner.max(winner);
                     assert!(game.placements().is_some());
                 }
-                println!("{} count={count} least_active={least_active} winner_range={lowest_winner}..{highest_winner}", KEYS[kind]);
-                assert!(least_active >= usize::from(count) - 1,
-                    "{} left too many pets without a scoring chance at {count} players", KEYS[kind]);
-                assert!(lowest_winner > 0, "{} stopped producing winners", KEYS[kind]);
+                println!(
+                    "{} count={count} least_active={least_active} winner_range={lowest_winner}..{highest_winner}",
+                    KEYS[kind]
+                );
+                assert!(
+                    least_active >= usize::from(count) - 1,
+                    "{} left too many pets without a scoring chance at {count} players",
+                    KEYS[kind]
+                );
+                assert!(
+                    lowest_winner > 0,
+                    "{} stopped producing winners",
+                    KEYS[kind]
+                );
             }
         }
     }
@@ -1868,21 +1986,30 @@ mod tests {
                 let mut game = PetArcade::new(kind, &contestants, seed);
                 let mut events = Vec::new();
                 for _ in 0..(LIMIT as usize * 60 + 2) {
-                    let inputs = contestants.iter().map(|c| {
-                        (c.seat, game.bot_input(c.seat, 1.0 / 60.0))
-                    }).collect::<Vec<_>>();
+                    let inputs = contestants
+                        .iter()
+                        .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
+                        .collect::<Vec<_>>();
                     game.step(&inputs, 1.0 / 60.0, &mut events);
                 }
                 let broad = game.players[broad_seat].score;
                 let small = game.players[1 - broad_seat].score;
                 broad_score += broad;
                 small_score += small;
-                if broad > small { broad_wins += 1; }
-                else if small > broad { small_wins += 1; }
-                else { ties += 1; }
+                if broad > small {
+                    broad_wins += 1;
+                } else if small > broad {
+                    small_wins += 1;
+                } else {
+                    ties += 1;
+                }
             }
-            println!("{} small_wins={small_wins} broad_wins={broad_wins} ties={ties} mean_scores={:.1}/{:.1}",
-                KEYS[kind], small_score as f32 / 96.0, broad_score as f32 / 96.0);
+            println!(
+                "{} small_wins={small_wins} broad_wins={broad_wins} ties={ties} mean_scores={:.1}/{:.1}",
+                KEYS[kind],
+                small_score as f32 / 96.0,
+                broad_score as f32 / 96.0
+            );
         }
     }
     #[test]
@@ -1899,7 +2026,8 @@ mod tests {
                     let contestants = (0..count)
                         .map(|seat| {
                             let mut contestant = Contestant::bot(seat, 0.7);
-                            contestant.body_width = if (usize::from(seat) + seed as usize) % 2 == 0 {
+                            contestant.body_width = if (usize::from(seat) + seed as usize) % 2 == 0
+                            {
                                 0.7
                             } else {
                                 1.4
@@ -1930,8 +2058,12 @@ mod tests {
                     }
                 }
                 let per_build = (64 * usize::from(count) / 2) as f32;
-                println!("{} count={count} mean_small={:.1} mean_broad={:.1} winners_small={small_winners} winners_broad={broad_winners} inactive={inactive}",
-                    KEYS[kind], small_score as f32 / per_build, broad_score as f32 / per_build);
+                println!(
+                    "{} count={count} mean_small={:.1} mean_broad={:.1} winners_small={small_winners} winners_broad={broad_winners} inactive={inactive}",
+                    KEYS[kind],
+                    small_score as f32 / per_build,
+                    broad_score as f32 / per_build
+                );
             }
         }
     }
