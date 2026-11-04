@@ -155,7 +155,11 @@ export class HubBot {
       return queue.done;
     }
     const state = { again: false, build, done: Promise.resolve() };
+    // Registered before the work starts: a round with nobody to push to finishes without
+    // awaiting anything, and its cleanup must not run before this entry exists.
+    this.refreshes.set(pageKey, state);
     state.done = (async () => {
+      await Promise.resolve();
       let retries = 0;
       try {
         do {
@@ -179,7 +183,6 @@ export class HubBot {
         this.refreshes.delete(pageKey);
       }
     })();
-    this.refreshes.set(pageKey, state);
     return state.done;
   }
 

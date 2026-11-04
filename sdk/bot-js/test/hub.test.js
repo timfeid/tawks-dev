@@ -80,3 +80,10 @@ test('a refresh asked for while one runs uses the newest build', async () => {
   await Promise.all([hub.refresh('p', () => [['m_a', { x: 1 }]]), hub.refresh('p', () => [['m_b', { x: 2 }]])]);
   assert.ok(sent.includes('m_b'), JSON.stringify(sent));
 });
+
+test('a refresh with nobody to push to leaves the next one working', async () => {
+  const { hub, sent } = refresher(() => false);
+  await hub.refresh('p', () => []);
+  await hub.refresh('p', () => [['m_a', { x: 1 }]]);
+  assert.deepEqual(sent, ['m_a']);
+});
