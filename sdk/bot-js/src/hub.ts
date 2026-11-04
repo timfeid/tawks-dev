@@ -112,7 +112,7 @@ export class HubBot {
   private forgetHandler: ((userId: string) => void | Promise<void>) | null = null;
   private latestNow = new Date();
   private running: Promise<void> | null = null;
-  private readonly refreshes = new Map<string, { again: boolean; done: Promise<void> }>();
+  private readonly refreshes = new Map<string, { again: boolean; build: () => [string | null, Partial<Record<string, JsonValue>>][]; done: Promise<void> }>();
 
   constructor(db: HubDb, options: BotOptions) {
     this.bot = new TawksBot(options);
@@ -151,14 +151,29 @@ export class HubBot {
     const queue = this.refreshes.get(pageKey);
     if (queue) {
       queue.again = true;
+      queue.build = build;
       return queue.done;
     }
-    const state = { again: false, done: Promise.resolve() };
+    const state = { again: false, build, done: Promise.resolve() };
     state.done = (async () => {
+      let retries = 0;
       try {
         do {
           state.again = false;
-          for (const [userId, values] of build()) await this.push(pageKey, values, userId ?? undefined);
+          // One person's push failing must not cost everyone after them theirs.
+          let failed = 0;
+          for (const [userId, values] of state.build()) {
+            try {
+              await this.push(pageKey, values, userId ?? undefined);
+            } catch (error) {
+              failed += 1;
+              console.warn(`[hub] a push to ${pageKey} failed: ${error instanceof Error ? error.message : error}`);
+            }
+          }
+          if (failed && retries < 2) {
+            retries += 1;
+            state.again = true;
+          }
         } while (state.again);
       } finally {
         this.refreshes.delete(pageKey);

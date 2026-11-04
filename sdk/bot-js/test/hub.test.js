@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { HubDb, destructiveStatement } from '../dist/hub.js';
+import { HubBot, HubDb, destructiveStatement } from '../dist/hub.js';
 
 const open = () => new HubDb(new DatabaseSync(':memory:'));
 
@@ -56,4 +56,27 @@ test('a transaction commits together or not at all', () => {
   assert.equal(db.get('SELECT count(*) AS n FROM a').n, 0);
   db.tx(() => db.run('INSERT INTO a VALUES (1)'));
   assert.equal(db.get('SELECT count(*) AS n FROM a').n, 1);
+});
+
+const refresher = (fail) => {
+  const hub = new HubBot(open(), { rspcUrl: 'http://x', eventsUrl: 'ws://x', token: 't' });
+  const sent = [];
+  hub.bot.api.mutate = async (_procedure, body) => {
+    if (fail(body)) throw Object.assign(new Error('refused'), { code: 403 });
+    sent.push(body.filter.user_id);
+    return 1;
+  };
+  return { hub, sent };
+};
+
+test('a refresh that fails for one person still reaches everyone after them', async () => {
+  const { hub, sent } = refresher((body) => body.filter.user_id === 'm_a');
+  await hub.refresh('p', () => [['m_a', { x: 1 }], ['m_b', { x: 1 }], ['m_c', { x: 1 }]]);
+  assert.deepEqual([...new Set(sent)], ['m_b', 'm_c']);
+});
+
+test('a refresh asked for while one runs uses the newest build', async () => {
+  const { hub, sent } = refresher(() => false);
+  await Promise.all([hub.refresh('p', () => [['m_a', { x: 1 }]]), hub.refresh('p', () => [['m_b', { x: 2 }]])]);
+  assert.ok(sent.includes('m_b'), JSON.stringify(sent));
 });
