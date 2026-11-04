@@ -33,6 +33,7 @@
     side = 'right',
     portalProps,
     modal = true,
+    closeClass,
     children,
     ...restProps
   }: WithoutChildrenOrChild<SheetPrimitive.ContentProps> & {
@@ -40,6 +41,8 @@
     side?: Side;
     /** False leaves what's underneath undimmed and usable while the sheet is open. */
     modal?: boolean;
+    /** Lines the close button up with a header that isn't at the sheet's own padding. */
+    closeClass?: string;
     children: Snippet;
   } = $props();
 
@@ -66,7 +69,10 @@
   >
     {@render children?.()}
     <SheetPrimitive.Close
-      class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"
+      class={cn(
+        'ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none',
+        closeClass,
+      )}
     >
       <X class="size-4" />
       <span class="sr-only">Close</span>
