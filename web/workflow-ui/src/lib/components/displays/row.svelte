@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { interpolate, safeHref } from '../../utils';
+  import { safeHref } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import { pressable } from '../../act.svelte';
   import type { Props } from '../workflow-display.svelte';
@@ -10,7 +11,7 @@
   let state = $derived(look.stateOf(row?.state, inputs));
   let accent = $derived(look.accentOf(row?.accent, inputs));
   let tint = $derived(accent ? `background-color: ${look.accentFill(accent)}; box-shadow: ${look.accentEdge(accent)}` : undefined);
-  let href = $derived(row?.href ? safeHref(interpolate(inputs, row.href)) : null);
+  let href = $derived(row?.href ? safeHref(shown(inputs, row.href)) : null);
   let external = $derived(!!href && /^https?:\/\//i.test(href));
   const press = pressable(() => ({ workflow, inputs }));
   let interactive = $derived(!!href || !!row?.act);
@@ -29,8 +30,8 @@
     </div>
   {/if}
   <div class="flex min-w-0 flex-1 flex-col">
-    <span class={['text-sm font-semibold [overflow-wrap:anywhere]', state === 'Muted' || state === 'Disabled' ? 'text-muted-foreground' : 'text-foreground']}>{interpolate(inputs, row!.title)}</span>
-    {#if row!.meta}<span class="truncate text-xs text-muted-foreground">{interpolate(inputs, row!.meta)}</span>{/if}
+    <span class={['text-sm font-semibold [overflow-wrap:anywhere]', state === 'Muted' || state === 'Disabled' ? 'text-muted-foreground' : 'text-foreground']}>{shown(inputs, row!.title)}</span>
+    {#if row!.meta}<span class="truncate text-xs text-muted-foreground">{shown(inputs, row!.meta)}</span>{/if}
   </div>
   {#if row!.trail.length}
     <!-- Buttons at the end do their own thing, not the row's. -->

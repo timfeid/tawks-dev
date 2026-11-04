@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import { pressable } from '../../act.svelte';
   import type { Props } from '../workflow-display.svelte';
@@ -16,8 +16,8 @@
       <ChevronLeft class="size-4" />
     </button>
     <div class="flex min-w-0 flex-col items-center text-center">
-      <span class="truncate text-sm font-semibold text-foreground">{interpolate(inputs, stepper.title)}</span>
-      {#if stepper.subtitle}<span class="truncate text-xs text-muted-foreground">{interpolate(inputs, stepper.subtitle)}</span>{/if}
+      <span class="truncate text-sm font-semibold text-foreground">{shown(inputs, stepper.title)}</span>
+      {#if stepper.subtitle}<span class="truncate text-xs text-muted-foreground">{shown(inputs, stepper.subtitle)}</span>{/if}
     </div>
     <button type="button" class={[look.action.Icon, !stepper.next && 'invisible', press.disabled(stepper.next) && 'opacity-30']} aria-label="Next" disabled={!stepper.next || press.disabled(stepper.next)} onclick={() => press.run(stepper.next)}>
       <ChevronRight class="size-4" />

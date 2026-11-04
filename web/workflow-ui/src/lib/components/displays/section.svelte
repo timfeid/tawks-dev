@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
@@ -13,11 +13,11 @@
     <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
       <div class="flex min-w-0 flex-col gap-1.5">
         {#if section.eyebrow}
-          <div class={look.text('Eyebrow', 'Default')}>{interpolate(inputs, section.eyebrow)}</div>
+          <div class={look.text('Eyebrow', 'Default')}>{shown(inputs, section.eyebrow)}</div>
         {/if}
-        <h2 class={look.text('Heading', 'Default')}>{interpolate(inputs, section.title)}</h2>
+        <h2 class={look.text('Heading', 'Default')}>{shown(inputs, section.title)}</h2>
         {#if section.lead}
-          <p class={['max-w-2xl', look.text('Body', 'Default')]}>{interpolate(inputs, section.lead)}</p>
+          <p class={['max-w-2xl', look.text('Body', 'Default')]}>{shown(inputs, section.lead)}</p>
         {/if}
       </div>
       {#if section.aside.length}

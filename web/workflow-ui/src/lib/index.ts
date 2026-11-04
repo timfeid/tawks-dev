@@ -11,3 +11,4 @@ export * from './media';
 export * from './client';
 export * as look from './look';
 export * from './page-title';
+export { setMemberLookup, withNames, type MemberName } from './member-names.svelte';

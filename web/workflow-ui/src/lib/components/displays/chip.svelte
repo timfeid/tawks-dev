@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import { pressable } from '../../act.svelte';
   import type { Props } from '../workflow-display.svelte';
@@ -7,7 +7,7 @@
 
   let { display, inputs, workflow }: Props = $props();
   let chip = $derived(typeof display.type !== 'string' && 'Chip' in display.type ? display.type.Chip : null);
-  let Icon = $derived(chip?.icon ? LUCIDE_REGISTRY[interpolate(inputs, chip.icon)] : undefined);
+  let Icon = $derived(chip?.icon ? LUCIDE_REGISTRY[shown(inputs, chip.icon)] : undefined);
   let state = $derived(look.stateOf(chip?.state, inputs));
   let on = $derived(state === 'Selected');
   const Cross = LUCIDE_REGISTRY['x'];
@@ -24,12 +24,12 @@
     onclick={() => press.run(chip.act)}
   >
     {#if Icon}<Icon class="size-4 shrink-0" />{/if}
-    <span>{interpolate(inputs, chip.text)}</span>
+    <span>{shown(inputs, chip.text)}</span>
     {#if on && Cross}<Cross class="size-3.5 shrink-0 opacity-70" aria-hidden="true" />{/if}
   </button>
 {:else if chip}
   <div class={look.chip}>
     {#if Icon}<Icon class="size-4 shrink-0 text-primary" />{/if}
-    <span>{interpolate(inputs, chip.text)}</span>
+    <span>{shown(inputs, chip.text)}</span>
   </div>
 {/if}

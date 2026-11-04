@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import type { Props } from '../workflow-display.svelte';
 
   let { display, inputs }: Props = $props();
   let log = $derived(typeof display.type !== 'string' && 'Log' in display.type ? display.type.Log : null);
-  let value = $derived(log ? interpolate(inputs, log.text) : '');
+  let value = $derived(log ? shown(inputs, log.text) : '');
   let box = $state<HTMLPreElement>();
 
   // New output keeps the end in view, unless someone has scrolled up to read.

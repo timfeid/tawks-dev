@@ -4,7 +4,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use specta::{Generics, Type, TypeCollection, datatype::DataType};
+use specta::{datatype::DataType, Generics, Type, TypeCollection};
 use std::collections::HashMap;
 
 use crate::{
@@ -21,8 +21,8 @@ pub mod schedule;
 pub mod select;
 pub mod server_action;
 pub mod service;
-pub mod transform;
 mod tolerant;
+pub mod transform;
 pub mod ui;
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -264,7 +264,9 @@ impl Accent {
         if is_hex_color(&value) || is_key_template(&value) {
             Ok(Self(value))
         } else {
-            Err(format!("an accent is a #rgb or #rrggbb colour or a {{key}} template, not {value:?}"))
+            Err(format!(
+                "an accent is a #rgb or #rrggbb colour or a {{key}} template, not {value:?}"
+            ))
         }
     }
 
@@ -283,7 +285,12 @@ fn is_key_template(value: &str) -> bool {
     value
         .strip_prefix('{')
         .and_then(|rest| rest.strip_suffix('}'))
-        .is_some_and(|key| !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$' | '-')))
+        .is_some_and(|key| {
+            !key.is_empty()
+                && key
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$' | '-'))
+        })
 }
 
 impl<'de> Deserialize<'de> for Accent {
@@ -462,8 +469,12 @@ pub struct GroupButton {
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub enum Layout {
-    Stack { gap: Gap },
-    Row { gap: Gap },
+    Stack {
+        gap: Gap,
+    },
+    Row {
+        gap: Gap,
+    },
     /// `fixed` keeps every column on a phone too, for boards and tile grids.
     Grid {
         columns: u8,
@@ -474,7 +485,10 @@ pub enum Layout {
     /// Rows with a rule between them.
     Divided,
     /// A stack that shows about `rows` rows and scrolls the rest.
-    Scroll { gap: Gap, rows: u8 },
+    Scroll {
+        gap: Gap,
+        rows: u8,
+    },
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -1003,6 +1017,12 @@ pub enum DisplayType {
         actions: Vec<WorkflowDisplay>,
     },
     /// Someone's avatar beside their name; the avatar falls back to an initial.
+    /// A person as a hub's own bot knows them: a template or an `m_...` id. Tawks
+    /// draws their current name and picture, and "Deleted user" when they are gone.
+    Member {
+        member: String,
+        size: Size,
+    },
     Person {
         avatar: String,
         name: String,

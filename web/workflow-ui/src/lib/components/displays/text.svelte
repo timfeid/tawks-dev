@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getNestedValue, interpolate, resolveInputValue, evaluateCondition, formatDate, cn, debounce, deepEqual, objectInterpolate } from '../../utils.js';
+  import { getNestedValue, resolveInputValue, evaluateCondition, formatDate, cn, debounce, deepEqual, objectInterpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import type { Props } from '../workflow-display.svelte';
 
   let { workflow, display, inputs }: Props = $props();
@@ -8,7 +9,7 @@
     if (typeof display.type === 'string' || !('Text' in display.type)) return;
     let template = display.type.Text.text;
     if (typeof template !== 'string') return;
-    return interpolate(inputs, template);
+    return shown(inputs, template);
   });
 </script>
 

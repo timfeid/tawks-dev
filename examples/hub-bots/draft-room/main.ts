@@ -23,7 +23,7 @@ const db = hub.db;
 // entry and never drop anything.
 db.migrate([
   `CREATE TABLE players (id INTEGER PRIMARY KEY, name TEXT NOT NULL, rank INTEGER NOT NULL);
-   CREATE TABLE teams (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, seat INTEGER);
+   CREATE TABLE teams (user_id TEXT PRIMARY KEY, seat INTEGER);
    CREATE TABLE picks (number INTEGER PRIMARY KEY, user_id TEXT NOT NULL, player_id INTEGER NOT NULL UNIQUE, auto INTEGER NOT NULL DEFAULT 0, at TEXT NOT NULL);
    CREATE TABLE draft (id INTEGER PRIMARY KEY CHECK (id = 1), phase TEXT NOT NULL, deadline TEXT);
    INSERT INTO draft (id, phase) VALUES (1, 'lobby');`,
@@ -35,9 +35,12 @@ if (!db.get('SELECT 1 AS found FROM players LIMIT 1')) {
   });
 }
 
-type Team = { user_id: string; name: string; seat: number };
+// A person here is only ever an id. hub.who(id) writes them in text, and Tawks
+// shows their name to whoever reads it, so a deleted account shows as deleted
+// with nothing to clean up. Never store what people type about each other.
+type Team = { user_id: string; seat: number };
 const state = () => db.get<{ phase: string; deadline: string | null }>('SELECT phase, deadline FROM draft')!;
-const teams = () => db.all<Team>('SELECT user_id, name, seat FROM teams ORDER BY seat, rowid');
+const teams = () => db.all<Team>('SELECT user_id, seat FROM teams ORDER BY seat, rowid');
 const pickCount = () => db.get<{ n: number }>('SELECT count(*) AS n FROM picks')!.n;
 
 /** Whose pick it is: seats go 1 to N, then N to 1. */
@@ -60,12 +63,12 @@ function shared() {
     phase,
     deadline: deadline ?? '',
     can_start: phase === 'lobby' && all.length >= 2,
-    on_clock: onClock?.name ?? '',
+    on_clock: onClock ? hub.who(onClock.user_id) : '',
     round: all.length ? Math.floor(number / all.length) + 1 : 1,
     pick_number: number + 1,
     team_count: all.length,
     teams: all.map((team) => ({
-      name: team.name,
+      name: hub.who(team.user_id),
       roster: picks.filter((pick) => pick.user_id === team.user_id).map((pick) => pick.name + (pick.auto ? ' (auto)' : '')).join(', ') || 'No picks yet',
       state: team.user_id === onClock?.user_id ? 'Active' : 'Default',
     })),
@@ -126,8 +129,8 @@ hub.onWake('draft', async (wake) => {
 });
 
 hub.onForget((userId) => {
-  db.run('DELETE FROM teams WHERE user_id = ? AND (SELECT phase FROM draft) = \'lobby\'', userId);
-  db.run("UPDATE teams SET name = 'Deleted account' WHERE user_id = ?", userId);
+  // Only before the draft starts: afterwards their picks stay, as "Deleted user".
+  db.run("DELETE FROM teams WHERE user_id = ? AND (SELECT phase FROM draft) = 'lobby'", userId);
 });
 
 const load = await hub.action('draft.load', (ctx) => result.responses({ ...shared(), ...mine(ctx.user.id) }));
@@ -135,7 +138,7 @@ const load = await hub.action('draft.load', (ctx) => result.responses({ ...share
 const join = await hub.action('draft.join', async (ctx) => {
   if (ctx.anonymous) return result.error('Sign in to join the draft.');
   if (state().phase !== 'lobby') return result.error('The draft has started.');
-  db.run('INSERT OR IGNORE INTO teams (user_id, name) VALUES (?, ?)', ctx.user.id, ctx.user.display_name);
+  db.run('INSERT OR IGNORE INTO teams (user_id) VALUES (?)', ctx.user.id);
   await pushAll();
   return result.none();
 });

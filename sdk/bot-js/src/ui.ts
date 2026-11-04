@@ -338,6 +338,13 @@ export const loading = (title: string, o: EmptyOptions = {}) => emptyState(title
 
 /** `avatar` is an image URL template; with none, the name's first letter stands in.
  * `user` is a user id template whose profile card pressing the person opens. */
+/**
+ * A person a hub's bot knows by their `m_...` id, or a template holding it. Tawks
+ * draws their current name and picture. In text, write `@[m_...]`: `hub.who(id)`.
+ */
+export const member = (id: string, o: Marked & { size?: Size } = {}) =>
+  block({ Member: { member: id, size: o.size ?? 'Medium' } }, o.mark);
+
 export const person = (avatar: string, name: string, o: Marked & { meta?: string; size?: Size; user?: string } = {}) =>
   block({ Person: { avatar, name, meta: o.meta ?? null, size: o.size ?? 'Medium', ...(o.user ? { user: o.user } : {}) } }, o.mark);
 

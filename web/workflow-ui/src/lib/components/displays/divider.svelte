@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import type { Props } from '../workflow-display.svelte';
 
   let { display, inputs }: Props = $props();
@@ -10,7 +10,7 @@
   {#if divider.label}
     <div class="flex items-center gap-3 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
       <div class="h-px flex-1 border-t border-dashed border-foreground/15"></div>
-      {interpolate(inputs, divider.label)}
+      {shown(inputs, divider.label)}
       <div class="h-px flex-1 border-t border-dashed border-foreground/15"></div>
     </div>
   {:else}

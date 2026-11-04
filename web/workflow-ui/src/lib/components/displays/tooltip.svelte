@@ -1,7 +1,8 @@
 <script lang="ts">
   import * as Tooltip from '@tawks/ui/tooltip/index.js';
   import { onMount } from 'svelte';
-  import { getNestedValue, interpolate, resolveInputValue, evaluateCondition, formatDate, cn, debounce, deepEqual, objectInterpolate } from '../../utils';
+  import { getNestedValue, resolveInputValue, evaluateCondition, formatDate, cn, debounce, deepEqual, objectInterpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
   import { sanitizeInlineHtml } from '@tawks/editor';
@@ -35,7 +36,7 @@
       </Tooltip.Trigger>
 
       <Tooltip.Content collisionBoundary={scrollEl}>
-        {@html sanitizeInlineHtml(interpolate(inputs, tooltip.tooltip_html))}
+        {@html sanitizeInlineHtml(shown(inputs, tooltip.tooltip_html))}
       </Tooltip.Content>
     </Tooltip.Root>
   </Tooltip.Provider>

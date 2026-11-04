@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { evaluateCondition, interpolate, safeHref } from '../../utils';
+  import { evaluateCondition, safeHref } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import { pressable } from '../../act.svelte';
   import type { Props } from '../workflow-display.svelte';
@@ -37,18 +38,18 @@
   <nav class={style.bar} role="tablist" aria-orientation="horizontal" tabindex="-1" {onkeydown}>
     {#each bar.tabs as tab, index}
       {@const on = evaluateCondition(tab.active, inputs)}
-      {@const Icon = tab.icon ? LUCIDE_REGISTRY[interpolate(inputs, tab.icon)] : undefined}
-      {@const href = tab.href ? safeHref(interpolate(inputs, tab.href)) : null}
+      {@const Icon = tab.icon ? LUCIDE_REGISTRY[shown(inputs, tab.icon)] : undefined}
+      {@const href = tab.href ? safeHref(shown(inputs, tab.href)) : null}
       {@const reachable = on || (active < 0 && index === 0)}
       {#if href}
         <a {href} role="tab" aria-selected={on} tabindex={reachable ? 0 : -1} class={[style.tab, on ? style.on : style.off]} aria-current={on ? 'page' : undefined}>
           {#if Icon}<Icon />{/if}
-          {interpolate(inputs, tab.label)}
+          {shown(inputs, tab.label)}
         </a>
       {:else}
         <button type="button" role="tab" aria-selected={on} tabindex={reachable ? 0 : -1} class={[style.tab, on ? style.on : style.off]} aria-current={on ? 'page' : undefined} onclick={() => press.runLatest(on ? null : tab.act)}>
           {#if Icon}<Icon />{/if}
-          {interpolate(inputs, tab.label)}
+          {shown(inputs, tab.label)}
         </button>
       {/if}
     {/each}

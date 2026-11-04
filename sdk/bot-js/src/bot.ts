@@ -66,8 +66,8 @@ export type NotificationKind = {
   key: string;
   label: string;
   description?: string | null;
-  /** `reminder` for a nudge on a schedule, `event` for something that happened. */
-  kind: 'reminder' | 'event';
+  /** `reminder` for a nudge on a schedule, `event` for something that happened, the default. */
+  kind?: 'reminder' | 'event';
   sort_order?: number | null;
 };
 
@@ -207,7 +207,7 @@ export class TawksBot {
         key: k.key,
         label: k.label,
         description: k.description ?? null,
-        kind: k.kind,
+        kind: k.kind ?? 'event',
         default_state: 'off',
         sort_order: k.sort_order ?? i,
       })),

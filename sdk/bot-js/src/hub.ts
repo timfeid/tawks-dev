@@ -1,5 +1,6 @@
 import { TawksBot, type ServerActionHandler, type BotOptions } from './bot.js';
 import type { CreateWorkflowDefinition, JsonValue } from '@tawks/workflow-types';
+import type { TawksApiError } from './api.js';
 
 /**
  * What a bot running as a hub's own bot gets on top of `TawksBot`: its SQLite
@@ -45,6 +46,8 @@ export function destructiveStatement(sql: string): string | null {
  * new versions and rollbacks. Rollback runs older code on the same file, so
  * schema changes only add: new tables, new columns with defaults, new indexes.
  */
+const PUSH_TRIES = 6;
+
 export class HubDb {
   constructor(readonly sql: Sql) {
     sql.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 2000;');
@@ -96,7 +99,40 @@ export class HubDb {
   }
 }
 
-export type Member = { id: string; username: string; display_name: string; avatar_url?: string; role: 'owner' | 'member' };
+/** The row fields each list on a page reads, by the response key the list shows. */
+export function listFields(definition: unknown): Map<string, Set<string>> {
+  const found = new Map<string, Set<string>>();
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(walk);
+    if (value === null || typeof value !== 'object') return;
+    const items = (value as Record<string, any>).Items;
+    if (items && typeof items.items_key === 'string' && typeof items.as === 'string') {
+      const fields = found.get(items.items_key) ?? new Set<string>();
+      for (const match of JSON.stringify(items.content ?? []).matchAll(new RegExp(`\\{${items.as}\\.(\\w+)`, 'g'))) fields.add(match[1]);
+      found.set(items.items_key, fields);
+    }
+    Object.values(value).forEach(walk);
+  };
+  walk(definition);
+  return found;
+}
+
+/** Fields a list reads that its rows don't have. Each shows as a blank on the page. */
+export function blankFields(fields: Map<string, Set<string>>, values: Partial<Record<string, JsonValue>>): string[] {
+  const blanks: string[] = [];
+  for (const [key, wanted] of fields) {
+    const rows = values[key];
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    for (const field of wanted) {
+      const missing = rows.some((row) => row !== null && typeof row === 'object' && !Array.isArray(row) && !(field in row));
+      if (missing) blanks.push(`${key}.${field}`);
+    }
+  }
+  return blanks;
+}
+
+/** A person, to a bot: an `m_...` id that is theirs in this hub and nowhere else. No name, ever. */
+export type Member = { id: string; role: 'owner' | 'member' };
 export type HubChannel = { id: string; name: string; slug: string; kind: string };
 export type HubContext = { hub: { id: string; name: string; slug: string }; scope: 'live' | 'preview'; bot: string; channels: HubChannel[]; now: string };
 export type DatasetResult = { rows: { id: string; data: Record<string, JsonValue> }[]; refused: string | null; notice: string | null; attribution: string };
@@ -113,6 +149,8 @@ export class HubBot {
   private latestNow = new Date();
   private running: Promise<void> | null = null;
   private readonly refreshes = new Map<string, { again: boolean; build: () => [string | null, Partial<Record<string, JsonValue>>][]; done: Promise<void> }>();
+  private readonly lists = new Map<string, Set<string>>();
+  private readonly warned = new Set<string>();
 
   constructor(db: HubDb, options: BotOptions) {
     this.bot = new TawksBot(options);
@@ -123,21 +161,50 @@ export class HubBot {
 
   /** Registers a page. Returns its id, which `push` also takes as its key. */
   page(definition: CreateWorkflowDefinition): Promise<string> {
+    for (const [key, fields] of listFields(definition)) {
+      const known = this.lists.get(key) ?? new Set<string>();
+      fields.forEach((field) => known.add(field));
+      this.lists.set(key, known);
+    }
     return this.bot.workflow(definition);
+  }
+
+  /** A list row with no value for what its page reads looks like an empty box, and nothing else says so. */
+  private warnBlanks(values: Partial<Record<string, JsonValue>>): void {
+    for (const blank of blankFields(this.lists, values)) {
+      if (this.warned.has(blank)) continue;
+      this.warned.add(blank);
+      console.warn(`[hub] a page reads ${blank} but the rows sent have no such field, so it shows blank`);
+    }
   }
 
   /** Registers a server action and returns the id its buttons target. */
   action(name: string, handler: ServerActionHandler): Promise<string> {
-    return this.bot.serverAction(name, handler);
+    return this.bot.serverAction(name, async (ctx) => {
+      const answer = await handler(ctx);
+      const responses = (answer as { UpdateResponses?: Partial<Record<string, JsonValue>> } | null)?.UpdateResponses;
+      if (responses) this.warnBlanks(responses);
+      return answer;
+    });
   }
 
   /** Pushes values into every open copy of a page, or one person's. */
-  push(pageKey: string, updates: Partial<Record<string, JsonValue>>, userId?: string): Promise<unknown> {
-    return this.bot.api.mutate('workflow_broadcast_updates', {
-      workflow_definition_id: `wf-${pageKey}-${this.user}`,
-      filter: { user_id: userId ?? null, response_equals: null, include_completed: false },
-      updates,
-    });
+  async push(pageKey: string, updates: Partial<Record<string, JsonValue>>, userId?: string): Promise<unknown> {
+    this.warnBlanks(updates);
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.bot.api.mutate('workflow_broadcast_updates', {
+          workflow_definition_id: `wf-${pageKey}-${this.user}`,
+          filter: { user_id: userId ?? null, response_equals: null, include_completed: false },
+          updates,
+        });
+      } catch (error) {
+        // Someone pressing while a push lands is normal on a busy page. A push is
+        // only values, so sending it again is safe, and failing would fail their press.
+        if ((error as TawksApiError).code !== 409 || attempt === PUSH_TRIES) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 40 * attempt));
+      }
+    }
   }
 
   /**
@@ -219,7 +286,12 @@ export class HubBot {
     this.wakeHandlers.set(prefix, handler);
   }
 
-  /** Called when someone in this hub deletes their account: remove them from your data. */
+  /** How to write this person in text, on a page or in chat. Tawks shows their current name to whoever reads it. */
+  who(memberId: string): string {
+    return `@[${memberId}]`;
+  }
+
+  /** Called with a member's id when they delete their account, to clear them from play. Their id already names nobody. */
   onForget(handler: (userId: string) => void | Promise<void>): void {
     this.forgetHandler = handler;
   }
@@ -228,7 +300,7 @@ export class HubBot {
     return JSON.parse(await this.bot.api.query<string>('code_bot_context'));
   }
 
-  /** The hub's people. In a preview, sample people. */
+  /** The hub's people, by id. In a preview, sample people. */
   async members(): Promise<Member[]> {
     const all: Member[] = [];
     let after: string | null = null;

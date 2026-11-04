@@ -3,6 +3,7 @@
   import TableImage from './table-image.svelte';
   import { getContext } from 'svelte';
   import { holdsInputs, rowKeys } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   /** A length such as 120px, 30% or 8rem; anything else could smuggle in more CSS. */
   const columnWidth = (width: string | null | undefined) =>
     width && /^\d{1,4}(\.\d+)?(px|%|rem|em|ch)$/.test(width.trim()) ? width.trim() : 'auto';
@@ -64,7 +65,7 @@
       <tbody>
         {#each items as item, index (keys[index])}
           {@const scope = { ...inputs, [table.as]: item }}
-          {#if table.section_key && interpolate(scope, table.section_key)}
+          {#if table.section_key && shown(scope, table.section_key)}
             <tr class="border-b border-foreground/10 bg-foreground/[0.03] last:border-b-0">
               <td colspan={columnCount} class="px-3 py-2">
                 {#each table.section ?? [] as sectionItem}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import { pressable, scrollToId } from '../../act.svelte';
   import type { Props } from '../workflow-display.svelte';
@@ -8,8 +8,8 @@
 
   let { display, inputs, workflow, buttonClicked }: Props = $props();
   let action = $derived(typeof display.type !== 'string' && 'Action' in display.type ? display.type.Action : null);
-  let label = $derived(action ? interpolate(inputs, action.label) : '');
-  let Icon = $derived(action?.icon ? LUCIDE_REGISTRY[interpolate(inputs, action.icon)] : undefined);
+  let label = $derived(action ? shown(inputs, action.label) : '');
+  let Icon = $derived(action?.icon ? LUCIDE_REGISTRY[shown(inputs, action.icon)] : undefined);
   const press = pressable(() => ({ workflow, inputs }));
   const formSubmit = getContext<
     ((sent: { action: string; inputs: Record<string, any> } | null, from: Element | null) => void) | undefined
@@ -40,7 +40,7 @@
       return;
     }
     press.run(action.act);
-    if (action.scroll_to) scrollToId(interpolate(inputs, action.scroll_to));
+    if (action.scroll_to) scrollToId(shown(inputs, action.scroll_to));
     buttonClicked?.();
   }
 </script>

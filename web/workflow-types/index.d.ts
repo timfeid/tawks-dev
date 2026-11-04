@@ -221,6 +221,11 @@ state?: string | null } } |
 /**
  * Someone's avatar beside their name; the avatar falls back to an initial.
  */
+/**
+ * A person as a hub's own bot knows them: a template or an `m_...` id. Tawks draws
+ * their current name and picture.
+ */
+{ Member: { member: string; size: Size } } | 
 { Person: { avatar: string; name: string; meta: string | null; size: Size; 
 /**
  * A user id template; pressing the person then opens their profile card.

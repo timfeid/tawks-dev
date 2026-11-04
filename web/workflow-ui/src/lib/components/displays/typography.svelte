@@ -1,13 +1,13 @@
 <script lang="ts">
   import { toast } from 'svelte-sonner';
   import { Check, Copy } from '@lucide/svelte';
-  import { interpolate } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import type { Props } from '../workflow-display.svelte';
 
   let { display, inputs }: Props = $props();
   let typography = $derived(typeof display.type !== 'string' && 'Typography' in display.type ? display.type.Typography : null);
-  let value = $derived(typography ? interpolate(inputs, typography.text) : '');
+  let value = $derived(typography ? shown(inputs, typography.text) : '');
   let tone = $derived(look.toneOf(typography?.tone, inputs));
   let copied = $state(false);
 

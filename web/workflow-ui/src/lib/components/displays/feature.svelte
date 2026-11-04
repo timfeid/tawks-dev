@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { interpolate, safeHref } from '../../utils';
+  import { safeHref } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import * as look from '../../look';
   import type { Props } from '../workflow-display.svelte';
   import { LUCIDE_REGISTRY } from './icon/registry.js';
 
   let { display, inputs }: Props = $props();
   let feature = $derived(typeof display.type !== 'string' && 'Feature' in display.type ? display.type.Feature : null);
-  let Icon = $derived(feature?.icon ? LUCIDE_REGISTRY[interpolate(inputs, feature.icon)] : undefined);
-  let href = $derived(feature?.href ? safeHref(interpolate(inputs, feature.href)) : null);
+  let Icon = $derived(feature?.icon ? LUCIDE_REGISTRY[shown(inputs, feature.icon)] : undefined);
+  let href = $derived(feature?.href ? safeHref(shown(inputs, feature.href)) : null);
   let external = $derived(!!href && /^https?:\/\//i.test(href));
 </script>
 
@@ -17,10 +18,10 @@
   {/if}
   <div class="flex min-w-0 flex-1 flex-col gap-1">
     <div class="flex items-baseline justify-between gap-2">
-      <div class={look.text('Subheading', 'Default')}>{interpolate(inputs, feature!.title)}</div>
+      <div class={look.text('Subheading', 'Default')}>{shown(inputs, feature!.title)}</div>
       {#if href}<div class={['shrink-0', look.text('Fine', 'Primary')]}>Open</div>{/if}
     </div>
-    <div class={look.text('Body', 'Default')}>{interpolate(inputs, feature!.body)}</div>
+    <div class={look.text('Body', 'Default')}>{shown(inputs, feature!.body)}</div>
   </div>
 {/snippet}
 

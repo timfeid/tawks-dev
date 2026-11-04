@@ -57,6 +57,7 @@
   import SegmentsBlock from './displays/segments.svelte';
   import EmptyBlock from './displays/empty.svelte';
   import PersonBlock from './displays/person.svelte';
+  import MemberBlock from './displays/member.svelte';
   import AvatarStackBlock from './displays/avatar-stack.svelte';
   import DividerBlock from './displays/divider.svelte';
   import LogBlock from './displays/log.svelte';
@@ -185,6 +186,7 @@
     Segments: SegmentsBlock,
     Empty: EmptyBlock,
     Person: PersonBlock,
+    Member: MemberBlock,
     AvatarStack: AvatarStackBlock,
     Divider: DividerBlock,
     Log: LogBlock,

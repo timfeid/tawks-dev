@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getNestedValue, interpolate, resolveInputValue } from '../../utils';
+  import { getNestedValue, resolveInputValue } from '../../utils';
+  import { shown } from '../../member-names.svelte';
   import type { Props } from '../workflow-display.svelte';
   import WorkflowDisplay from '../workflow-display.svelte';
 

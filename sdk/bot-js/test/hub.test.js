@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { HubBot, HubDb, destructiveStatement } from '../dist/hub.js';
+import { HubBot, HubDb, blankFields, destructiveStatement, listFields } from '../dist/hub.js';
 
 const open = () => new HubDb(new DatabaseSync(':memory:'));
 
@@ -56,6 +56,42 @@ test('a transaction commits together or not at all', () => {
   assert.equal(db.get('SELECT count(*) AS n FROM a').n, 0);
   db.tx(() => db.run('INSERT INTO a VALUES (1)'));
   assert.equal(db.get('SELECT count(*) AS n FROM a').n, 1);
+});
+
+test('a list row missing what its page reads is found', () => {
+  const page = { nodes: { home: { visuals: [{ display: { type: { Items: { items_key: 'games', as: 'g', content: [{ type: { Row: { title: '{g.title}', meta: '{g.meta}' } } }] } } } }] } } };
+  const fields = listFields(page);
+  assert.deepEqual([...fields.get('games')].sort(), ['meta', 'title']);
+  assert.deepEqual(blankFields(fields, { games: [{ text: 'a', meta: 'b' }] }), ['games.title']);
+  assert.deepEqual(blankFields(fields, { games: [{ title: 'a', meta: 'b' }] }), []);
+  assert.deepEqual(blankFields(fields, { games: [] }), []);
+  assert.deepEqual(blankFields(fields, { other: [{ x: 1 }] }), []);
+  assert.deepEqual(blankFields(fields, { games: [{ title: 'a', meta: 'b' }, { title: 'c' }] }), ['games.meta']);
+  assert.deepEqual(blankFields(fields, { games: [{ title: null, meta: '' }] }), []);
+});
+
+const pusher = (answers) => {
+  const sent = [];
+  const mutate = async (procedure, body) => {
+    sent.push(body);
+    const answer = answers.shift();
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+  return { sent, bot: { warnBlanks() {}, user: 'b', bot: { api: { mutate } } } };
+};
+const refusal = (code) => Object.assign(new Error('refused'), { code });
+
+test('a push that lost a race goes again, and any other refusal is the bot\'s to hear', async () => {
+  const raced = pusher([refusal(409), refusal(409), 3]);
+  assert.equal(await HubBot.prototype.push.call(raced.bot, 'p', { x: 1 }), 3);
+  assert.equal(raced.sent.length, 3);
+  const refused = pusher([refusal(403), 3]);
+  await assert.rejects(HubBot.prototype.push.call(refused.bot, 'p', { x: 1 }));
+  assert.equal(refused.sent.length, 1);
+  const stuck = pusher(Array.from({ length: 20 }, () => refusal(409)));
+  await assert.rejects(HubBot.prototype.push.call(stuck.bot, 'p', { x: 1 }));
+  assert.equal(stuck.sent.length, 6);
 });
 
 const refresher = (fail) => {
