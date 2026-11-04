@@ -1148,6 +1148,10 @@ pub enum DisplayType {
     BattlefieldCanvas,
     TracklinesCanvas,
     PartyCanvas,
+    /// A made minigame's stage, drawn by the kit renderer from the scene
+    /// frames the made relay streams. The client reads the relay address and
+    /// join pass from `responses.made` (made_protocol::MadeJoin).
+    MadeCanvas,
     RemotePlayCanvas,
     NhlStreams,
     /// An authenticated, live installed-game invitation in a conversation.

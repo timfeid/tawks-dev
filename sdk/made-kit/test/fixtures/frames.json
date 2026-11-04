@@ -1,0 +1,917 @@
+[
+ {
+  "n": 0,
+  "t": 0.02,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 89.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "entities": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 11.25,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 11,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": 0,
+    "y": 0.4,
+    "z": -6,
+    "r": 0.6,
+    "yaw": -0.96,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -6,
+    "y": 0.4,
+    "z": 0,
+    "r": 0.6,
+    "yaw": 0.91,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": 0,
+    "y": 0.4,
+    "z": 6,
+    "r": 0.6,
+    "yaw": -2.19,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": 6,
+    "y": 0.4,
+    "z": 0,
+    "r": 0.6,
+    "yaw": -2.48,
+    "pose": "ride"
+   }
+  ],
+  "effects": []
+ },
+ {
+  "n": 1,
+  "t": 1.02,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 88.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "entities": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 11.09,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.84,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": -1.07,
+    "y": 0.4,
+    "z": -2.63,
+    "r": 0.6,
+    "yaw": 1.26,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -4.67,
+    "y": 0.4,
+    "z": 2.87,
+    "r": 0.6,
+    "yaw": 1.28,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": -1.44,
+    "y": 0.4,
+    "z": 3.21,
+    "r": 0.6,
+    "yaw": -1.86,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": 1.42,
+    "y": 0.4,
+    "z": -2.33,
+    "r": 0.6,
+    "yaw": -1.78,
+    "pose": "ride"
+   }
+  ],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "thud"
+   },
+   {
+    "kind": "sound",
+    "name": "thud"
+   }
+  ]
+ },
+ {
+  "n": 2,
+  "t": 2.02,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 87.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "entities": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.93,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.68,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": -4.39,
+    "y": 0.4,
+    "z": -1.86,
+    "r": 0.6,
+    "yaw": 1.95,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -3.75,
+    "y": 0.4,
+    "z": 2.97,
+    "r": 0.6,
+    "yaw": 1.62,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": -2.54,
+    "y": 0.4,
+    "z": 3.02,
+    "r": 0.6,
+    "yaw": -1.51,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": -3.22,
+    "y": 0.4,
+    "z": -2.11,
+    "r": 0.6,
+    "yaw": -1.21,
+    "pose": "ride"
+   }
+  ],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "thud"
+   },
+   {
+    "kind": "sound",
+    "name": "thud"
+   }
+  ]
+ },
+ {
+  "n": 3,
+  "t": 3.02,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 86.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "entities": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.77,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.52,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": -8.79,
+    "y": 0.4,
+    "z": -1.31,
+    "r": 0.6,
+    "yaw": 1.57,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -5.86,
+    "y": 0.4,
+    "z": 1.68,
+    "r": 0.6,
+    "yaw": 1.23,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": -4.68,
+    "y": 0.4,
+    "z": 2.17,
+    "r": 0.6,
+    "yaw": -2.04,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": -7.13,
+    "y": 0.4,
+    "z": -1.72,
+    "r": 0.6,
+    "yaw": 1.38,
+    "pose": "ride"
+   }
+  ],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "thud"
+   },
+   {
+    "kind": "sound",
+    "name": "thud"
+   }
+  ]
+ },
+ {
+  "n": 4,
+  "t": 4.02,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 85.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "entities": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.61,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.36,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": -10.1,
+    "y": 0.4,
+    "z": -1.21,
+    "r": 0.6,
+    "yaw": 1.3,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -8.31,
+    "y": 0.4,
+    "z": -0.42,
+    "r": 0.6,
+    "yaw": 1.41,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": -7.64,
+    "y": 0.4,
+    "z": 0.58,
+    "r": 0.6,
+    "yaw": -2.37,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": -7.43,
+    "y": 0.4,
+    "z": -1.24,
+    "r": 0.6,
+    "yaw": -0.82,
+    "pose": "ride"
+   }
+  ],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "thud"
+   }
+  ]
+ },
+ {
+  "n": 5,
+  "t": 5.02,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 84.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "entities": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.45,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.2,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": -7.35,
+    "y": 0.4,
+    "z": -1.76,
+    "r": 0.6,
+    "yaw": 0.62,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -8.62,
+    "y": 0.4,
+    "z": 1.27,
+    "r": 0.6,
+    "yaw": 1.83,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": -7.76,
+    "y": 0.4,
+    "z": 0.43,
+    "r": 0.6,
+    "yaw": -0.77,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": -6.81,
+    "y": 0.4,
+    "z": -0.68,
+    "r": 0.6,
+    "yaw": -2.78,
+    "pose": "ride"
+   }
+  ],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "thud"
+   }
+  ]
+ },
+ {
+  "n": 99,
+  "t": 1,
+  "stage": {
+   "water": false,
+   "ground": "snow"
+  },
+  "camera": {
+   "half_x": 6,
+   "half_z": 6,
+   "pitch": 50,
+   "x": 0,
+   "z": 0,
+   "follow": 2
+  },
+  "hud": {
+   "objective": "All of it",
+   "alert": "Now",
+   "timer": 12.5,
+   "scores": [
+    {
+     "seat": 2,
+     "score": 3,
+     "label": "Ice"
+    }
+   ],
+   "meter": {
+    "label": "Power",
+    "value": 0.5,
+    "color": "gold"
+   }
+  },
+  "entities": [
+   {
+    "id": "wall",
+    "kind": "box",
+    "x": 1,
+    "y": 0,
+    "z": 2,
+    "w": 3,
+    "d": 0.5,
+    "h": 2,
+    "yaw": 0.5,
+    "color": "stone"
+   },
+   {
+    "id": "snowball",
+    "kind": "ball",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 2,
+    "yaw": 1.5,
+    "color": "seat",
+    "seat": 1
+   },
+   {
+    "id": "goal",
+    "kind": "marker",
+    "x": 3,
+    "y": 0,
+    "z": 3,
+    "r": 1,
+    "color": "gold"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": 1,
+    "y": 0,
+    "z": 1,
+    "r": 0.6,
+    "yaw": 0,
+    "pose": "cheer"
+   }
+  ],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "win"
+   },
+   {
+    "kind": "burst",
+    "x": 1,
+    "z": 1,
+    "color": "gold"
+   }
+  ]
+ },
+ {
+  "n": 1,
+  "t": 1.02,
+  "base": 0,
+  "stage": {
+   "water": true,
+   "ground": null
+  },
+  "camera": {
+   "half_x": 12,
+   "half_z": 12,
+   "pitch": 55,
+   "x": 0,
+   "z": 0,
+   "follow": null
+  },
+  "hud": {
+   "objective": "Shove them off. Keep moving or the ice cracks.",
+   "alert": null,
+   "timer": 88.98,
+   "scores": [
+    {
+     "seat": 1,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 2,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 3,
+     "up": true,
+     "label": "2 lives"
+    },
+    {
+     "seat": 4,
+     "up": true,
+     "label": "2 lives"
+    }
+   ],
+   "meter": null
+  },
+  "set": [
+   {
+    "id": "rim",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 11.09,
+    "h": 0.36,
+    "color": "danger"
+   },
+   {
+    "id": "floe",
+    "kind": "disc",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "r": 10.84,
+    "h": 0.4,
+    "color": "ice"
+   },
+   {
+    "id": "p1",
+    "kind": "player",
+    "seat": 1,
+    "x": -1.07,
+    "y": 0.4,
+    "z": -2.63,
+    "r": 0.6,
+    "yaw": 1.26,
+    "pose": "ride"
+   },
+   {
+    "id": "p2",
+    "kind": "player",
+    "seat": 2,
+    "x": -4.67,
+    "y": 0.4,
+    "z": 2.87,
+    "r": 0.6,
+    "yaw": 1.28,
+    "pose": "ride"
+   },
+   {
+    "id": "p3",
+    "kind": "player",
+    "seat": 3,
+    "x": -1.44,
+    "y": 0.4,
+    "z": 3.21,
+    "r": 0.6,
+    "yaw": -1.86,
+    "pose": "ride"
+   },
+   {
+    "id": "p4",
+    "kind": "player",
+    "seat": 4,
+    "x": 1.42,
+    "y": 0.4,
+    "z": -2.33,
+    "r": 0.6,
+    "yaw": -1.78,
+    "pose": "ride"
+   }
+  ],
+  "del": [],
+  "effects": [
+   {
+    "kind": "sound",
+    "name": "thud"
+   },
+   {
+    "kind": "sound",
+    "name": "thud"
+   }
+  ]
+ }
+]

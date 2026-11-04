@@ -299,7 +299,7 @@ close_on_submit?: boolean; content: WorkflowDisplay[] } } |
  * sandboxed frame. The client gets the response `state` and sends each
  * move to `action` as input `input`.
  */
-{ Activity: { state: string; action: string } } | "BattlefieldCanvas" | "TracklinesCanvas" | "PartyCanvas" | "RemotePlayCanvas" | "NhlStreams" | 
+{ Activity: { state: string; action: string } } | "BattlefieldCanvas" | "TracklinesCanvas" | "PartyCanvas" | "MadeCanvas" | "RemotePlayCanvas" | "NhlStreams" | 
 /**
  * An authenticated, live installed-game invitation in a conversation.
  */

@@ -624,6 +624,13 @@ impl WorkflowDisplayBuilder {
         self
     }
 
+    /// A made minigame's stage; the client reads its relay address and pass
+    /// from `responses.made`.
+    pub fn made_canvas(mut self) -> Self {
+        self.kind = Some(DisplayType::MadeCanvas);
+        self
+    }
+
     /// The remote play stage; the client reads its relay address and pass
     /// from `responses.remote_play`.
     pub fn remote_play_canvas(mut self) -> Self {

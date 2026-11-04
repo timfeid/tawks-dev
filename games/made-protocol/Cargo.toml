@@ -1,0 +1,14 @@
+[package]
+name = "made-protocol"
+version = "0.1.0"
+edition = "2024"
+description = "The shapes made minigames share: scene frames, input, the relay and sandbox protocols."
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+specta = { version = "=2.0.0-rc.22", default-features = false, features = ["derive", "serde", "serde_json"] }
+
+[dev-dependencies]
+specta-typescript = "0.0.9"

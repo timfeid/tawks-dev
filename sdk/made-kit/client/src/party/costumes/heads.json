@@ -1,0 +1,7 @@
+[
+  { "id": "head-pumpkin", "name": "Pumpkin", "from": "10-01", "until": "11-15" },
+  { "id": "head-turkey", "name": "Turkey", "from": "11-01", "until": "11-30" },
+  { "id": "head-gingerbread", "name": "Gingerbread", "from": "11-15", "until": "12-31" },
+  { "id": "head-snowman", "name": "Snowman", "from": "12-01", "until": "03-20" },
+  { "id": "head-penguin", "name": "Penguin", "from": "12-01", "until": "03-20" }
+]
