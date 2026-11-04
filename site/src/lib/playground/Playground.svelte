@@ -6,10 +6,10 @@
   import generated from './generated.json';
   import { act, begin, fromMocks, start, type Json, type LogEntry, type Mocks, type State } from './runtime';
   import { DEFAULT_DEVHOST, devhostActions, listWorkflows, type DevhostWorkflow } from './devhost';
-  import { getAt, insertTarget, setAt, tree, type Path } from './tree';
+  import { getAt, insertTarget, setAt, tree, type Path } from '@tawks/workflow-ui/editor/tree';
   import { rustFor, typescriptFor } from './codegen';
   import { decode, encode } from './share';
-  import Outline from './Outline.svelte';
+  import Outline from '@tawks/workflow-ui/editor/outline.svelte';
   import Preview from './Preview.svelte';
 
   type Template = (typeof generated.templates)[number];

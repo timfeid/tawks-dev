@@ -23,6 +23,7 @@
     header,
     followChildren = true,
     title,
+    visuals,
   }: {
     workflow: WorkflowResource;
     titlebar?: Snippet;
@@ -37,6 +38,8 @@
     followChildren?: boolean;
     /** The host's name for the page, shown above it unless the page opens with its own title. */
     title?: Snippet;
+    /** Drawn in place of the page's own, while it is edited by hand. */
+    visuals?: WorkflowResource['visuals'];
   } = $props();
 
   setContext('workflow-provider', provider);
@@ -52,7 +55,10 @@
   });
 
   // ✅ Derived from repo (fallback only if repo doesn't have it yet)
-  let viewWorkflow = $derived(provider?.byInstance?.[instanceId] ?? workflow);
+  let viewWorkflow = $derived.by(() => {
+    const shown = provider?.byInstance?.[instanceId] ?? workflow;
+    return visuals && shown.instance_id === workflow.instance_id ? { ...shown, visuals } : shown;
+  });
 
   // ✅ Replace handling: switch pointer only
   let replacing = $state(false);

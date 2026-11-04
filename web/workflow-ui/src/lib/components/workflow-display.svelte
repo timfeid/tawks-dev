@@ -74,6 +74,7 @@
   import Discussion from './displays/discussion.svelte';
   import { getContext, type Component } from 'svelte';
   import type { WorkflowStateProvider } from '../workflow';
+  import { useEditing } from '../editor/editing';
 
   export type Props = {
     workflow: WorkflowResource;
@@ -235,13 +236,23 @@
   };
 
   let mark = $derived(originalProps.display.mark ? interpolate(mergedInputs, originalProps.display.mark) : '');
+  const editing = useEditing();
+  let editKey = $derived(editing?.keyOf(originalProps.display) ?? null);
 </script>
 
+{#if editKey}
+  <div class="contents" data-edit-key={editKey}>{@render marked()}</div>
+{:else}
+  {@render marked()}
+{/if}
+
+{#snippet marked()}
 {#if mark}
   <div data-mark={mark}>{@render drawn()}</div>
 {:else}
   {@render drawn()}
 {/if}
+{/snippet}
 
 {#snippet drawn()}
 {#if finalProps.display.type}

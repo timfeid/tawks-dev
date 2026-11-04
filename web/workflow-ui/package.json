@@ -10,7 +10,8 @@
   },
   "scripts": {
     "format": "prettier --write .",
-    "lint": "prettier --check . && eslint ."
+    "lint": "prettier --check . && eslint .",
+    "test": "node --test --experimental-strip-types src/lib/editor/*.test.ts"
   },
   "dependencies": {
     "@tawks/activity-sdk": "workspace:^",
