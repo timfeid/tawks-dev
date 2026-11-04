@@ -18,6 +18,7 @@ pub mod condition;
 pub mod error;
 pub mod path;
 pub mod schedule;
+pub mod select;
 pub mod server_action;
 pub mod service;
 pub mod transform;
@@ -30,14 +31,29 @@ pub enum InputType {
         placeholder: Option<String>,
     },
     Wysiwyg,
+    /// A dropdown. Its choices are the fixed `options`, or one per row at
+    /// `items_key` with `value` and `option_label` templates reading each row
+    /// as `as`. `content` draws a choice for a build older than renderer 3.
     Select {
         filter: Option<NodeCondition>,
+        #[serde(default)]
         items_key: String,
+        #[serde(default)]
         r#as: String,
+        #[serde(default)]
         value: String,
+        #[serde(default)]
         content: Vec<WorkflowDisplay>,
         selected_content: Option<Vec<WorkflowDisplay>>,
         unselected_content: Option<Vec<WorkflowDisplay>>,
+        #[serde(default)]
+        options: Vec<SelectOption>,
+        #[serde(default)]
+        option_label: Option<String>,
+        #[serde(default)]
+        label: Option<String>,
+        #[serde(default)]
+        placeholder: Option<String>,
     },
     Switch,
     Checkbox {
@@ -86,10 +102,35 @@ pub enum InputType {
     },
 }
 
+/// How a `Dialog` opens. A `Modal` sits in the middle of the screen, for a short
+/// focused task; a `Drawer` slides in from the side and leaves the page visible
+/// beside it. Both are a bottom sheet on a phone.
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DialogStyle {
+    #[default]
+    Modal,
+    Drawer,
+}
+
+/// The look of the button that opens a `Dialog`.
+#[derive(Type, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DialogButton {
+    #[default]
+    Primary,
+    Secondary,
+    Ghost,
+}
+
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
 pub struct SelectOption {
     pub value: String,
     pub label: String,
+}
+
+impl SelectOption {
+    pub fn new(value: impl Into<String>, label: impl Into<String>) -> Self {
+        Self { value: value.into(), label: label.into() }
+    }
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -454,6 +495,10 @@ pub struct TableHeader {
     /// Leaves the column out on narrow screens.
     #[serde(default)]
     pub wide_only: bool,
+    /// A `{key}` naming a small picture for each row, shown before the cell's
+    /// own content, such as `{t.logo}`. A row with no picture keeps the space.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 #[derive(Type, Debug, Clone, Serialize, Deserialize)]
@@ -1011,6 +1056,24 @@ pub enum DisplayType {
         tint: String,
         #[serde(default)]
         caption_placement: CaptionPlacement,
+    },
+    /// A button that opens `content` over the page. Whether it is open belongs
+    /// to the viewer's browser and is never saved, so a reload shows the page.
+    Dialog {
+        label: String,
+        #[serde(default)]
+        icon: Option<String>,
+        #[serde(default)]
+        look: DialogButton,
+        title: String,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(default)]
+        style: DialogStyle,
+        /// Closes it once a form inside has been sent and not refused.
+        #[serde(default)]
+        close_on_submit: bool,
+        content: Vec<WorkflowDisplay>,
     },
     /// Floats over the game canvas just before it, in one corner, with the
     /// canvas still playable around it. Docks to the bottom on a phone.

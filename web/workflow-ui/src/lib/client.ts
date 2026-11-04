@@ -6,7 +6,7 @@ export type ClientInfo = {
   renderer?: number;
 };
 
-const RENDERER = 2;
+const RENDERER = 3;
 
 let info: ClientInfo = { desktop: false, os: 'other', renderer: RENDERER };
 

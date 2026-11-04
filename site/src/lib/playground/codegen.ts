@@ -86,6 +86,13 @@ function inputType(t: J, depth: number, im: Imports): string {
       return `${I()}.number(${opt(v.min)}, ${opt(v.max)})`;
     case 'TextArea':
       return `${I()}.textArea(${opt(v.placeholder)}, ${opt(v.rows)})`;
+    case 'Select': {
+      const hint = v.placeholder === null || v.placeholder === undefined ? '' : `, ${str(v.placeholder)}`;
+      if (v.options?.length) return `${I()}.dropdown(${str(v.label ?? '')}, ${lit(v.options, depth)}${hint})`;
+      if (v.option_label)
+        return `${I()}.dropdownFrom(${str(v.label ?? '')}, ${str(v.items_key)}, ${str(v.as)}, ${str(v.value)}, ${str(v.option_label)}${hint})`;
+      return lit(t, depth);
+    }
     case 'Checkbox':
       return `${I()}.checkbox(${str(v.label)})`;
     case 'Switch':
@@ -251,6 +258,15 @@ function block(kind: string, v: J, mark: string | null, depth: number, im: Impor
     case 'ScoreTicker':
       if (!exactly(v, ['value_key', 'icon'])) return null;
       return helper(im, 'scoreTicker', [str(v.value_key), display(v.icon, depth, im)], o([]));
+    case 'Dialog':
+      if (!exactly(v, ['label', 'icon', 'look', 'title', 'description', 'style', 'close_on_submit', 'content'])) return null;
+      return helper(im, 'dialog', [str(v.label), str(v.title), kids(v.content)], o([
+        ['icon', optStr(v.icon)],
+        ['look', v.look === 'Primary' ? null : str(v.look)],
+        ['description', optStr(v.description)],
+        ['style', v.style === 'Modal' ? null : str(v.style)],
+        ['closeOnSubmit', v.close_on_submit ? 'true' : null],
+      ]));
     case 'Overlay':
       if (!exactly(v, ['corner', 'content'])) return null;
       return helper(im, 'overlay', [str(v.corner), kids(v.content)], o([]));

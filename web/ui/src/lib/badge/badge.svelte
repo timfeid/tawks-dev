@@ -30,6 +30,16 @@
   });
 
   export type BadgeVariant = VariantProps<typeof badgeVariants>['variant'];
+
+  /** A left edge in a badge's tone, for showing the same meaning without the tag. */
+  export const badgeStrip = {
+    success: 'border-emerald-700 dark:border-emerald-300',
+    warning: 'border-amber-700 dark:border-amber-300',
+    danger: 'border-red-700 dark:border-red-300',
+    info: 'border-sky-700 dark:border-sky-300',
+    violet: 'border-violet-700 dark:border-violet-300',
+    secondary: 'border-muted-foreground/60',
+  } as const;
 </script>
 
 <script lang="ts">

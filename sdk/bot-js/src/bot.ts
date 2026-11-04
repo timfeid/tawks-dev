@@ -404,7 +404,12 @@ export class TawksBot {
     if (this.seenTokens.has(id)) return;
     this.seenTokens.set(id, now);
 
-    const handler = this.handlers.get(action_id);
+    // A request held for us can arrive just as the action registers.
+    let handler = this.handlers.get(action_id);
+    for (let wait = 0; !handler && wait < 20; wait += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      handler = this.handlers.get(action_id);
+    }
     if (!handler) {
       this.emit('message', message);
       return;
@@ -419,7 +424,9 @@ export class TawksBot {
       await this.api.mutate('workflow_respond_server_action', { token: id, result: outcome });
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      if (!/No external action context|Workflow instance not found/.test(text)) {
+      // Answering with a refusal comes back as a failed request, which is what it is.
+      const refused = typeof outcome === 'object' && outcome !== null && 'Error' in outcome;
+      if (!refused && !/No external action context|Workflow instance not found/.test(text)) {
         this.log?.warn(`[tawks] could not answer ${action_id}: ${text}`);
       }
     }

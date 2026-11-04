@@ -32,18 +32,38 @@
     class: className,
     side = 'right',
     portalProps,
+    modal = true,
     children,
     ...restProps
   }: WithoutChildrenOrChild<SheetPrimitive.ContentProps> & {
     portalProps?: SheetPrimitive.PortalProps;
     side?: Side;
+    /** False leaves what's underneath undimmed and usable while the sheet is open. */
+    modal?: boolean;
     children: Snippet;
   } = $props();
+
+  const beside = $derived(
+    modal
+      ? {}
+      : {
+          trapFocus: false,
+          preventScroll: false,
+          interactOutsideBehavior: 'ignore' as const,
+          onOpenAutoFocus: (event: Event) => event.preventDefault(),
+          onCloseAutoFocus: (event: Event) => event.preventDefault(),
+        },
+  );
 </script>
 
 <SheetPrimitive.Portal {...portalProps}>
-  <SheetOverlay />
-  <SheetPrimitive.Content bind:ref class={cn(sheetVariants({ side }), className)} {...restProps}>
+  {#if modal}<SheetOverlay />{/if}
+  <SheetPrimitive.Content
+    bind:ref
+    class={cn(sheetVariants({ side }), className)}
+    {...beside}
+    {...restProps}
+  >
     {@render children?.()}
     <SheetPrimitive.Close
       class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none"

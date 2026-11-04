@@ -21,6 +21,8 @@
           'hover:bg-accent text-muted-foreground hover:text-accent-foreground',
         hoveronly: 'hover:text-primary text-primary/50',
         link: 'text-primary underline-offset-4 hover:underline',
+        action:
+          'text-foreground hover:bg-accent max-sm:h-11 max-sm:w-full max-sm:justify-start [&_svg]:text-primary',
         iconButton:
           'rounded-full bg-neutral-400 p-0 text-black hover:bg-neutral-100 hover:text-neutral-900 group-hover:bg-neutral-100 hover:text-neutral-900',
       },

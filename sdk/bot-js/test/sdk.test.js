@@ -27,6 +27,28 @@ test('ui helpers build the JSON tawks expects', () => {
   assert.deepEqual(def.actions[0], { id: 'go', action_type: 'RunServerAction', allow_while_loading: false, target: 'sa-hi.go-bot', progress_node: true });
 });
 
+test('ui.dropdown carries its options, default and required', () => {
+  const fixed = ui.dropdown('wager.stake', 'Stake', [{ value: '5', label: '5 points' }], 'Pick', { required: true, default: '5' });
+  const input = fixed.type.Input.input;
+  assert.equal(fixed.type.Input.id, 'wager.stake');
+  assert.deepEqual(input.type.Select.options, [{ value: '5', label: '5 points' }]);
+  assert.equal(input.type.Select.label, 'Stake');
+  assert.equal(input.type.Select.placeholder, 'Pick');
+  assert.equal(input.required, true);
+  assert.equal(input.default_value, '5');
+  const rows = ui.dropdownFrom('pick.game', 'Game', 'games', 'g', '{g.id}', '{g.name}');
+  assert.equal(rows.type.Input.input.type.Select.items_key, 'games');
+  assert.equal(rows.type.Input.input.type.Select.option_label, '{g.name}');
+});
+
+test('ui.dialog defaults to a modal and takes its options', () => {
+  const plain = ui.dialog('Open', 'A task', [ui.body('Hi')]).type.Dialog;
+  assert.equal(plain.style, 'Modal');
+  assert.equal(plain.close_on_submit, false);
+  const drawer = ui.dialog('Open', 'A task', [], { style: 'Drawer', closeOnSubmit: true, icon: 'plus', look: 'Secondary', description: 'D' }).type.Dialog;
+  assert.deepEqual(drawer, { label: 'Open', icon: 'plus', look: 'Secondary', title: 'A task', description: 'D', style: 'Drawer', close_on_submit: true, content: [] });
+});
+
 function fakeTawks(handle) {
   const calls = [];
   const server = http.createServer(async (req, res) => {

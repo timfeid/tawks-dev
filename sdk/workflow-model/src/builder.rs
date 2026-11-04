@@ -942,6 +942,55 @@ impl InputTypeBuilder {
             content,
             selected_content,
             unselected_content,
+            options: Vec::new(),
+            option_label: None,
+            label: None,
+            placeholder: None,
+        }
+    }
+
+    /// A labelled dropdown of fixed choices.
+    pub fn dropdown(
+        label: impl Into<String>,
+        options: Vec<crate::SelectOption>,
+        placeholder: Option<String>,
+    ) -> crate::InputType {
+        crate::InputType::Select {
+            filter: None,
+            items_key: String::new(),
+            r#as: String::new(),
+            value: String::new(),
+            content: Vec::new(),
+            selected_content: None,
+            unselected_content: None,
+            options,
+            option_label: None,
+            label: Some(label.into()),
+            placeholder,
+        }
+    }
+
+    /// A labelled dropdown with one choice per row at `items_key`.
+    pub fn dropdown_from(
+        label: impl Into<String>,
+        items_key: impl Into<String>,
+        r#as: impl Into<String>,
+        value: impl Into<String>,
+        option_label: impl Into<String>,
+        placeholder: Option<String>,
+    ) -> crate::InputType {
+        crate::InputType::Select {
+            filter: None,
+            items_key: items_key.into(),
+            r#as: r#as.into(),
+            value: value.into(),
+            content: Vec::new(),
+            selected_content: None,
+            unselected_content: None,
+            options: Vec::new(),
+            option_label: Some(option_label.into()),
+            label: Some(label.into()),
+            placeholder,
         }
     }
 
@@ -1245,6 +1294,7 @@ pub fn table_header(
         align,
         numeric: false,
         wide_only: false,
+        image: None,
     }
 }
 

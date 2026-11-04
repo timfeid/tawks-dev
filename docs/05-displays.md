@@ -654,6 +654,7 @@ Display conditions see responses only. Compute booleans in your bot and test the
 
 - Reads: the array at `items_key`.
 - Renders a horizontally scrolling table. Each header shows its `label`, with `width` as its CSS width. A header with `numeric: true` lines its figures up and aligns them right, and one with `wide_only: true` leaves its column out on narrow screens.
+- A header with `image`, a `{key}` template such as `"{t.logo}"`, shows that row's picture small before the cell's content, like a team's logo beside its name. Every row in the column keeps the same space for it, so a row with no picture, or one that fails to load, stays lined up and shows no broken image. It is decorative, so keep the name in the cell as text.
 - Each item becomes a row with one cell per display in `row`, with the item in scope as `as`. `row_state` is a `{key}` template naming each row's [state](#tones-and-states), such as `"{p.state}"` to highlight the viewer's row.
 - `row_accent` washes each row in a colour, such as the team the viewer follows: `#rgb`, `#rrggbb`, or a `{key}` template like `"{p.accent}"` naming one per item. The page draws a faint wash of it with a bar along the row's start, so text stays readable. Anything else is refused when the workflow is registered, and a template that resolves to something other than a hex colour, or to nothing, leaves the row plain.
 - `section_key` splits one table into sections so its columns line up across them. It is a `{key}` template per item, like `"{p.section}"`. An item it fills in draws the `section` displays once across every column instead of the row's cells. Items it leaves empty, or that lack the key, are ordinary rows.
@@ -662,8 +663,8 @@ Display conditions see responses only. Compute booleans in your bot and test the
 {
   "responses": {
     "players": [
-      { "name": "Ana", "score": 12, "wins": 4, "state": "", "accent": "#CE1126" },
-      { "name": "Ben", "score": 9, "wins": 3, "state": "Highlight" },
+      { "name": "Ana", "score": 12, "wins": 4, "state": "", "accent": "#CE1126", "logo": "https://assets.nhle.com/logos/nhl/svg/BUF_dark.svg" },
+      { "name": "Ben", "score": 9, "wins": 3, "state": "Highlight", "logo": "https://assets.nhle.com/logos/nhl/svg/TOR_dark.svg" },
       { "name": "Cy", "score": 5, "wins": 1, "state": "" }
     ]
   },
@@ -673,7 +674,7 @@ Display conditions see responses only. Compute booleans in your bot and test the
         "items_key": "players",
         "as": "p",
         "headers": [
-          { "label": "Player", "key": "name", "width": null, "align": null },
+          { "label": "Player", "key": "name", "width": null, "align": null, "image": "{p.logo}" },
           { "label": "Wins", "key": "wins", "width": "5rem", "align": "right", "numeric": true, "wide_only": true },
           { "label": "Score", "key": "score", "width": "5rem", "align": "right", "numeric": true }
         ],
@@ -1113,7 +1114,7 @@ Rows sharing an x and a series add up. With `split_by`, the largest 8 series sho
 `Form { server_action_id, content, submit_when }`, builder `.form(action_id, content, submit_when)`.
 
 - Renders a form around `content`, which usually holds `Input` displays and a button that submits it: `primary_action(label, act(action_id)).submits()`, or the older `.submit(..)`.
-- `SubmitWhen::OnSubmit`: pressing Enter or the submit button fires the action with every input in the form, keyed by input id. Text fields are cleared afterwards.
+- `SubmitWhen::OnSubmit`: pressing Enter in a text field or pressing the submit button fires the action with every input in the form, keyed by input id. Text fields are cleared afterwards and a dropdown returns to its default. A refused action leaves everything as it was. On a dropdown itself, Enter opens the list and picks the highlighted choice; it doesn't send the form.
 - `SubmitWhen::OnChange`: each change fires the action 350 ms after the last keystroke, sending only `{ <input id>: value }` for the field that changed. Useful for live search.
 
 ```display
@@ -1160,6 +1161,32 @@ Rows sharing an x and a series add up. With `split_by`, the largest 8 series sho
 }
 ```
 
+#### Dialog
+
+`Dialog { label, icon, look, title, description, style, close_on_submit, content }`, built with `ui::dialog(label, title, content)` and in JavaScript with `ui.dialog(label, title, content, options)`.
+
+A button on the page that opens `content` over the page. It needs no node, action or response of its own, and it can hold ordinary blocks, including forms, buttons and dropdowns.
+
+- `style`: `Modal`, the default, is a centered dialog for a short focused task. `Drawer`, with `.drawer()`, slides in from the side, for longer content or something people want the page visible beside. On a phone both are a bottom sheet that can be swiped down.
+- `close_on_submit`, with `.closes_on_submit()`: closes it once a form inside has been sent and not refused. A refusal leaves it open with what was typed.
+- `look`: the button's look, `Primary`, `Secondary` or `Ghost`.
+- It closes on Esc, on its close button and by clicking outside it, and focus goes back to the button.
+- Whether it is open belongs to the viewer's browser. It is never saved, so a reload shows the page underneath, and live updates to the page leave it open. A move to another node closes it.
+- **Older desktop builds.** A build that bundles a renderer older than 3 shows the title and contents in a panel on the page instead, with the same forms working. Tawks adds this when it serves the page.
+
+```rust
+ui::dialog(
+    "Start a wager",
+    "New wager",
+    vec![WorkflowDisplayBuilder::new()
+        .form("place", vec![stake_dropdown, ui::primary_action("Place it", ui::act("place")).submits()], SubmitWhen::OnSubmit)
+        .build()],
+)
+.closes_on_submit()
+```
+
+Hub pages may not nest one inside another or inside a form, and what one holds stays flat.
+
 #### Input
 
 `Input { id, input }`, builder `.input(id, input)` with a `WorkflowInput` from `WorkflowInputBuilder`. `id` is the response key the value lands in when it is sent. The input shows the current value of `responses[id]`, and does not overwrite what the user is typing while the field has focus.
@@ -1167,10 +1194,10 @@ Rows sharing an x and a series add up. With `split_by`, the largest 8 series sho
 `WorkflowInput` fields:
 
 - `type`: the `InputType`, built with `InputTypeBuilder`.
-- `required`: marks text, number and text area fields as required.
+- `required`: marks text, number and text area fields as required. A required dropdown refuses to send blank.
 - `readonly`: a condition; when it holds, the input is read-only. Every input is also read-only while a server action is pending.
 - `on_change_action`: `(action_id, map)`. Supported by `Switch`, `Select`, `MultiSelectFromList` and the `Wysiwyg` input. Sends `{ <id>: new value }` plus each map entry, with map values interpolated against the scope. A key containing a dot updates a field inside an existing response object.
-- `default_value`: used by the `Wysiwyg` input. For other inputs, seed the value with `.response(id, value)` on the definition or from a server action.
+- `default_value`: used by the `Wysiwyg` input, by a dropdown and by text and number fields. For other inputs, seed the value with `.response(id, value)` on the definition or from a server action.
 
 Input types:
 
@@ -1179,12 +1206,42 @@ Input types:
 | `Text { placeholder }` | `InputTypeBuilder::text(..)` | Through an enclosing `Form`, as a string. |
 | `TextArea { placeholder, rows }` | `InputTypeBuilder::text_area(..)` | Through a `Form`, as a string. |
 | `Number { min, max }` | `InputTypeBuilder::number(..)` | Through a `Form`, as a number, or `null` when empty (`0` if required). |
-| `Select { filter, items_key, as, value, content, selected_content, unselected_content }` | `InputTypeBuilder::select(..)` | Through a `Form` or `on_change_action`. A dropdown of the items at `items_key`. `value` is a template giving each item's value, `filter` hides items, `content` draws each option, `selected_content` the closed state and `unselected_content` the placeholder. |
+| `Select { label, placeholder, options }` | `InputTypeBuilder::dropdown(label, options, placeholder)` | Through a `Form` or `on_change_action`, as a string. A labelled dropdown of fixed choices, each a `SelectOption { value, label }`. See [Dropdowns](#dropdowns). |
+| `Select { label, placeholder, items_key, as, value, option_label, filter }` | `InputTypeBuilder::dropdown_from(label, items_key, as, value, option_label, placeholder)` | The same, with one choice per row at `items_key`. `value` and `option_label` are templates reading the row, and `filter` hides rows. |
+| `Select { filter, items_key, as, value, content, selected_content, unselected_content }` | `InputTypeBuilder::select(..)` | Through a `Form` or `on_change_action`. A dropdown with no label whose choices are displays: `content` draws each option, `selected_content` the closed state and `unselected_content` the placeholder. `value` is a template giving each item's value. Its values are not checked. |
 | `SelectFromList { items_key, as, value, content, columns }` | `InputTypeBuilder::select_from_list(items_key, as, value, content, columns)` | Through a `Form`. Each item is drawn as a tile holding `content`, and the chosen one shows as `Selected`. `columns` lays the tiles out in that many columns; `0` stacks them. |
 | `MultiSelectFromList { items_key, as, value, content, columns, min, max }` | `InputTypeBuilder::multi_select_from_list(items_key, as, value, content, columns, min, max)` | Through `on_change_action`, as an array. Tiles as in `SelectFromList`, with every chosen one `Selected`. Check the count in your handler. |
 | `Switch` | `InputTypeBuilder::switch()` | Through `on_change_action`, which it needs to do anything. |
 | `Wysiwyg` | `InputTypeBuilder::wysiwyg()` | Through `on_change_action`. A rich text editor producing TipTap JSON. |
 | `ServerActionLoader { target }` | `InputTypeBuilder::server_action_loader(target)` | Fires `target` once when it appears, sending all current responses, and shows "Loading data...". Handy for loading a section lazily. |
+
+##### Dropdowns
+
+Use a dropdown for a fixed choice of more than a few options, or a choice from a list of rows, and buttons for two or three.
+
+```rust
+WorkflowDisplayBuilder::new()
+    .input(
+        "wager.stake",
+        WorkflowInputBuilder::new()
+            .r#type(InputTypeBuilder::dropdown(
+                "Stake",
+                vec![SelectOption::new("5", "5 points"), SelectOption::new("10", "10 points")],
+                Some("Pick a stake".into()),
+            ))
+            .default_value(json!("10"))
+            .required(true)
+            .build(),
+    )
+    .build()
+```
+
+In JavaScript the same input is `InputTypeBuilder.dropdown('Stake', [{ value: '5', label: '5 points' }], 'Pick a stake')`, and a list of rows is `InputTypeBuilder.dropdownFrom('Game', 'games', 'g', '{g.id}', '{g.matchup}', 'Pick a game')`.
+
+- **Keyboard.** Tab reaches it. Enter, Space or an arrow key opens the list, arrows and typing move through it, and Enter picks. Enter on a dropdown doesn't send the form.
+- **What is sent.** The chosen option's `value`, as a string, or an empty string when nothing is picked. After a send it returns to its default.
+- **What the server checks.** Before your action runs, Tawks refuses a blank in a required dropdown and any value that isn't one of the choices, and shows the person why. For a list of rows it checks against the rows the instance holds at `items_key`. If it holds none there, such as a list inside another list's row, it can't check, so your handler still treats the value as untrusted input.
+- **Older desktop builds.** A build that bundles a renderer older than 3 can't draw fixed `options`, so it shows a text field with the choices written above it, under the same id, and Tawks holds what is typed to the same choices. A label or a value is understood. A dropdown of rows still draws as a dropdown on those builds. You don't write any of this: Tawks adds it when it serves the page.
 
 ```display
 {

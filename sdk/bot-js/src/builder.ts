@@ -10,6 +10,7 @@ import type {
   IconLibrary,
   InjectWorkflowPlace,
   InputType,
+  SelectOption,
   JsonValue,
   NodeCondition,
   NotificationVariant,
@@ -672,6 +673,55 @@ export class InputTypeBuilder {
         content,
         selected_content: selectedContent,
         unselected_content: unselectedContent,
+        options: [],
+        option_label: null,
+        label: null,
+        placeholder: null,
+      },
+    };
+  }
+
+  /** A labelled dropdown of fixed choices. */
+  static dropdown(label: string, options: SelectOption[], placeholder: string | null = null): InputType {
+    return {
+      Select: {
+        filter: null,
+        items_key: '',
+        as: '',
+        value: '',
+        content: [],
+        selected_content: null,
+        unselected_content: null,
+        options,
+        option_label: null,
+        label,
+        placeholder,
+      },
+    };
+  }
+
+  /** A labelled dropdown with one choice per row at `itemsKey`. */
+  static dropdownFrom(
+    label: string,
+    itemsKey: string,
+    as: string,
+    value: string,
+    optionLabel: string,
+    placeholder: string | null = null,
+  ): InputType {
+    return {
+      Select: {
+        filter: null,
+        items_key: itemsKey,
+        as,
+        value,
+        content: [],
+        selected_content: null,
+        unselected_content: null,
+        options: [],
+        option_label: optionLabel,
+        label,
+        placeholder,
       },
     };
   }

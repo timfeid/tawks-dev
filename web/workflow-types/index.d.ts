@@ -254,6 +254,15 @@ user?: string | null } } |
  */
 tint?: string; caption_placement?: CaptionPlacement } } | 
 /**
+ * A button that opens `content` over the page. Whether it is open belongs
+ * to the viewer's browser and is never saved, so a reload shows the page.
+ */
+{ Dialog: { label: string; icon?: string | null; look?: DialogButton; title: string; description?: string | null; style?: DialogStyle; 
+/**
+ * Closes it once a form inside has been sent and not refused.
+ */
+close_on_submit?: boolean; content: WorkflowDisplay[] } } | 
+/**
  * Floats over the game canvas just before it, in one corner, with the
  * canvas still playable around it. Docks to the bottom on a phone.
  */
@@ -356,7 +365,7 @@ export type InjectOnComplete = "Detach"
 
 export type InjectWorkflowPlace = "This" | { Tile: { name: string; on_complete: InjectOnComplete | null } } | { Modal: { title: string } } | { Sidebar: { position: string } }
 
-export type InputType = { Text: { placeholder: string | null } } | "Wysiwyg" | { Select: { filter: NodeCondition | null; items_key: string; as: string; value: string; content: WorkflowDisplay[]; selected_content: WorkflowDisplay[] | null; unselected_content: WorkflowDisplay[] | null } } | "Switch" | { Checkbox: { label: string } } | { Number: { min: number | null; max: number | null; placeholder?: string | null } } | { TextArea: { placeholder: string | null; rows: number | null } } | { List: { from_responses_id: string; item_key: string; display_field: string } } | { ServerActionLoader: { target: string } } | { Display: { content: string } } | { MultiSelectFromList: { items_key: string; as: string; value: string; content: WorkflowDisplay[]; 
+export type InputType = { Text: { placeholder: string | null } } | "Wysiwyg" | { Select: { filter: NodeCondition | null; items_key?: string; as?: string; value?: string; content?: WorkflowDisplay[]; selected_content: WorkflowDisplay[] | null; unselected_content: WorkflowDisplay[] | null; options?: SelectOption[]; option_label?: string | null; label?: string | null; placeholder?: string | null } } | "Switch" | { Checkbox: { label: string } } | { Number: { min: number | null; max: number | null; placeholder?: string | null } } | { TextArea: { placeholder: string | null; rows: number | null } } | { List: { from_responses_id: string; item_key: string; display_field: string } } | { ServerActionLoader: { target: string } } | { Display: { content: string } } | { MultiSelectFromList: { items_key: string; as: string; value: string; content: WorkflowDisplay[]; 
 /**
  * Lays the options out in this many columns; 0 stacks them.
  */
@@ -471,7 +480,12 @@ numeric?: boolean;
 /**
  * Leaves the column out on narrow screens.
  */
-wide_only?: boolean }
+wide_only?: boolean; 
+/**
+ * A `{key}` naming a small picture for each row, shown before the cell's
+ * own content, such as `{t.logo}`. A row with no picture keeps the space.
+ */
+image?: string | null }
 
 export type TextAlign = "Start" | "Center" | "End"
 
@@ -599,3 +613,14 @@ export type WorkflowRuntimeStatus = "active" | "waiting" | "completed" | "cancel
 
 export type WorkflowVisual = { id: string; display: DisplayVisual }
 
+/**
+ * How a `Dialog` opens. A `Modal` sits in the middle of the screen, for a short
+ * focused task; a `Drawer` slides in from the side and leaves the page visible
+ * beside it. Both are a bottom sheet on a phone.
+ */
+export type DialogStyle = "Modal" | "Drawer"
+
+/**
+ * The look of the button that opens a `Dialog`.
+ */
+export type DialogButton = "Primary" | "Secondary" | "Ghost"

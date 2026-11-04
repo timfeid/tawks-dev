@@ -87,6 +87,10 @@ fn accuse_input() -> WorkflowDisplay {
                         )
                         .fit(Fit::Contain),
                     ]),
+                    options: Vec::new(),
+                    option_label: None,
+                    label: None,
+                    placeholder: None,
                 },
                 default_value: None,
                 required: false,

@@ -22,6 +22,10 @@ pub(super) fn select(items_key: &str, item: &str) -> InputType {
         content: vec![body(format!("{{{item}.label}}"))],
         selected_content: None,
         unselected_content: None,
+        options: Vec::new(),
+        option_label: None,
+        label: None,
+        placeholder: None,
     }
 }
 

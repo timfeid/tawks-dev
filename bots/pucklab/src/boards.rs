@@ -461,6 +461,7 @@ fn header(label: &str, key: &str, numeric: bool, wide_only: bool) -> TableHeader
         align: None,
         numeric,
         wide_only,
+        image: None,
     }
 }
 

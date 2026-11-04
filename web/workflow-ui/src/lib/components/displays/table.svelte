@@ -1,5 +1,6 @@
 <script lang="ts">
   import RowScope from './row-scope.svelte';
+  import TableImage from './table-image.svelte';
   import { getContext } from 'svelte';
   import { holdsInputs, rowKeys } from '../../utils';
   /** A length such as 120px, 30% or 8rem; anything else could smuggle in more CSS. */
@@ -86,7 +87,14 @@
                   class={['px-3 py-2 text-sm [&_*]:[overflow-wrap:normal]', header?.numeric && 'whitespace-nowrap text-right tabular-nums', header?.wide_only && 'hidden @xl:table-cell']}
                   style:box-shadow={accent && index === 0 ? look.accentEdge(accent) : undefined}
                 >
-                  <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
+                  {#if header?.image}
+                    <div class={look.tableImageCell}>
+                      <TableImage template={header.image} inputs={scope} />
+                      <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
+                    </div>
+                  {:else}
+                    <WorkflowDisplay from="table" inputs={scope} {workflow} display={displayItem} />
+                  {/if}
                 </td>
               {/each}
               </RowScope>

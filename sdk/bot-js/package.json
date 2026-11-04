@@ -11,6 +11,14 @@
     "./builder": {
       "types": "./dist/builder.d.ts",
       "default": "./dist/builder.js"
+    },
+    "./hub": {
+      "types": "./dist/hub.d.ts",
+      "default": "./dist/hub.js"
+    },
+    "./compete": {
+      "types": "./dist/compete.d.ts",
+      "default": "./dist/compete.js"
     }
   },
   "files": [
@@ -20,7 +28,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepare": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && node --test test/sdk.test.js src/builder.test.ts"
+    "test": "tsc -p tsconfig.json && node --test test/sdk.test.js test/hub.test.js src/builder.test.ts src/compete.test.ts"
   },
   "engines": {
     "node": ">=22"

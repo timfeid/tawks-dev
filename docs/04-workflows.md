@@ -61,7 +61,7 @@ A node holds a list of `WorkflowVisual { id, display: DisplayVisual }`. Visuals 
 
 ### Displays
 
-Inside a visual you nest `WorkflowDisplay { type, mark }`. `type` is a `DisplayType` variant: `Typography`, `Panel`, `Row`, `Action`, `Items`, `Form`, `Input`, `Condition` and so on. `mark` is optional; it names the display for [animations](05-displays.md#animation).
+Inside a visual you nest `WorkflowDisplay { type, mark }`. `type` is a `DisplayType` variant: `Typography`, `Panel`, `Row`, `Action`, `Items`, `Form`, `Input`, `Dialog`, `Condition` and so on. `mark` is optional; it names the display for [animations](05-displays.md#animation).
 
 Most displays come from the building blocks in `tawks_bot::workflow::ui`. Each one says what something is, such as a heading or the main button, and tawks decides how it looks. There are no classes:
 
@@ -90,7 +90,7 @@ A display gets data out of `responses` in two ways:
 
 ### Inputs
 
-`DisplayType::Input { id, input }` draws a form control. `id` is the response key the value is written to. `WorkflowInput` carries the `InputType` (text, number, select and so on), `required`, an optional `readonly` condition, an optional `default_value` and an optional `on_change_action`. An input's value reaches your bot in one of two ways: from inside a `Form`, or through `on_change_action` for the controls that support it. The [Display reference](05-displays.md#input) has the details per input.
+`DisplayType::Input { id, input }` draws a form control. `id` is the response key the value is written to. `WorkflowInput` carries the `InputType` (text, number, [dropdown](05-displays.md#dropdowns) and so on), `required`, an optional `readonly` condition, an optional `default_value` and an optional `on_change_action`. An input's value reaches your bot in one of two ways: from inside a `Form`, or through `on_change_action` for the controls that support it. The [Display reference](05-displays.md#input) has the details per input.
 
 ### Actions
 

@@ -26,6 +26,27 @@ import { interpolate } from './utils';
  * class here is written out whole so Tailwind finds it.
  */
 
+/** A label over its input. */
+export const field = 'flex min-w-0 flex-col gap-1.5';
+
+/** A table cell with a picture before its content. */
+export const tableImageCell = 'flex min-w-0 items-center gap-2';
+/** The same size in every row, with or without a picture, so columns stay put. */
+export const tableImageSlot = 'size-6 shrink-0';
+export const tableImage = 'size-full object-contain';
+
+/** A dropdown's open list: long choices wrap instead of running off a phone. */
+export const dropdownList = 'max-w-[calc(100vw-2rem)]';
+
+/** What a `Dialog` holds, scrolling on its own when it is long. */
+export const dialogBody = 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto';
+export const dialogLayer = 'relative z-40';
+export const dialogModal = 'px-3 py-6';
+export const dialogModalBody = 'px-3';
+export const dialogDrawer = 'flex flex-col';
+export const dialogSheet = 'gap-3 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]';
+export const dialogSheetClose = 'absolute right-2 top-2 flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground';
+
 export const gap: Record<Gap, string> = {
   None: 'gap-0',
   Tight: 'gap-1.5',

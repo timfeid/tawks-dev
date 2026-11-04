@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use serde_json::{json, Value};
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use serde_json::{Value, json};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use workflow_model::condition::eval_condition;
 use workflow_model::schedule::job::{ScheduledAction, ScheduledJob};
 use workflow_model::server_action::ServerActionResult;
@@ -438,10 +438,18 @@ impl Host {
                 .find(|a| a.id == action_id)
                 .ok_or_else(|| format!("the workflow has no action {action_id}"))?
                 .clone();
+            let nodes = serde_json::to_value(&definition.nodes).unwrap_or_default();
             let instance = state
                 .instances
                 .get_mut(instance_id)
                 .ok_or("no such instance")?;
+            let mut inputs = inputs;
+            workflow_model::select::check_submitted(
+                &nodes,
+                &mut inputs,
+                &instance.responses,
+                &instance.context,
+            )?;
             instance.responses.extend(inputs);
             match (&action.action_type, &action.target) {
                 (ActionType::RunServerAction, Some(target)) => Some(target.clone()),

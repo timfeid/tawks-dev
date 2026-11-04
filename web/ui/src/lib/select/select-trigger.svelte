@@ -7,8 +7,9 @@
     ref = $bindable(null),
     class: className,
     children,
+    chevron = false,
     ...restProps
-  }: WithoutChild<SelectPrimitive.TriggerProps> = $props();
+  }: WithoutChild<SelectPrimitive.TriggerProps> & { chevron?: boolean } = $props();
 </script>
 
 <SelectPrimitive.Trigger
@@ -21,5 +22,5 @@
 >
   <!-- One line however long the choice is; the full text is in the list. -->
   <span class="min-w-0 flex-1 truncate text-left">{@render children?.()}</span>
-  <!-- <ChevronDown class="size-4 opacity-50" /> -->
+  {#if chevron}<ChevronDown class="ml-2 size-4 shrink-0 opacity-50" />{/if}
 </SelectPrimitive.Trigger>

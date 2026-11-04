@@ -341,6 +341,129 @@
       }
     },
     {
+      "label": "Modal",
+      "hint": "A button that opens its contents over the page, for a short task",
+      "display": {
+        "type": {
+          "Dialog": {
+            "label": "Start a wager",
+            "icon": null,
+            "look": "Primary",
+            "title": "New wager",
+            "description": null,
+            "style": "Modal",
+            "close_on_submit": false,
+            "content": [
+              {
+                "type": {
+                  "Typography": {
+                    "text": "Forms, buttons and text go here.",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Drawer",
+      "hint": "The same from the side, for longer content or to keep the page in view",
+      "display": {
+        "type": {
+          "Dialog": {
+            "label": "Open details",
+            "icon": null,
+            "look": "Primary",
+            "title": "Details",
+            "description": null,
+            "style": "Drawer",
+            "close_on_submit": false,
+            "content": [
+              {
+                "type": {
+                  "Typography": {
+                    "text": "Forms, buttons and text go here.",
+                    "role": "Body",
+                    "tone": "",
+                    "style": {
+                      "numeric": false,
+                      "clamp": 0,
+                      "reserve": false,
+                      "align": "Start",
+                      "struck": false,
+                      "lines": false,
+                      "themed": false
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "Dropdown",
+      "hint": "Pick from a list; options, or items_key to read rows. Put it inside a Form so actions receive it",
+      "display": {
+        "type": {
+          "Input": {
+            "id": "stake",
+            "input": {
+              "readonly": null,
+              "type": {
+                "Select": {
+                  "filter": null,
+                  "items_key": "",
+                  "as": "",
+                  "value": "",
+                  "content": [],
+                  "selected_content": null,
+                  "unselected_content": null,
+                  "options": [
+                    {
+                      "value": "5",
+                      "label": "5 points"
+                    },
+                    {
+                      "value": "10",
+                      "label": "10 points"
+                    },
+                    {
+                      "value": "25",
+                      "label": "25 points"
+                    },
+                    {
+                      "value": "50",
+                      "label": "50 points"
+                    }
+                  ],
+                  "option_label": null,
+                  "label": "Stake",
+                  "placeholder": "Pick a stake"
+                }
+              },
+              "default_value": null,
+              "required": false,
+              "on_change_action": null
+            }
+          }
+        }
+      }
+    },
+    {
       "label": "Switch",
       "hint": "A boolean input. Put it inside a Form so actions receive it",
       "display": {

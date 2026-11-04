@@ -16,7 +16,7 @@
     type="button"
     class={[
       'flex min-w-0 rounded-xl border px-3 py-2.5 transition-colors',
-      choice.direction === 'Row' ? 'flex-row items-center gap-3 text-left' : 'flex-col items-stretch justify-center gap-1.5 text-center',
+      choice.direction === 'Row' ? 'flex-row flex-wrap items-center gap-x-3 gap-y-1 text-left' : 'flex-col items-stretch justify-center gap-1.5 text-center',
       look.choiceState[state],
       press.pending && 'cursor-progress opacity-60',
     ]}

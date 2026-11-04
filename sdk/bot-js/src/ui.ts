@@ -220,6 +220,34 @@ export const iconAction = (iconName: string, label: string, run: Act, o: ActionO
 /** Inside a form, a primary button that sends the form to the workflow action `actionId`. */
 export const submit = (label: string, actionId: string, o: ActionOptions = {}) => primaryAction(label, act(actionId), { ...o, submit: true });
 
+export type DialogOptions = Marked & {
+  icon?: string;
+  look?: 'Primary' | 'Secondary' | 'Ghost';
+  description?: string;
+  /** `Modal` for a short focused task, `Drawer` from the side to keep the page in view. Both are a bottom sheet on a phone. */
+  style?: 'Modal' | 'Drawer';
+  /** Closes it once a form inside has been sent and not refused. */
+  closeOnSubmit?: boolean;
+};
+
+/** A button labelled `label` that opens `content` over the page, titled `title`. */
+export const dialog = (label: string, title: string, content: WorkflowDisplay[], o: DialogOptions = {}) =>
+  block(
+    {
+      Dialog: {
+        label,
+        icon: o.icon ?? null,
+        look: o.look ?? 'Primary',
+        title,
+        description: o.description ?? null,
+        style: o.style ?? 'Modal',
+        close_on_submit: o.closeOnSubmit ?? false,
+        content,
+      },
+    },
+    o.mark,
+  );
+
 /** A notice across the page: an error, a hint, a call to sign in. */
 export const notice = (tone: Template<Tone>, value: string, o: Marked & { icon?: string; title?: string; actions?: WorkflowDisplay[] } = {}) =>
   block({ Notice: { tone, icon: o.icon ?? null, title: o.title ?? null, body: value, actions: o.actions ?? [] } }, o.mark);
@@ -430,6 +458,37 @@ export const numberInput = (id: string, min: number | null = null, max: number |
   input(id, { Number: { min, max } }, o);
 
 export const switchInput = (id: string, o: InputOptions = {}) => input(id, 'Switch', o);
+
+/** A labelled dropdown of fixed choices. Sends the chosen `value`. */
+export const dropdown = (
+  id: string,
+  label: string,
+  options: { value: string; label: string }[],
+  placeholder: string | null = null,
+  o: InputOptions = {},
+) =>
+  input(
+    id,
+    { Select: { filter: null, items_key: '', as: '', value: '', content: [], selected_content: null, unselected_content: null, options, option_label: null, label, placeholder } },
+    o,
+  );
+
+/** A labelled dropdown with one choice per row at `itemsKey`; `value` and `optionLabel` read the row as `as`. */
+export const dropdownFrom = (
+  id: string,
+  label: string,
+  itemsKey: string,
+  as: string,
+  value: string,
+  optionLabel: string,
+  placeholder: string | null = null,
+  o: InputOptions = {},
+) =>
+  input(
+    id,
+    { Select: { filter: null, items_key: itemsKey, as, value, content: [], selected_content: null, unselected_content: null, options: [], option_label: optionLabel, label, placeholder } },
+    o,
+  );
 
 type NodeOptions = { parent?: string; condition?: NodeCondition; description?: string };
 

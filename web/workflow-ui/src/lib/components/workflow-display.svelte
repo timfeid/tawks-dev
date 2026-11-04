@@ -64,6 +64,7 @@
   import ActionBarBlock from './displays/action-bar.svelte';
   import MediaBlock from './displays/media.svelte';
   import OverlayBlock from './displays/overlay.svelte';
+  import DialogBlock from './displays/dialog.svelte';
   import ItemsBlock from './displays/items.svelte';
   import Backdrop from './displays/backdrop.svelte';
   import Calendar from './displays/calendar.svelte';
@@ -194,6 +195,7 @@
     Calendar,
     Items: ItemsBlock,
     Overlay: OverlayBlock,
+    Dialog: DialogBlock,
     Action: ActionBlock,
     Carousel,
     Countdown,

@@ -456,6 +456,46 @@ function movePrevious(state: State, log: LogEntry[]) {
   else state.nodeId = back;
 }
 
+type Choices = { id: string; label: string; required: boolean; values: string[] | null };
+
+function dropdowns(value: unknown, state: State, found: Choices[] = []): Choices[] {
+  if (Array.isArray(value)) {
+    for (const item of value) dropdowns(item, state, found);
+  } else if (value && typeof value === 'object') {
+    const input = (value as any).Input;
+    const select = input?.input?.type?.Select;
+    if (select && (select.options?.length || select.option_label)) {
+      let values: string[] | null = null;
+      if (select.options?.length) values = select.options.map((o: { value: string }) => o.value);
+      else {
+        const rows = getAny(state, select.items_key);
+        if (Array.isArray(rows)) {
+          values = rows
+            .filter((row) => !select.filter || evalCondition(select.filter, { ...state.responses, [select.as]: row }, state.context))
+            .map((row) => String(interpolate(select.value, { responses: { ...state.responses, [select.as]: row }, context: state.context })));
+        }
+      }
+      found.push({ id: input.id, label: select.label || input.id, required: !!input.input.required, values });
+    }
+    for (const child of Object.values(value)) dropdowns(child, state, found);
+  }
+  return found;
+}
+
+/** Why the server would refuse these inputs, as the engine does for a dropdown. */
+function refusedChoice(def: CreateWorkflowDefinition, state: State, inputs: Map): string | null {
+  for (const { id, label, required, values } of dropdowns(def.nodes, state)) {
+    const sent = nested(inputs, id);
+    if (sent === undefined) continue;
+    if (sent === null || sent === '') {
+      if (required) return `Pick a value for ${label}.`;
+      continue;
+    }
+    if (values && !values.includes(String(sent))) return `${String(sent)} is not one of the choices for ${label}. Pick from: ${values.join(', ')}.`;
+  }
+  return null;
+}
+
 /** Runs one workflow action with the inputs the page sent. Returns the new state and what happened. */
 export async function act(
   def: CreateWorkflowDefinition,
@@ -468,6 +508,11 @@ export async function act(
   const log: LogEntry[] = [];
   if (state.status !== 'active') {
     log.push({ kind: 'warn', text: 'This instance is finished. Restart it to try again.' });
+    return { state, log };
+  }
+  const refused = refusedChoice(def, state, inputs);
+  if (refused) {
+    log.push({ kind: 'error', text: refused });
     return { state, log };
   }
   for (const key of Object.keys(inputs)) {

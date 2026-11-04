@@ -14,6 +14,7 @@
   let values: Record<string, any> = {};
   const formState = $state<{ version: number; scope: Element | null }>({ version: 0, scope: null });
   setContext('form-state', formState);
+  const closeDialog = getContext<(() => void) | undefined>('dialog-close');
   setContext(
     'form-submit',
     (sent: { action: string; inputs: Record<string, any> } | null, from: Element | null) => submitAll(sent, from),
@@ -100,7 +101,10 @@
     try {
       const went = await submitServerAction(provider, workflow.instance_id, payload, sent?.action || form.server_action_id);
       // A refusal leaves what they typed, to fix and send again.
-      if (went !== false) clearTyped(pressedRow);
+      if (went !== false) {
+        clearTyped(pressedRow);
+        closeDialog?.();
+      }
     } catch (e) {
       console.error('Submission failed', e);
     } finally {
@@ -116,6 +120,9 @@
       '[data-input-id] input[type="text"], [data-input-id] input[type="number"], [data-input-id] textarea',
     ) ?? []) {
       field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    for (const field of scope?.querySelectorAll('[data-input-id] input[data-input-clears]') ?? []) {
       field.dispatchEvent(new Event('input', { bubbles: true }));
     }
     values = {};

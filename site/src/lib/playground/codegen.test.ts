@@ -109,3 +109,16 @@ test('classes from older definitions are left out', async () => {
   const { code } = await rebuild('old', definition);
   assert.doesNotMatch(code, /class/);
 });
+
+test('dropdowns use their builders', () => {
+  const page = (type: any) => ({
+    id: 'd', name: 'D', responses: {}, context: {}, actions: [], description: null, starting_server_action: null, multi_instance_per_user: false,
+    nodes: { main: { title: 'M', description: null, condition: 'Always', parent_id: null, visuals: [{ id: 'v', display: { Block: { content: [
+      { type: { Input: { id: 'stake', input: { readonly: null, type, default_value: null, required: false, on_change_action: null } } } },
+    ] } } }] } },
+  });
+  const fixed = typescriptFor(page({ Select: { filter: null, items_key: '', as: '', value: '', content: [], selected_content: null, unselected_content: null, options: [{ value: '5', label: '$5' }], option_label: null, label: 'Stake', placeholder: 'Pick' } }) as any);
+  assert.match(fixed, /InputTypeBuilder\.dropdown\('Stake',/);
+  const rows = typescriptFor(page({ Select: { filter: null, items_key: 'rows', as: 'g', value: '{g.id}', content: [], selected_content: null, unselected_content: null, options: [], option_label: '{g.name}', label: 'Game', placeholder: null } }) as any);
+  assert.match(rows, /InputTypeBuilder\.dropdownFrom\('Game', 'rows', 'g', '\{g\.id\}', '\{g\.name\}'\)/);
+});

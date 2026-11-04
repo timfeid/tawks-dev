@@ -116,3 +116,30 @@ test('mock rules answer by condition, and the right guess switches the page', as
   assert.equal(s.nodeId, 'won');
   assert.equal(s.responses.gn_done, true);
 });
+
+const dropdownPage = (select: any, required = false): any => ({
+  id: 'd',
+  name: 'd',
+  nodes: { main: { title: 'd', visuals: [{ id: 'v', display: { Block: { content: [{ type: { Input: { id: 'wager.stake', input: { type: { Select: select }, required } } } }] } } }] } },
+  actions: [{ id: 'send', action_type: 'Noop' }],
+  responses: {},
+  context: {},
+});
+
+test('a dropdown takes its choices and refuses anything else, like the engine', async () => {
+  const def = dropdownPage({ label: 'Stake', options: [{ value: '5', label: '$5' }] }, true);
+  const ok = await act(def, start(def, user), 'send', { wager: { stake: '5' } }, {});
+  assert.deepEqual(ok.state.responses.wager, { stake: '5' });
+  const forged = await act(def, start(def, user), 'send', { wager: { stake: '9' } }, {});
+  assert.equal(forged.state.responses.wager, undefined);
+  assert.match(forged.log[0].text, /9 is not one of the choices for Stake/);
+  const blank = await act(def, start(def, user), 'send', { wager: { stake: '' } }, {});
+  assert.match(blank.log[0].text, /Pick a value for Stake/);
+});
+
+test('a dropdown of rows reads its choices from the responses', async () => {
+  const def = dropdownPage({ label: 'Game', items_key: 'games', as: 'g', value: '{g.id}', option_label: '{g.name}' });
+  def.responses.games = [{ id: 'a', name: 'A' }];
+  assert.match((await act(def, start(def, user), 'send', { wager: { stake: 'b' } }, {})).log[0].text, /not one of the choices/);
+  assert.equal((await act(def, start(def, user), 'send', { wager: { stake: 'a' } }, {})).log[0].kind, 'action');
+});

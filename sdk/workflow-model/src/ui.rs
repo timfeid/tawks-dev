@@ -208,6 +208,27 @@ pub fn on_older_renderer(content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
     when(NodeCondition::Not(Box::new(renderer_is_current())), content)
 }
 
+/// A button labelled `label` that opens `content` over the page as a modal,
+/// titled `title`. `.drawer()` and `.closes_on_submit()` change how it behaves.
+pub fn dialog(label: impl Into<String>, title: impl Into<String>, content: Vec<WorkflowDisplay>) -> WorkflowDisplay {
+    display(DisplayType::Dialog {
+        label: label.into(),
+        icon: None,
+        look: crate::DialogButton::Primary,
+        title: title.into(),
+        description: None,
+        style: crate::DialogStyle::Modal,
+        close_on_submit: false,
+        content,
+    })
+}
+
+/// Whether this client's renderer is at least version `renderer`. Builds from
+/// before `$client.renderer` existed never are.
+pub fn renderer_at_least(renderer: u32) -> NodeCondition {
+    NodeCondition::Gte { field: "$client.renderer".into(), value: serde_json::json!(renderer) }
+}
+
 /// Reactions and a comments button for the chat message whose chat and id
 /// `chat` and `message` resolve to; `reactions_key` and `comments_key` name
 /// what the page last knew. See `DisplayType::Discussion`.
@@ -843,6 +864,22 @@ impl WorkflowDisplay {
     pub fn full_width(mut self) -> Self {
         if let DisplayType::Action { full_width, .. } = &mut self.r#type {
             *full_width = true;
+        }
+        self
+    }
+
+    /// Opens a `Dialog` as a drawer from the side instead of a modal.
+    pub fn drawer(mut self) -> Self {
+        if let DisplayType::Dialog { style, .. } = &mut self.r#type {
+            *style = crate::DialogStyle::Drawer;
+        }
+        self
+    }
+
+    /// Closes a `Dialog` once a form inside has been sent and not refused.
+    pub fn closes_on_submit(mut self) -> Self {
+        if let DisplayType::Dialog { close_on_submit, .. } = &mut self.r#type {
+            *close_on_submit = true;
         }
         self
     }

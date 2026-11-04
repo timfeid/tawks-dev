@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use workflow_model::builder::{
     Cond, InputTypeBuilder, WorkflowDisplayBuilder, WorkflowInputBuilder, table_header,
 };
-use workflow_model::{ui, CreateWorkflowDefinition, SubmitWhen, WorkflowDisplay};
+use workflow_model::{ui, CreateWorkflowDefinition, SelectOption, SubmitWhen, WorkflowDisplay};
 
 use crate::templates;
 
@@ -102,6 +102,41 @@ pub fn build() -> Playground {
             hint: "With a min and max. Put it inside a Form so actions receive it",
             display: WorkflowDisplayBuilder::new()
                 .input("amount", WorkflowInputBuilder::new().r#type(InputTypeBuilder::number(Some(0), Some(100))).build())
+                .build(),
+        },
+        PaletteItem {
+            label: "Modal",
+            hint: "A button that opens its contents over the page, for a short task",
+            display: ui::dialog(
+                "Start a wager",
+                "New wager",
+                vec![ui::body("Forms, buttons and text go here.")],
+            ),
+        },
+        PaletteItem {
+            label: "Drawer",
+            hint: "The same from the side, for longer content or to keep the page in view",
+            display: ui::dialog("Open details", "Details", vec![ui::body("Forms, buttons and text go here.")]).drawer(),
+        },
+        PaletteItem {
+            label: "Dropdown",
+            hint: "Pick from a list; options, or items_key to read rows. Put it inside a Form so actions receive it",
+            display: WorkflowDisplayBuilder::new()
+                .input(
+                    "stake",
+                    WorkflowInputBuilder::new()
+                        .r#type(InputTypeBuilder::dropdown(
+                            "Stake",
+                            vec![
+                                SelectOption::new("5", "5 points"),
+                                SelectOption::new("10", "10 points"),
+                                SelectOption::new("25", "25 points"),
+                                SelectOption::new("50", "50 points"),
+                            ],
+                            Some("Pick a stake".into()),
+                        ))
+                        .build(),
+                )
                 .build(),
         },
         PaletteItem {
