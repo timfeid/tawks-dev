@@ -358,6 +358,7 @@ impl Speedball {
             jump: false,
             crouch: false,
             press: None,
+            arena_target: None,
         };
         if self.flag.holder == Some(seat) {
             let goal = toward(direction(team) * (self.station().0 + 1.0), 0.0);

@@ -243,6 +243,7 @@ impl PaintPlaylist {
             jump: false,
             crouch: false,
             press: None,
+            arena_target: None,
         }
     }
 
@@ -527,6 +528,7 @@ impl PaintPlaylist {
             jump: false,
             crouch: false,
             press: None,
+            arena_target: None,
         };
         if team == 1 {
             if distance2 <= RETAKE_ZONE * RETAKE_ZONE {

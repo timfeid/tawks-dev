@@ -57,6 +57,16 @@ pub struct Input {
     /// tick in the order they came, so none are lost between ticks.
     #[serde(default)]
     pub press: Option<Press>,
+    #[serde(default)]
+    pub arena_target: Option<ArenaTarget>,
+}
+
+/// A stable target order for arena bouts; never trust a client-supplied position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ArenaTarget {
+    Champion { seat: u8 },
+    Minion { id: u32 },
 }
 
 /// Which hand a tap came from. Both is a single button, such as the action key.

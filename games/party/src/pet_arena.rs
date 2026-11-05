@@ -1,14 +1,14 @@
-//! Two pet controlled combat bouts. The room owns every hit, cooldown, and score.
+//! A pet ringout bout and an avatar led Crownfall match. The room owns every hit, cooldown, and score.
 use serde_json::{Value, json};
 
-use crate::bout::{BodyProfile, Bout, Contestant, Input, Stick};
+use crate::bout::{ArenaTarget, BodyProfile, Bout, Contestant, Input, Stick};
 use crate::ground::{Runner, step_runner};
 
 pub const KEYS: [&str; 2] = ["pet_ringout", "pet_teamfight"];
 pub const NAMES: [&str; 2] = ["Skyline Scramble", "Crownfall Clash"];
 pub const RULES: [&str; 2] = [
     "Launch rivals out of the ring. Small pets move quickly; broad pets hit farther and harder, and resist launches. Charge a heavy strike for a knockout.",
-    "Choose a champion and break the enemy Crown. Full teams send one flexible top, a bottom carry and support, and a roaming mage. Clear pet minions, capture relays, and contest the Crown Rift for a team buff.",
+    "Choose a champion and break the enemy Crown. Push pet minions through both side lanes to destroy outer and inner towers, then the last tower before the Crown. Full teams send one flexible top, a bottom carry and support, and a roamer who can gank through jungle passages. Contest the Crown Rift for a team buff.",
 ];
 pub const CHAMPIONS: [&str; 10] = [
     "Cinderfox",
@@ -136,17 +136,22 @@ pub const DRAGON_WAKE: f32 = 120.0;
 const DRAGON_RESPAWN: f32 = 100.0;
 pub const CROWN_HP: f32 = 800.0;
 pub const CROWN_SHIELD_END: f32 = 90.0;
-pub const ARENA_RADIUS: f32 = 46.0;
-pub const LANE_Z: [f32; 2] = [20.0, -20.0];
+pub const ARENA_RADIUS: f32 = 50.0;
+pub const LANE_Z: [f32; 2] = [31.0, -31.0];
 pub const CROWN_POS: [(f32, f32); 2] = [(-39.0, 0.0), (39.0, 0.0)];
 pub const RELAYS: [(f32, f32); 2] = [(0.0, LANE_Z[0]), (0.0, LANE_Z[1])];
 const RELAY_RADIUS: f32 = 2.7;
 const RELAY_PULSE: f32 = 8.0;
-const RELAY_DAMAGE: f32 = 12.0;
 const CROWN_COLLAPSE_START: f32 = 540.0;
 const DUEL_COLLAPSE_START: f32 = 300.0;
 const CROWN_COLLAPSE_PER_SECOND: f32 = 4.0;
 pub const BRUSH: [(f32, f32); 4] = [(18.0, 11.5), (18.0, -11.5), (-18.0, 11.5), (-18.0, -11.5)];
+// The gaps between these low walls are the walking entrances to the jungle.
+// Champion dashes can vault a wall, but ordinary movement cannot pass through it.
+pub const JUNGLE_WALLS: [(f32, f32, f32, f32); 6] = [
+    (-27.0, -18.0, 18.5, 21.0), (-8.0, 8.0, 18.5, 21.0), (18.0, 27.0, 18.5, 21.0),
+    (-27.0, -18.0, -21.0, -18.5), (-8.0, 8.0, -21.0, -18.5), (18.0, 27.0, -21.0, -18.5),
+];
 pub const PORTALS: [(f32, f32); 2] = [(-12.0, 0.0), (12.0, 0.0)];
 pub const RIFT_UNLOCK: f32 = DRAFT + 300.0;
 const PORTAL_WAIT: f32 = 5.0;
@@ -157,12 +162,24 @@ const MINION_WAVE: f32 = 11.0;
 
 #[derive(Clone, Debug)]
 struct Minion {
+    id: u32,
     team: u8,
     lane: usize,
     x: f32,
     z: f32,
     hp: f32,
     attack: f32,
+}
+#[derive(Clone, Debug)]
+struct Tower {
+    team: u8,
+    lane: Option<usize>,
+    tier: u8, // 0 outer, 1 inner, 2 last tower before the Crown
+    x: f32,
+    z: f32,
+    hp: f32,
+    max_hp: f32,
+    shot: f32,
 }
 #[derive(Clone, Debug)]
 struct SparBot {
@@ -176,6 +193,7 @@ struct SparBot {
 enum AutoTarget {
     Minion(usize),
     Champion(usize),
+    Spar(usize),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -217,6 +235,9 @@ struct Fighter {
     score: i32,
     cooldown: [f32; 4],
     auto_cd: f32,
+    arena_target: Option<ArenaTarget>,
+    gank_target: Option<u8>,
+    gank_until: f32,
     last_hits: u16,
     gold: u16,
     item: u8,
@@ -261,6 +282,8 @@ pub struct PetArena {
     relay_owner: [Option<u8>; 2],
     relay_pulse: f32,
     minions: Vec<Minion>,
+    next_minion_id: u32,
+    towers: Vec<Tower>,
     minion_wave: f32,
     spar: [SparBot; 2],
     result: Option<Vec<Vec<u8>>>,
@@ -276,6 +299,45 @@ fn distance(a: &Fighter, b: &Fighter) -> f32 {
 }
 fn direction(yaw: f32) -> (f32, f32) {
     (yaw.sin(), yaw.cos())
+}
+fn inside_jungle_wall(x: f32, z: f32, margin: f32) -> bool {
+    JUNGLE_WALLS.iter().any(|&(x0, x1, z0, z1)|
+        x > x0 - margin && x < x1 + margin && z > z0 - margin && z < z1 + margin)
+}
+fn bot_path(p: &Fighter, target: (f32, f32)) -> (f32, f32) {
+    let x = p.runner.x;
+    let z = p.runner.z;
+    let gate_x = if x < 0.0 { -13.0 } else { 13.0 };
+    let crossing_out = z.abs() > 21.0
+        && (target.1.abs() < 17.0 || z.signum() != target.1.signum());
+    if crossing_out {
+        if (x-gate_x).abs() > 1.8 { (gate_x, z) }
+        else { (gate_x, z.signum() * 16.0) }
+    } else if z.abs() < 18.0 && target.1.abs() > 21.0 {
+        if (x-gate_x).abs() > 1.8 { (gate_x, z) }
+        else { (gate_x, target.1.signum() * 23.0) }
+    } else { target }
+}
+fn initial_towers(player_count: usize) -> Vec<Tower> {
+    let mut towers = Vec::with_capacity(10);
+    let durability = match player_count { 0..=2 => 0.35, 3..=4 => 0.55,
+        5..=6 => 0.75, _ => 5.0 };
+    let final_durability = if player_count >= 8 { 3.0 } else { durability };
+    for team in 0..2u8 {
+        let sign = if team == 0 { -1.0 } else { 1.0 };
+        for lane in 0..2 {
+            for tier in 0..2u8 {
+                let max_hp = (if tier == 0 { 340.0 } else { 470.0 }) * durability;
+                towers.push(Tower { team, lane: Some(lane), tier,
+                    x: sign * if tier == 0 { 16.0 } else { 29.0 }, z: LANE_Z[lane],
+                    hp: max_hp, max_hp, shot: 0.0 });
+            }
+        }
+        towers.push(Tower { team, lane: None, tier: 2,
+            x: sign * 34.0, z: 0.0, hp: 620.0 * final_durability,
+            max_hp: 620.0 * final_durability, shot: 0.0 });
+    }
+    towers
 }
 fn spawn(index: usize, count: usize, team: u8, kind: usize, role: usize, seed: u64) -> (f32, f32) {
     if kind == 1 {
@@ -551,6 +613,7 @@ impl PetArena {
                 for team in 0..2u8 {
                     for rank in 0..3 {
                         self.minions.push(Minion {
+                            id: self.next_minion_id,
                             team,
                             lane,
                             x: if team == 0 { -33.0 } else { 33.0 }
@@ -563,6 +626,7 @@ impl PetArena {
                             hp: 80.0,
                             attack: 0.0,
                         });
+                        self.next_minion_id = self.next_minion_id.wrapping_add(1);
                     }
                 }
             }
@@ -574,7 +638,7 @@ impl PetArena {
             .map(|m| (m.team, m.lane, m.x, m.z, m.hp))
             .collect::<Vec<_>>();
         let mut damage = vec![0.0; self.minions.len()];
-        let mut breaches = [0u8; 2];
+        let mut tower_damage = vec![0.0; self.towers.len()];
         for (index, m) in self.minions.iter_mut().enumerate() {
             if m.hp <= 0.0 {
                 continue;
@@ -597,13 +661,23 @@ impl PetArena {
                     m.attack = 0.8;
                 }
             } else {
-                let speed = 2.4 + 1.5 * ((self.time - DRAFT) / 360.0).clamp(0.0, 1.0);
-                m.x += if m.team == 0 { speed * dt } else { -speed * dt };
-                if m.x.abs() > 38.0 {
-                    breaches[m.team as usize] += 1;
-                    m.hp = 0.0;
+                let tower = self.towers.iter().enumerate().find(|(_, t)|
+                    t.team != m.team && t.lane == Some(m.lane) && t.hp > 0.0
+                    && (m.x-t.x).hypot(m.z-t.z) < 4.0).map(|(i, _)| i);
+                if let Some(tower) = tower {
+                    if m.attack == 0.0 {
+                        tower_damage[tower] += 22.0;
+                        m.attack = 0.9;
+                    }
+                } else {
+                    let speed = 2.4 + 1.5 * ((self.time - DRAFT) / 360.0).clamp(0.0, 1.0);
+                    m.x += if m.team == 0 { speed * dt } else { -speed * dt };
+                    if m.x.abs() > 38.0 { m.hp = 0.0; }
                 }
             }
+        }
+        for (index, amount) in tower_damage.into_iter().enumerate() {
+            if amount > 0.0 { self.hit_tower(index, amount, events); }
         }
         for (m, damage) in self.minions.iter_mut().zip(damage) {
             m.hp -= damage;
@@ -625,20 +699,8 @@ impl PetArena {
             }
         }
         self.minions.retain(|m| m.hp > 0.0);
-        if self.time >= CROWN_SHIELD_END {
-            for (team, count) in breaches.into_iter().enumerate() {
-                if count == 0 {
-                    continue;
-                }
-                self.team_push[team] = self.team_push[team].max(8.0);
-                let target = 1 - team;
-                let damage = 4.0 * f32::from(count);
-                self.crown_hp[target] = (self.crown_hp[target] - damage).max(0.0);
-                events.push(json!({"kind":"pet_crown_hit","team":team,
-                    "target":target,"hp":self.crown_hp[target],"damage":damage,
-                    "x":CROWN_POS[target].0,"z":CROWN_POS[target].1}));
-            }
-        }
+        // Lane pressure opens the tower chain. The Crown is never damaged by
+        // minions that merely reach the edge of the map.
     }
     fn damage_minions(
         &mut self,
@@ -682,11 +744,28 @@ impl PetArena {
     }
     fn auto_target(&self, index: usize) -> Option<AutoTarget> {
         let p = &self.players[index];
-        if self.kind != 1 || self.time < DRAFT || !p.selected || p.respawn > 0.0 || p.busy {
+        if self.kind != 1 || !p.selected || p.respawn > 0.0 || p.busy {
             return None;
         }
         let (x, z, team) = (p.runner.x, p.runner.z, p.team);
         let range = BASIC_RANGE[p.champ] * BodyProfile::new(p.width).reach;
+        if self.time < DRAFT {
+            if p.is_bot { return None; }
+            let spar = &self.spar[team as usize];
+            return ((spar.x-x).hypot(spar.z-z) < range).then_some(AutoTarget::Spar(team as usize));
+        }
+        if let Some(ArenaTarget::Champion { seat }) = p.arena_target {
+            return self.players.iter().enumerate().find(|(i, other)| {
+                *i != index && other.seat == seat && other.team != team && other.selected
+                    && other.respawn <= 0.0 && !other.busy && !self.hidden_from(index,*i)
+                    && (other.runner.x-x).hypot(other.runner.z-z) < range
+            }).map(|(i,_)| AutoTarget::Champion(i));
+        } else if let Some(ArenaTarget::Minion { id }) = p.arena_target {
+            return self.minions.iter().enumerate().find(|(_,m)|
+                m.id == id && m.team != team && m.hp > 0.0
+                    && (m.x-x).hypot(m.z-z) < range
+            ).map(|(i,_)| AutoTarget::Minion(i));
+        }
         let minion = self
             .minions
             .iter()
@@ -722,11 +801,33 @@ impl PetArena {
             return;
         }
         let Some(target) = self.auto_target(index) else {
+            let p = &self.players[index];
+            if p.arena_target.is_some() { return; }
+            let range = BASIC_RANGE[p.champ] * BodyProfile::new(p.width).reach;
+            if let Some(tower) = self.towers.iter().enumerate().find(|(i, t)|
+                t.team != p.team && t.hp > 0.0 && self.tower_open(*i)
+                && (t.x-p.runner.x).hypot(t.z-p.runner.z) <= range)
+                .map(|(i, _)| i) {
+                self.players[index].auto_cd = 1.0;
+                self.players[index].cast = 4;
+                self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+                self.hit_tower(tower, 19.0, events);
+            }
             return;
         };
         let interval = 1.1 - 0.35 * ((self.time - DRAFT) / 300.0).clamp(0.0, 1.0);
         let seat = self.players[index].seat;
         match target {
+          AutoTarget::Spar(team) => {
+            let bot = &mut self.spar[team];
+            bot.hp = (bot.hp - 24.0).max(0.0);
+            self.players[index].auto_cd = 0.9;
+            self.players[index].cast = 4;
+            self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+            events.push(json!({"kind":"pet_arena_auto","seat":seat,
+                "x":bot.x,"z":bot.z,"target":"spar"}));
+            if bot.hp == 0.0 { bot.hp = 150.0; }
+          }
           AutoTarget::Minion(target) => {
             let (tx, tz) = (self.minions[target].x, self.minions[target].z);
             self.minions[target].hp -= 24.0;
@@ -760,24 +861,77 @@ impl PetArena {
           }
         }
     }
-    fn relay_lead(&self, team: usize) -> bool {
-        let own = self
-            .relay_owner
-            .iter()
-            .filter(|owner| **owner == Some(team as u8))
-            .count();
-        let enemy = self
-            .relay_owner
-            .iter()
-            .filter(|owner| **owner == Some((1 - team) as u8))
-            .count();
-        own > enemy
+    fn tower_open(&self, index: usize) -> bool {
+        let tower = &self.towers[index];
+        match tower.tier {
+            0 => true,
+            1 => !self.towers.iter().any(|other| other.team == tower.team
+                && other.lane == tower.lane && other.tier == 0 && other.hp > 0.0),
+            _ => !self.towers.iter().any(|other| other.team == tower.team
+                && other.tier == 1 && other.hp > 0.0),
+        }
+    }
+    fn hit_tower(&mut self, index: usize, amount: f32, events: &mut Vec<Value>) {
+        if self.towers[index].hp <= 0.0 || !self.tower_open(index) { return; }
+        let shielded = self.towers[index].tier < 2 && !self.minions.iter().any(|m|
+            m.team != self.towers[index].team && m.hp > 0.0
+            && (m.x-self.towers[index].x).hypot(m.z-self.towers[index].z) < 8.0);
+        let t = &mut self.towers[index];
+        t.hp = (t.hp - amount * if shielded { 0.25 } else { 1.0 }).max(0.0);
+        events.push(json!({"kind":"crownfall_tower_hit","team":t.team,
+            "lane":t.lane,"tier":t.tier,"x":t.x,"z":t.z,"hp":t.hp,"shielded":shielded}));
+        if t.hp == 0.0 {
+            events.push(json!({"kind":"crownfall_tower_down","team":t.team,
+                "lane":t.lane,"tier":t.tier,"x":t.x,"z":t.z}));
+        }
+    }
+    fn damage_towers(&mut self, player: usize, amount: f32, range: f32,
+        yaw: f32, cone: f32, events: &mut Vec<Value>) {
+        if self.kind != 1 || self.time < DRAFT { return; }
+        let p = &self.players[player];
+        let (ax, az) = direction(yaw);
+        let target = self.towers.iter().enumerate().find(|(i, t)| {
+            if t.team == p.team || t.hp <= 0.0 || !self.tower_open(*i) { return false; }
+            let (dx, dz) = (t.x - p.runner.x, t.z - p.runner.z);
+            let d = dx.hypot(dz);
+            d <= range && (dx * ax + dz * az) / d.max(0.01) >= cone
+        }).map(|(i, _)| i);
+        if let Some(index) = target { self.hit_tower(index, amount, events); }
+    }
+    fn step_towers(&mut self, dt: f32, events: &mut Vec<Value>) {
+        if self.kind != 1 || self.time < DRAFT { return; }
+        for index in 0..self.towers.len() {
+            if self.towers[index].hp <= 0.0 { continue; }
+            self.towers[index].shot = (self.towers[index].shot - dt).max(0.0);
+            if self.towers[index].shot > 0.0 { continue; }
+            let (team, x, z) = { let t=&self.towers[index]; (t.team,t.x,t.z) };
+            if let Some(minion) = self.minions.iter().position(|m| m.team != team
+                && m.hp > 0.0 && (m.x-x).hypot(m.z-z) < 7.2) {
+                self.minions[minion].hp -= 42.0;
+                self.towers[index].shot = 1.35;
+                events.push(json!({"kind":"crownfall_tower_shot","x":x,"z":z,
+                    "target_x":self.minions[minion].x,"target_z":self.minions[minion].z,"team":team}));
+            } else if let Some(champ) = self.players.iter().position(|p| p.team != team
+                && p.selected && p.respawn <= 0.0 && !p.busy
+                && p.invuln <= 0.0 && p.stasis <= 0.0
+                && (p.runner.x-x).hypot(p.runner.z-z) < 7.2) {
+                let victim = &mut self.players[champ];
+                victim.hp = (victim.hp - 34.0).max(0.0);
+                if victim.hp == 0.0 {
+                    victim.respawn = 3.5;
+                    victim.lock = 0.0;
+                    events.push(json!({"kind":"pet_arena_ko","victim":victim.seat,
+                        "x":victim.runner.x,"z":victim.runner.z,"tower":true}));
+                }
+                self.towers[index].shot = 1.35;
+                events.push(json!({"kind":"crownfall_tower_shot","x":x,"z":z,
+                    "target_x":self.players[champ].runner.x,"target_z":self.players[champ].runner.z,"team":team}));
+            }
+        }
     }
     fn crown_open(&self, team: usize) -> bool {
         self.kind == 1
-            && self.time >= CROWN_SHIELD_END
-            && self.team_push[team] > 0.0
-            && self.relay_lead(team)
+            && !self.towers.iter().any(|t| t.team as usize == 1-team && t.hp > 0.0)
     }
     fn limit(&self) -> f32 {
         if self.kind == 0 {
@@ -860,6 +1014,9 @@ impl PetArena {
                     score: 0,
                     cooldown: [0.0; 4],
                     auto_cd: 0.0,
+                    arena_target: None,
+                    gank_target: None,
+                    gank_until: 0.0,
                     last_hits: 0,
                     gold: 50,
                     item: 0,
@@ -905,6 +1062,8 @@ impl PetArena {
             relay_owner: [None; 2],
             relay_pulse: RELAY_PULSE,
             minions: Vec::new(),
+            next_minion_id: 1,
+            towers: initial_towers(count),
             minion_wave: MINION_WAVE,
             spar: [
                 SparBot {
@@ -1009,37 +1168,6 @@ impl PetArena {
         self.relay_pulse -= dt;
         if self.relay_pulse <= 0.0 {
             self.relay_pulse += RELAY_PULSE;
-            if self.time >= CROWN_SHIELD_END {
-                let count = [0, 1].map(|team| {
-                    self.relay_owner
-                        .iter()
-                        .filter(|owner| **owner == Some(team))
-                        .count()
-                        + usize::from(self.players.len() < 4 && self.team_buff[team as usize] > 0.0)
-                });
-                if count[0] != count[1] {
-                    let team = if count[0] > count[1] { 0 } else { 1 };
-                    let target = 1 - team;
-                    let site = self
-                        .relay_owner
-                        .iter()
-                        .position(|owner| *owner == Some(team as u8));
-                    let base = if self.players.len() <= 4 {
-                        20.0
-                    } else {
-                        RELAY_DAMAGE
-                    };
-                    let damage = base
-                        * count[team].abs_diff(count[target]) as f32
-                        * if self.team_push[team] > 0.0 { 1.5 } else { 1.0 }
-                        * if self.team_buff[team] > 0.0 { 1.5 } else { 1.0 };
-                    self.crown_hp[target] = (self.crown_hp[target] - damage).max(0.0);
-                    events.push(json!({"kind":"pet_crown_hit","site":site,"team":team,
-                        "target":target,"hp":self.crown_hp[target],"damage":damage,
-                        "x":site.map_or(0.0, |site|RELAYS[site].0),
-                        "z":site.map_or(0.0, |site|RELAYS[site].1)}));
-                }
-            }
         }
     }
     fn damage_dragon(
@@ -1113,7 +1241,7 @@ impl PetArena {
         if dist > range || (dx * ax + dz * az) / dist.max(0.01) < cone {
             return;
         }
-        let pressure = if self.players.len() == 4 { 0.08 } else { 0.045 };
+        let pressure = if self.players.len() == 4 { 0.08 } else { 0.06 };
         let damage = amount
             * pressure
             * if self.team_buff[team] > 0.0 {
@@ -1124,6 +1252,37 @@ impl PetArena {
         self.crown_hp[target] = (self.crown_hp[target] - damage).max(0.0);
         events.push(json!({"kind":"pet_crown_hit","seat":p.seat,"team":team,
             "target":target,"hp":self.crown_hp[target],"damage":damage,"x":x,"z":z}));
+    }
+    fn best_gank(&self, index: usize) -> Option<usize> {
+        let roamer = &self.players[index];
+        if self.kind != 1 || roamer.position != Some(3)
+            || self.time < DRAFT + 25.0 || self.time >= RIFT_UNLOCK - 20.0
+            || roamer.respawn > 0.0 || roamer.busy
+            || roamer.hp < Self::max_hp(roamer.level) * 0.55 || roamer.mana < 20.0 {
+            return None;
+        }
+        self.players.iter().enumerate().filter_map(|(enemy_index, enemy)| {
+            if enemy.team == roamer.team || !enemy.selected || enemy.respawn > 0.0
+                || enemy.busy || self.hidden_from(index, enemy_index)
+                || (enemy.runner.z.abs() - LANE_Z[0]).abs() > 7.0 { return None; }
+            let allies = self.players.iter().filter(|ally| ally.team == roamer.team
+                && ally.seat != roamer.seat && ally.selected && ally.respawn <= 0.0
+                && distance(ally, enemy) < 15.0).count();
+            if allies == 0 { return None; }
+            let backup = self.players.iter().filter(|other| other.team == enemy.team
+                && other.seat != enemy.seat && other.respawn <= 0.0
+                && distance(other, enemy) < 12.0).count();
+            let tower_cover = self.towers.iter().any(|tower| tower.team == enemy.team
+                && tower.hp > 0.0 && (tower.x-enemy.runner.x).hypot(tower.z-enemy.runner.z) < 8.0);
+            if tower_cover { return None; }
+            let vulnerable = 1.0 - enemy.hp / Self::max_hp(enemy.level);
+            let overextended = if (roamer.team == 0 && enemy.runner.x < -4.0)
+                || (roamer.team == 1 && enemy.runner.x > 4.0) { 0.75 } else { 0.0 };
+            let travel = distance(roamer, enemy);
+            let score = vulnerable * 1.5 + overextended + allies.min(2) as f32 * 0.5
+                - backup as f32 * 0.45 - (travel / 60.0);
+            (score >= 0.95).then_some((enemy_index, score))
+        }).max_by(|a,b| a.1.total_cmp(&b.1)).map(|(index,_)| index)
     }
     fn target(&self, index: usize, yaw: f32, range: f32, cone: f32) -> Option<usize> {
         let (dx, dz) = direction(yaw);
@@ -1360,8 +1519,11 @@ impl PetArena {
             2 => {
                 let (dx, dz) = direction(yaw);
                 let dash = [4.5, 6.5, 3.8, 4.0, 5.2, 5.4, 4.3, 5.0, 5.0, 4.1][champ];
-                self.players[index].runner.x = from.0 + dx * dash;
-                self.players[index].runner.z = from.1 + dz * dash;
+                let landing = (from.0 + dx * dash, from.1 + dz * dash);
+                if !inside_jungle_wall(landing.0, landing.1, 0.45) {
+                    self.players[index].runner.x = landing.0;
+                    self.players[index].runner.z = landing.1;
+                }
                 self.players[index].invuln = if matches!(champ, 1 | 5 | 6) {
                     0.25
                 } else {
@@ -1417,17 +1579,20 @@ impl PetArena {
                 self.damage_spar(index, 46.0, 8.0 * reach, yaw, 0.6, events);
                 self.damage_minions(index, 46.0, 8.0 * reach, yaw, 0.6, events);
                 let range = [8.0, 4.0, 7.0, 2.7, 7.0, 9.0, 7.0, 2.5, 7.0, 6.0][champ] * reach;
+                self.damage_towers(index, 46.0, range, yaw, 0.72, events);
                 self.damage_crown(index, 46.0, yaw, range, 0.72, events);
             }
             2 => {
                 self.damage_spar(index, 30.0, 2.6, yaw, -1.0, events);
                 self.damage_minions(index, 30.0, 2.6, yaw, -1.0, events);
+                self.damage_towers(index, 30.0, 2.6, yaw, -1.0, events);
                 self.damage_crown(index, 30.0, yaw, 2.6, -1.0, events);
             }
             3 => {
                 self.damage_spar(index, 110.0, 6.5, yaw, -1.0, events);
                 self.damage_minions(index, 110.0, 6.5, yaw, -1.0, events);
                 let range = [6.5, 3.5, 7.5, 4.0, 6.0, 9.0, 6.0, 4.5, 6.5, 6.0][champ];
+                self.damage_towers(index, 110.0, range, yaw, -1.0, events);
                 self.damage_crown(index, 110.0, yaw, range, -1.0, events);
             }
             _ => {}
@@ -1488,19 +1653,19 @@ impl Bout for PetArena {
         let dt = dt.clamp(0.0, 0.1);
         self.turn = self.turn.wrapping_add(1);
         let before = self.time;
-        self.time += dt;
-        if self.kind == 1
-            && before >= 8.0
-            && before < DRAFT
-            && self.players.iter().all(|p| p.selected)
-        {
-            self.time = DRAFT;
-        }
+        self.time = if self.kind == 1 && before < DRAFT {
+            if before >= 8.0 && self.players.iter().all(|p| p.selected) {
+                DRAFT
+            } else {
+                (before + dt).min(DRAFT - 0.01)
+            }
+        } else {
+            before + dt
+        };
         if self.kind == 1 && before < DRAFT && self.time >= DRAFT {
             self.minion_wave = 0.0;
             let count = self.players.len();
             for (index, p) in self.players.iter_mut().enumerate() {
-                p.selected = true;
                 p.hp = MAX_HP;
                 p.mana = MAX_MANA;
                 p.shield = 0.0;
@@ -1552,6 +1717,7 @@ impl Bout for PetArena {
                     .count()
                     < 4;
             let p = &mut self.players[index];
+            p.arena_target = input.arena_target;
             for cd in &mut p.cooldown {
                 *cd = (*cd - dt).max(0.0);
             }
@@ -1587,11 +1753,20 @@ impl Bout for PetArena {
                     && input.yaw >= 0.0
                     && input.yaw < 10.0
                     && (open_draft || p.position.is_some_and(|pos| champion_allowed(pos, pick)))
-                    && input.pitch < 1.25
+                    && (1.15..1.25).contains(&input.pitch)
                 {
                     p.champ = pick;
                     p.role = CHAMPION_ROLE[pick];
-                    p.selected = input.pitch < 1.1;
+                }
+                if input.yaw.is_finite()
+                    && input.yaw >= 0.0
+                    && input.yaw < 10.0
+                    && (open_draft || p.position.is_some_and(|pos| champion_allowed(pos, pick)))
+                    && (0.95..1.05).contains(&input.pitch)
+                {
+                    p.champ = pick;
+                    p.role = CHAMPION_ROLE[pick];
+                    p.selected = true;
                 }
                 if !p.selected && self.time >= DRAFT {
                     continue;
@@ -1677,6 +1852,7 @@ impl Bout for PetArena {
                 }
             }
             if p.lock <= 0.0 {
+                let before_move = (p.runner.x, p.runner.z);
                 step_runner(
                     &mut p.runner,
                     input.stick,
@@ -1688,6 +1864,13 @@ impl Bout for PetArena {
                             * if p.haste > 0.0 { 1.35 } else { 1.0 }
                     },
                 );
+                if self.kind == 1 && self.time >= DRAFT
+                    && inside_jungle_wall(p.runner.x, p.runner.z, 0.45) {
+                    p.runner.x = before_move.0;
+                    p.runner.z = before_move.1;
+                    p.runner.vx = 0.0;
+                    p.runner.vz = 0.0;
+                }
             }
             if self.kind == 0 {
                 let old_height = p.height;
@@ -1753,16 +1936,17 @@ impl Bout for PetArena {
                 if input.press.is_some() {
                     self.cast(index, 3, input.yaw, events);
                 }
-                if self.time >= DRAFT {
-                    self.auto_attack(index, events);
-                }
+                self.auto_attack(index, events);
             }
         }
         self.step_minions(dt, events);
+        self.step_towers(dt, events);
         self.step_relays(dt, events);
         if self.kind == 1 && self.time >= self.crown_collapse_start() {
-            for hp in &mut self.crown_hp {
-                *hp = (*hp - CROWN_COLLAPSE_PER_SECOND * dt).max(0.0);
+            for team in 0..2 {
+                if self.crown_open(1-team) {
+                    self.crown_hp[team] = (self.crown_hp[team] - CROWN_COLLAPSE_PER_SECOND * dt).max(0.0);
+                }
             }
         }
         if self.time >= self.limit()
@@ -1792,8 +1976,9 @@ impl Bout for PetArena {
         }
         if self.kind == 1 && p.position == Some(3) && self.time >= RIFT_UNLOCK
             && !self.rift_used && self.side_bout.is_none() {
-            let dx = -p.runner.x;
-            let dz = -p.runner.z;
+            let path = bot_path(p, (0.0,0.0));
+            let dx = path.0-p.runner.x;
+            let dz = path.1-p.runner.z;
             let dist = dx.hypot(dz).max(0.01);
             return Input {
                 stick: if dist > 2.5 { Stick { x: dx / dist, z: dz / dist } } else { Stick::default() },
@@ -1803,8 +1988,9 @@ impl Bout for PetArena {
             };
         }
         if self.kind == 1 && self.rift_countdown.is_some() {
-            let dx = -p.runner.x;
-            let dz = -p.runner.z;
+            let path = bot_path(p, (0.0,0.0));
+            let dx = path.0-p.runner.x;
+            let dz = path.1-p.runner.z;
             let dist = dx.hypot(dz).max(0.01);
             return Input {
                 stick: if dist > 6.0 { Stick { x: dx / dist, z: dz / dist } } else { Stick::default() },
@@ -1812,12 +1998,66 @@ impl Bout for PetArena {
                 ..Default::default()
             };
         }
+        if self.kind == 1 && p.position == Some(3) && p.respawn <= 0.0 && !p.busy {
+            let hp_ratio = p.hp / Self::max_hp(p.level);
+            if hp_ratio < 0.34 {
+                let home = CROWN_POS[p.team as usize];
+                let gate_x = if p.team == 0 { -13.0 } else { 13.0 };
+                let waypoint = if p.runner.z.abs() > 21.0 {
+                    (gate_x, p.runner.z.signum() * 23.0)
+                } else if p.runner.z.abs() > 2.0 { (gate_x, 0.0) } else { home };
+                let (dx,dz) = (waypoint.0-p.runner.x, waypoint.1-p.runner.z);
+                let d = dx.hypot(dz).max(0.01);
+                return Input { stick: Stick { x:dx/d, z:dz/d }, yaw:dx.atan2(dz), ..Default::default() };
+            }
+            let queued = self.portal_queue.as_ref().is_some_and(|queue| queue.seat == seat);
+            let locked = p.gank_target.filter(|_| p.gank_until > self.time)
+                .and_then(|target| self.players.iter().enumerate()
+                    .find(|(other_index,other)| other.seat == target
+                        && other.team != p.team && other.respawn <= 0.0
+                        && other.selected && !other.busy && !self.hidden_from(index,*other_index))
+                    .map(|(other_index,_)| other_index));
+            let gank = if queued { None } else { locked.or_else(|| self.best_gank(index)) };
+            if let Some(target_index) = gank {
+                let enemy = &self.players[target_index];
+                let enemy_seat = enemy.seat;
+                let target = (enemy.runner.x, enemy.runner.z);
+                let gap_x = if p.team == 0 { -13.0 } else { 13.0 };
+                let brush_x = if p.team == 0 { -18.0 } else { 18.0 };
+                let waypoint = if p.runner.z.abs() < 9.0 && target.1.abs() > 21.0 {
+                    (brush_x, target.1.signum() * 11.5)
+                } else if p.runner.z.abs() < 21.0 && target.1.abs() > 21.0 {
+                    (gap_x, target.1.signum() * 23.0)
+                } else { target };
+                let (dx,dz) = (waypoint.0-p.runner.x, waypoint.1-p.runner.z);
+                let dist = dx.hypot(dz).max(0.01);
+                let enemy_dist = (target.0-p.runner.x).hypot(target.1-p.runner.z);
+                let attack = enemy_dist < 8.0;
+                let input = Input {
+                    stick: if enemy_dist > 4.2 { Stick { x:dx/dist, z:dz/dist } } else { Stick::default() },
+                    yaw: (target.0-p.runner.x).atan2(target.1-p.runner.z),
+                    arena_target: Some(ArenaTarget::Champion { seat: enemy_seat }),
+                    pitch: 0.0,
+                    fire: attack && p.cooldown[0] <= 0.0,
+                    jump: attack && p.cooldown[1] <= 0.0,
+                    crouch: enemy_dist > 5.0 && enemy_dist < 9.0 && p.cooldown[2] <= 0.0,
+                    press: (enemy_dist < 5.8 && p.cooldown[3] <= 0.0)
+                        .then_some(crate::bout::Press::Both),
+                };
+                let lock_until = if p.gank_target == Some(enemy_seat)
+                    && p.gank_until > self.time { p.gank_until } else { self.time + 8.0 };
+                self.players[index].gank_target = Some(enemy_seat);
+                self.players[index].gank_until = lock_until;
+                return input;
+            }
+        }
         if self.kind == 1 && p.position == Some(3) && self.portal_cd <= 0.0
             && self.side_bout.is_none() && self.time >= DRAFT + 20.0
             && self.time < RIFT_UNLOCK - 25.0 {
             let pad = PORTALS[p.team as usize];
-            let dx = pad.0 - p.runner.x;
-            let dz = pad.1 - p.runner.z;
+            let path = bot_path(p, pad);
+            let dx = path.0 - p.runner.x;
+            let dz = path.1 - p.runner.z;
             let dist = dx.hypot(dz).max(0.01);
             let queued = self.portal_queue.as_ref().is_some_and(|q| q.seat == seat);
             if self.portal_queue.is_none() || queued || self.portal_queue.as_ref().is_some_and(|q| {
@@ -1849,6 +2089,26 @@ impl Bout for PetArena {
                     ..Default::default()
                 };
             }
+            let preferred_lane = if p.position == Some(0) { 0 } else { 1 };
+            let enemy = 1 - p.team;
+            if let Some(tower) = self.towers.iter().enumerate()
+                .filter(|(i, t)| t.team == enemy && t.hp > 0.0 && self.tower_open(*i))
+                .min_by_key(|(_, t)| (if t.lane == Some(preferred_lane) { 0 } else { 1 }, t.tier))
+                .map(|(_, t)| t) {
+                let path = bot_path(p, (tower.x,tower.z));
+                let (dx, dz) = (path.0 - p.runner.x, path.1 - p.runner.z);
+                let dist = dx.hypot(dz).max(0.01);
+                let range = BASIC_RANGE[p.champ] * BodyProfile::new(p.width).reach;
+                let tower_dist = (tower.x-p.runner.x).hypot(tower.z-p.runner.z);
+                return Input {
+                    stick: if tower_dist > range * 0.78 || path != (tower.x, tower.z) {
+                        Stick { x: dx / dist, z: dz / dist }
+                    } else { Stick::default() },
+                    yaw: (tower.x-p.runner.x).atan2(tower.z-p.runner.z),
+                    fire: tower_dist < range && p.cooldown[0] <= 0.0,
+                    ..Default::default()
+                };
+            }
         }
         let team_size = self
             .players
@@ -1860,11 +2120,13 @@ impl Bout for PetArena {
             && (team_size == 1 || p.position != Some(3) || self.players.len() == 4)
         {
             let site = CROWN_POS[1 - p.team as usize];
-            let dx = site.0 - p.runner.x;
-            let dz = site.1 - p.runner.z;
+            let path = bot_path(p, site);
+            let dx = path.0 - p.runner.x;
+            let dz = path.1 - p.runner.z;
             let dist = dx.hypot(dz).max(0.01);
+            let crown_dist = (site.0-p.runner.x).hypot(site.1-p.runner.z);
             return Input {
-                stick: if dist > 4.8 {
+                stick: if crown_dist > 4.8 {
                     Stick {
                         x: dx / dist,
                         z: dz / dist,
@@ -1872,10 +2134,10 @@ impl Bout for PetArena {
                 } else {
                     Stick::default()
                 },
-                yaw: dx.atan2(dz),
-                fire: dist < 8.0 && p.cooldown[0] <= 0.0,
-                crouch: dist > 5.0 && p.cooldown[2] <= 0.0,
-                press: (dist < 6.5 && p.cooldown[3] <= 0.0).then_some(crate::bout::Press::Both),
+                yaw: (site.0-p.runner.x).atan2(site.1-p.runner.z),
+                fire: crown_dist < 8.0 && p.cooldown[0] <= 0.0,
+                crouch: crown_dist > 5.0 && p.cooldown[2] <= 0.0,
+                press: (crown_dist < 6.5 && p.cooldown[3] <= 0.0).then_some(crate::bout::Press::Both),
                 ..Default::default()
             };
         }
@@ -2048,8 +2310,14 @@ impl Bout for PetArena {
             .iter()
             .map(|m| {
                 json!({"team":m.team,"lane":m.lane,
-            "x":m.x,"z":m.z,"hp":m.hp})
+            "x":m.x,"z":m.z,"hp":m.hp,"id":m.id})
             })
+            .collect::<Vec<_>>();
+        let towers = self.towers.iter().enumerate().map(|(index,t)| json!({"team":t.team,
+            "lane":t.lane,"tier":t.tier,"x":t.x,"z":t.z,
+            "hp":t.hp,"max_hp":t.max_hp,"open":self.tower_open(index),
+            "shielded":t.tier < 2 && !self.minions.iter().any(|m| m.team != t.team
+                && m.hp > 0.0 && (m.x-t.x).hypot(m.z-t.z) < 8.0)}))
             .collect::<Vec<_>>();
         let mut snapshot = json!({"game":self.key(),"time":self.time,"limit":self.limit(),
             "draft":self.kind == 1 && self.time < DRAFT,
@@ -2059,7 +2327,7 @@ impl Bout for PetArena {
             "crown_shield":(CROWN_SHIELD_END-self.time).max(0.0),
             "crown_collapse_in":(self.crown_collapse_start()-self.time).max(0.0),
             "relays":relays,"relay_pulse":self.relay_pulse,
-            "dragon":dragon,"players":players,"minions":minions,
+            "dragon":dragon,"players":players,"minions":minions,"towers":towers,
             "spar":self.spar.iter().map(|bot|json!({"x":bot.x,"z":bot.z,"hp":bot.hp})).collect::<Vec<_>>(),
             "props":[]});
         snapshot["portal"] = json!({
@@ -2107,6 +2375,7 @@ impl Bout for PetArena {
         view["auto_target"] = match self.auto_target(observer) {
             Some(AutoTarget::Minion(index)) => json!({"kind":"minion","index":index}),
             Some(AutoTarget::Champion(index)) => json!({"kind":"champion","seat":self.players[index].seat}),
+            Some(AutoTarget::Spar(team)) => json!({"kind":"spar","team":team}),
             None => Value::Null,
         };
         view["auto_ready_in"] = json!(self.players[observer].auto_cd.max(self.players[observer].lock).max(self.players[observer].stasis));
@@ -2214,12 +2483,14 @@ mod tests {
         let mut game = PetArena::new(1, &contestants, 2);
         assert!(!game.players[0].selected);
         let mut events = Vec::new();
+        game.players[1].selected = true;
         for _ in 0..((DRAFT * 60.0) as usize + 1) {
             game.step(
                 &[(
                     0,
                     Input {
                         yaw: 7.0,
+                        pitch: 1.0,
                         ..Default::default()
                     },
                 )],
@@ -2266,7 +2537,7 @@ mod tests {
             &[(
                 0,
                 Input {
-                    yaw: 0.0,
+                    yaw: 0.0, pitch: 1.0,
                     ..Default::default()
                 },
             )],
@@ -2285,7 +2556,7 @@ mod tests {
             &[(
                 0,
                 Input {
-                    yaw: 4.0,
+                    yaw: 4.0, pitch: 1.0,
                     ..Default::default()
                 },
             )],
@@ -2297,7 +2568,7 @@ mod tests {
             &[(
                 0,
                 Input {
-                    yaw: 3.0,
+                    yaw: 3.0, pitch: 1.0,
                     ..Default::default()
                 },
             )],
@@ -2334,7 +2605,7 @@ mod tests {
             &[(
                 0,
                 Input {
-                    yaw: 7.0,
+                    yaw: 7.0, pitch: 1.0,
                     fire: true,
                     ..Default::default()
                 },
@@ -2486,17 +2757,15 @@ mod tests {
         assert_eq!(game.placements().unwrap()[0], vec![0, 2, 4, 6]);
     }
     #[test]
-    fn dragon_buff_adds_crown_pressure_in_a_duel_without_ending_it() {
-        let contestants = (0..2)
-            .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
-            .collect::<Vec<_>>();
+    fn buff_does_not_bypass_tower_defenses() {
+        let contestants = (0..2).map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2)).collect::<Vec<_>>();
         let mut game = PetArena::new(1, &contestants, 3);
         game.time = CROWN_SHIELD_END + 1.0;
         game.team_buff[0] = 45.0;
+        game.relay_owner[0] = Some(0);
         game.relay_pulse = 0.01;
         game.step(&[], 1.0 / 60.0, &mut Vec::new());
-        assert!(game.crown_hp[1] < CROWN_HP);
-        assert!(game.placements().is_none());
+        assert_eq!(game.crown_hp[1], CROWN_HP);
     }
     #[test]
     fn time_limit_awards_the_team_with_more_crown_health() {
@@ -2511,86 +2780,114 @@ mod tests {
         assert_eq!(game.placements(), Some(vec![vec![0], vec![1]]));
     }
     #[test]
-    fn dragon_buff_strengthens_team_relay_pressure() {
+    fn both_side_lanes_and_last_tower_guard_the_crown() {
+        let contestants = [Contestant::bot(0, 0.7).on_team(0), Contestant::bot(1, 0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 9);
+        game.time = DRAFT;
+        game.players[0].runner.x = 13.0;
+        game.players[0].runner.z = LANE_Z[0];
+        let mut events = Vec::new();
+        let outer_north = game.towers.iter().position(|t| t.team == 1 && t.lane == Some(0) && t.tier == 0).unwrap();
+        let inner_north = game.towers.iter().position(|t| t.team == 1 && t.lane == Some(0) && t.tier == 1).unwrap();
+        let final_tower = game.towers.iter().position(|t| t.team == 1 && t.tier == 2).unwrap();
+        game.hit_tower(inner_north, 99999.0, &mut events);
+        assert!(game.towers[inner_north].hp > 0.0);
+        game.hit_tower(outer_north, 99999.0, &mut events);
+        game.hit_tower(inner_north, 99999.0, &mut events);
+        assert_eq!(game.towers[inner_north].hp, 0.0);
+        game.hit_tower(final_tower, 99999.0, &mut events);
+        assert!(game.towers[final_tower].hp > 0.0);
+        for i in 0..game.towers.len() {
+            if game.towers[i].team == 1 && game.towers[i].tier < 2 {
+                game.towers[i].hp = 0.0;
+            }
+        }
+        game.hit_tower(final_tower, 99999.0, &mut events);
+        assert_eq!(game.towers[final_tower].hp, 0.0);
+        assert!(game.crown_open(0));
+        game.players[0].runner.x = CROWN_POS[1].0 - 4.5;
+        game.players[0].runner.z = 0.0;
+        game.damage_crown(0, 46.0, std::f32::consts::FRAC_PI_2, 8.0, 0.72, &mut events);
+        assert!(game.crown_hp[1] < CROWN_HP);
+    }
+    #[test]
+    fn jungle_walls_have_passages_and_dash_landings() {
+        assert!(inside_jungle_wall(0.0, 20.0, 0.45));
+        assert!(!inside_jungle_wall(13.0, 20.0, 0.45));
+        let contestants = [Contestant::bot(0, 0.7).on_team(0), Contestant::bot(1, 0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 9);
+        game.time = DRAFT;
+        game.players[0].runner.x = 0.0;
+        game.players[0].runner.z = 17.5;
+        game.step(&[(0, Input { stick: Stick { x: 0.0, z: 1.0 }, ..Default::default() })], 0.1, &mut Vec::new());
+        assert!(game.players[0].runner.z < 18.1);
+        game.players[0].cooldown[2] = 0.0;
+        game.players[0].mana = MAX_MANA;
+        game.cast(0, 2, 0.0, &mut Vec::new());
+        assert!(game.players[0].runner.z > 21.0);
+        game.players[0].runner = Runner::at(16.0, 31.0);
+        assert_eq!(bot_path(&game.players[0], (34.0, 0.0)), (13.0, 31.0));
+        game.players[0].runner = Runner::at(13.0, 23.0);
+        assert_eq!(bot_path(&game.players[0], (34.0, 0.0)), (13.0, 16.0));
+    }
+    #[test]
+    fn roamer_ganks_a_vulnerable_lane_through_brush_and_retreats_when_low() {
         let contestants = (0..8)
             .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
             .collect::<Vec<_>>();
-        let mut game = PetArena::new(1, &contestants, 9);
-        game.time = CROWN_SHIELD_END + 1.0;
-        game.relay_owner[0] = Some(0);
-        game.relay_progress[0] = 1.0;
-        game.team_buff[0] = 30.0;
-        game.relay_pulse = 0.01;
-        game.step(&[], 1.0 / 60.0, &mut Vec::new());
-        assert_eq!(game.crown_hp[1], CROWN_HP - RELAY_DAMAGE * 1.5);
-    }
-    #[test]
-    fn relays_open_crown_pressure_and_a_ko_creates_a_push() {
-        let contestants = [
-            Contestant::bot(0, 0.7).on_team(0),
-            Contestant::bot(1, 0.7).on_team(1),
-        ];
-        let mut game = PetArena::new(1, &contestants, 9);
-        game.time = DRAFT;
-        game.players[0].runner.x = RELAYS[0].0;
-        game.players[0].runner.z = RELAYS[0].1;
-        game.players[1].runner.x = 14.8;
-        game.players[1].runner.z = 0.0;
-        let mut events = Vec::new();
-        for _ in 0..400 {
-            game.step(&[], 1.0 / 60.0, &mut events);
+        let mut game = PetArena::new(1, &contestants, 17);
+        game.time = DRAFT + 60.0;
+        let roamer = game.players.iter().position(|p| p.team == 0 && p.position == Some(3)).unwrap();
+        let ally = game.players.iter().position(|p| p.team == 0 && p.position == Some(0)).unwrap();
+        let enemy = game.players.iter().position(|p| p.team == 1 && p.position == Some(0)).unwrap();
+        for (i,p) in game.players.iter_mut().enumerate() {
+            p.runner = Runner::at(if p.team == 0 { -34.0 } else { 34.0 },
+                if i % 2 == 0 { 31.0 } else { -31.0 });
         }
-        assert_eq!(game.relay_owner[0], Some(0));
-        assert_eq!(game.crown_hp, [CROWN_HP; 2]);
-        game.players[1].hp = 20.0;
-        game.hit_team(0, 1, 46.0, 0.0, &mut events);
-        assert!(game.team_push[0] > 11.0);
-        game.time = CROWN_SHIELD_END + 1.0;
-        game.relay_pulse = 0.01;
-        game.step(&[], 1.0 / 60.0, &mut events);
-        assert_eq!(game.crown_hp[1], CROWN_HP - 20.0 * 1.5);
-        assert!(events.iter().any(|e| e["kind"] == "pet_crown_hit"));
+        game.players[roamer].runner = Runner::at(-13.0, 0.0);
+        game.players[ally].runner = Runner::at(-9.0, 31.0);
+        game.players[enemy].runner = Runner::at(-8.0, 31.0);
+        game.players[enemy].hp = 60.0;
+        let seat = game.players[roamer].seat;
+        assert_eq!(game.best_gank(roamer), Some(enemy));
+        let approach = game.bot_input(seat, 1.0/60.0);
+        assert!(approach.stick.x < 0.0 && approach.stick.z > 0.0);
+        assert_eq!(game.players[roamer].gank_target, Some(game.players[enemy].seat));
+        game.players[roamer].runner = Runner::at(-8.0, 26.5);
+        let engage = game.bot_input(seat, 1.0/60.0);
+        assert!(engage.fire);
+        assert_eq!(engage.arena_target, Some(ArenaTarget::Champion { seat: game.players[enemy].seat }));
+        game.players[roamer].hp = 20.0;
+        let retreat = game.bot_input(seat, 1.0/60.0);
+        assert!(retreat.stick.z < 0.0 && !retreat.fire);
+        game.players[roamer].hp = MAX_HP;
+        game.players[roamer].gank_target = None;
+        game.players[ally].runner = Runner::at(15.0, 31.0);
+        game.players[enemy].runner = Runner::at(16.0, 31.0);
+        assert_eq!(game.best_gank(roamer), None, "do not dive an active enemy tower");
     }
     #[test]
-    fn breaking_the_enemy_crown_wins_without_a_dragon_claim() {
-        let contestants = [
-            Contestant::bot(0, 0.7).on_team(0),
-            Contestant::bot(1, 0.7).on_team(1),
-        ];
-        let mut game = PetArena::new(1, &contestants, 9);
-        game.time = CROWN_SHIELD_END + 1.0;
-        game.relay_owner[0] = Some(0);
-        game.relay_progress[0] = 1.0;
-        game.crown_hp[1] = RELAY_DAMAGE;
-        game.relay_pulse = 0.01;
-        game.step(&[], 1.0 / 60.0, &mut Vec::new());
-        assert_eq!(game.crown_hp[1], 0.0);
-        assert_eq!(game.dragon_claims, [0, 0]);
-        assert_eq!(game.placements().unwrap()[0], vec![0]);
-    }
-    #[test]
-    fn direct_crown_damage_requires_a_ko_push_and_relay_lead() {
-        let contestants = [
-            Contestant::bot(0, 0.7).on_team(0),
-            Contestant::bot(1, 0.7).on_team(1),
-        ];
-        let mut game = PetArena::new(1, &contestants, 9);
-        game.time = CROWN_SHIELD_END + 1.0;
-        game.players[0].runner.x = CROWN_POS[1].0 - 4.5;
-        game.players[0].runner.z = 0.0;
-        let mut events = Vec::new();
-        game.damage_crown(0, 46.0, std::f32::consts::FRAC_PI_2, 8.0, 0.72, &mut events);
-        assert_eq!(game.crown_hp[1], CROWN_HP);
-        game.relay_owner[0] = Some(0);
-        game.relay_progress[0] = 1.0;
-        game.team_push[0] = 12.0;
-        game.damage_crown(0, 46.0, std::f32::consts::FRAC_PI_2, 8.0, 0.72, &mut events);
-        assert!(game.crown_hp[1] < CROWN_HP);
-        assert_eq!(events.last().unwrap()["kind"], "pet_crown_hit");
-        let after = game.crown_hp[1];
-        game.team_push[0] = 0.0;
-        game.damage_crown(0, 46.0, std::f32::consts::FRAC_PI_2, 8.0, 0.72, &mut events);
-        assert_eq!(game.crown_hp[1], after);
+    fn explicit_attack_order_tracks_the_exact_enemy() {
+        let contestants = [Contestant::person(0).on_team(0), Contestant::bot(1,0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 8);
+        game.time = DRAFT;
+        game.players[0].selected = true;
+        game.players[0].runner = Runner::at(0.0,0.0);
+        game.players[1].runner = Runner::at(2.0,0.0);
+        game.minions.push(Minion { id: 42, team: 1, lane: 0,
+            x: 1.0, z: 0.0, hp: 80.0, attack: 0.0 });
+        game.players[0].arena_target = Some(ArenaTarget::Champion { seat: 1 });
+        assert_eq!(game.auto_target(0), Some(AutoTarget::Champion(1)));
+        game.auto_attack(0, &mut Vec::new());
+        assert!(game.players[1].hp < MAX_HP);
+        assert_eq!(game.minions[0].hp,80.0);
+        game.players[0].auto_cd = 0.0;
+        game.players[0].arena_target = Some(ArenaTarget::Minion { id: 42 });
+        assert_eq!(game.auto_target(0), Some(AutoTarget::Minion(0)));
+        game.auto_attack(0, &mut Vec::new());
+        assert!(game.minions[0].hp < 80.0);
+        game.players[0].arena_target = Some(ArenaTarget::Minion { id: 99 });
+        assert_eq!(game.auto_target(0), None);
     }
     #[test]
     fn two_lanes_spawn_minions_and_farming_levels_champions() {
@@ -2642,7 +2939,7 @@ mod tests {
         assert_eq!(game.players[0].points, game.players[0].level - 2);
     }
     #[test]
-    fn a_minion_breakthrough_damages_the_crown_without_awarding_farm_xp() {
+    fn a_minion_breakthrough_cannot_skip_the_tower_chain() {
         let contestants = [
             Contestant::person(0).on_team(0),
             Contestant::person(1).on_team(1),
@@ -2653,6 +2950,7 @@ mod tests {
         game.players[1].runner.x = 38.0;
         game.players[1].runner.z = LANE_Z[0];
         game.minions.push(Minion {
+            id: 1,
             team: 0,
             lane: 0,
             x: 37.99,
@@ -2662,11 +2960,11 @@ mod tests {
         });
         let mut events = Vec::new();
         game.step_minions(0.1, &mut events);
-        assert_eq!(game.crown_hp[1], CROWN_HP - 4.0);
-        assert_eq!(game.team_push[0], 8.0);
+        assert_eq!(game.crown_hp[1], CROWN_HP);
+        assert_eq!(game.team_push[0], 0.0);
         assert_eq!(game.players[1].xp, 0);
         assert!(game.minions.is_empty());
-        assert!(events.iter().any(|event| event["kind"] == "pet_crown_hit"));
+        assert!(!events.iter().any(|event| event["kind"] == "pet_crown_hit"));
     }
     #[test]
     fn crown_health_decides_a_timed_match() {
@@ -2857,7 +3155,7 @@ mod tests {
                     == if kind == 0 {
                         "pet_ring_hit"
                     } else {
-                        "pet_arena_hit"
+                        "pet_minion_wave"
                     }),
                 "{}",
                 game.key()
@@ -2921,12 +3219,12 @@ mod tests {
                         assert!(events.iter().any(|e| e["kind"] == "pet_ring_hit"));
                         assert!(events.iter().any(|e| e["kind"] == "pet_ring_ko"));
                     } else {
-                        assert!(events.iter().any(|e| e["kind"] == "pet_relay_change"));
+                        assert!(events.iter().any(|e| e["kind"] == "pet_minion_wave"));
                         assert!(
                             events
                                 .iter()
-                                .any(|e| e["kind"] == "pet_dragon_hit"
-                                    || e["kind"] == "pet_crown_hit")
+                                .any(|e| e["kind"] == "crownfall_tower_hit"
+                                    || e["kind"] == "pet_minion_farm")
                         );
                     }
                     if count == 2 {
@@ -2964,13 +3262,16 @@ mod tests {
                     .collect::<Vec<_>>();
                 let mut game = PetArena::new(1, &contestants, seed + 100);
                 let mut events = Vec::new();
+                let mut crown_exposed = None;
                 while game.placements().is_none() {
                     let inputs = contestants
                         .iter()
                         .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
                         .collect::<Vec<_>>();
                     game.step(&inputs, 1.0 / 60.0, &mut events);
+                    if crown_exposed.is_none() && (game.crown_open(0) || game.crown_open(1)) { crown_exposed = Some(game.time); }
                 }
+                if seed == 0 { println!("Crownfall {count} crown exposed {:?}; tower HP {:?}; tower hits {}", crown_exposed, game.towers.iter().map(|t| t.hp.round() as i32).collect::<Vec<_>>(), events.iter().filter(|e| e["kind"] == "crownfall_tower_hit").count()); }
                 times.push(game.time);
                 direct_crown_hits += events
                     .iter()
@@ -3114,6 +3415,7 @@ mod tests {
         game.players[0].runner = Runner::at(0.0, 0.0);
         game.players[0].mana = 30.0;
         game.minions.push(Minion {
+            id: 1,
             team: 1,
             lane: 0,
             x: 2.0,

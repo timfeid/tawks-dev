@@ -539,8 +539,9 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
                                 }
                                 Ok(())
                             },
-                            ClientMsg::Input { x, z, yaw, pitch, jump, crouch } => {
+                            ClientMsg::Input { x, z, yaw, pitch, jump, crouch, arena_target } => {
                                 room.set_input(&user_id, crate::bout::Stick { x, z }, yaw, pitch, jump, crouch);
+                                room.set_arena_target(&user_id, arena_target);
                                 Ok(())
                             }
                             ClientMsg::Fire { yaw, pitch } => {

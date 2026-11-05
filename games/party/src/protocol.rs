@@ -35,6 +35,8 @@ pub enum ClientMsg {
         jump: bool,
         #[serde(default)]
         crouch: bool,
+        #[serde(default)]
+        arena_target: Option<crate::bout::ArenaTarget>,
     },
     Fire {
         #[serde(default)]
@@ -252,4 +254,20 @@ pub enum ServerMsg<'a> {
 
 fn officer() -> bool {
     true
+}
+
+#[cfg(test)]
+mod arena_target_tests {
+    use super::ClientMsg;
+    use crate::bout::ArenaTarget;
+
+    #[test]
+    fn old_inputs_and_exact_arena_orders_decode() {
+        let old: ClientMsg = serde_json::from_str(r#"{"type":"input","x":0,"z":0}"#).unwrap();
+        assert!(matches!(old, ClientMsg::Input { arena_target: None, .. }));
+        let champ: ClientMsg = serde_json::from_str(r#"{"type":"input","x":0,"z":0,"arena_target":{"kind":"champion","seat":3}}"#).unwrap();
+        assert!(matches!(champ, ClientMsg::Input { arena_target: Some(ArenaTarget::Champion { seat: 3 }), .. }));
+        let minion: ClientMsg = serde_json::from_str(r#"{"type":"input","x":0,"z":0,"arena_target":{"kind":"minion","id":42}}"#).unwrap();
+        assert!(matches!(minion, ClientMsg::Input { arena_target: Some(ArenaTarget::Minion { id: 42 }), .. }));
+    }
 }

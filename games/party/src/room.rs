@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::board::{Board, BoardError, BoardView, BotMove, Item, Map, Taunt, TurnStep, Upgrade};
 use crate::table::{self, TABLE_GAMES, TableGame};
 use crate::bout::{
-    self, BOUTS, Bout, BoutSpec, Contestant, DEFAULT_SKILL, Input, Press, SKILLS, Skill, Stick,
+    self, ArenaTarget, BOUTS, Bout, BoutSpec, Contestant, DEFAULT_SKILL, Input, Press, SKILLS, Skill, Stick,
 };
 use crate::roster::{ROSTER, character};
 
@@ -236,6 +236,8 @@ pub struct Member {
     pub jump: bool,
     #[serde(skip)]
     pub crouch: bool,
+    #[serde(skip)]
+    pub arena_target: Option<ArenaTarget>,
     /// A shot asked for since the last tick, taken on the next one.
     #[serde(skip)]
     pub fire: bool,
@@ -731,6 +733,7 @@ impl Room {
             pitch: 0.0,
             jump: false,
             crouch: false,
+            arena_target: None,
             fire: false,
             presses: VecDeque::new(),
             ready: false,
@@ -787,6 +790,14 @@ impl Room {
             }
             member.jump = jump;
             member.crouch = crouch;
+        }
+    }
+
+    /// Stable arena target order. The bout validates team, visibility and life state.
+    pub fn set_arena_target(&mut self, user_id: &str, target: Option<ArenaTarget>) {
+        if self.board_paused() { return; }
+        if let Some(member) = self.members.iter_mut().find(|m| m.user_id == user_id) {
+            member.arena_target = target;
         }
     }
 
@@ -1083,6 +1094,7 @@ impl Room {
             pitch: 0.0,
             jump: false,
             crouch: false,
+            arena_target: None,
             fire: false,
             presses: VecDeque::new(),
             ready: false,
@@ -1184,6 +1196,7 @@ impl Room {
                     jump: member.jump,
                     crouch: member.crouch,
                     press: member.presses.pop_front(),
+                    arena_target: member.arena_target,
                 }
             } else {
                 Input::default()
@@ -1885,6 +1898,7 @@ impl Room {
             pitch: 0.0,
             jump: false,
             crouch: false,
+            arena_target: None,
             fire: false,
             presses: VecDeque::new(),
             ready: false,
@@ -2527,6 +2541,7 @@ impl Room {
                                 jump: member.jump,
                                 crouch: member.crouch,
                                 press: member.presses.pop_front(),
+                                arena_target: member.arena_target,
                             }
                         } else {
                             Input::default()
