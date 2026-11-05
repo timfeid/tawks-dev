@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod award;
 pub mod generator;
 pub(crate) mod model;
 pub mod multiplayer;

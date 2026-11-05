@@ -111,6 +111,42 @@ pub fn earns_rewards(song: &SongInfo) -> bool {
     song.official
 }
 
+pub const AWARD_GAME: &str = "encore";
+
+impl Progress {
+    /// Notes hit out of the part's notes, 0 to 1.
+    pub fn accuracy(&self) -> f64 {
+        if self.total == 0 {
+            return 0.0;
+        }
+        (self.hit as f64 / self.total as f64).clamp(0.0, 1.0)
+    }
+}
+
+/// The award for one official song played through, each person's best part
+/// counting. None for anything that earns no rewards.
+pub fn award_args(lobby_id: &str, started_at_ms: Option<f64>, finished: &[Finished]) -> Option<serde_json::Value> {
+    let official: Vec<&Finished> = finished.iter().filter(|f| f.official).collect();
+    let song_id = &official.first()?.song_id;
+    let mut best: BTreeMap<&str, f64> = BTreeMap::new();
+    for part in &official {
+        let accuracy = part.progress.accuracy();
+        let entry = best.entry(part.user_id.as_str()).or_insert(accuracy);
+        *entry = entry.max(accuracy);
+    }
+    let players: Vec<serde_json::Value> = best
+        .into_iter()
+        .map(|(user_id, accuracy)| serde_json::json!({ "user_id": user_id, "accuracy": accuracy }))
+        .collect();
+    Some(serde_json::json!({
+        "game": AWARD_GAME,
+        "reference_id": format!("{AWARD_GAME}:{lobby_id}:{}:{song_id}", started_at_ms.unwrap_or(0.0) as u64),
+        "lobby_id": lobby_id,
+        "players": players,
+        "meta": { "song_id": song_id },
+    }))
+}
+
 pub struct Room {
     pub phase: Phase,
     pub song: Option<SongInfo>,
@@ -556,6 +592,51 @@ mod tests {
             assert_eq!(finished.len(), 1);
             assert_eq!(finished[0].official, official);
         }
+    }
+
+    fn finished(user: &str, hit: u32, total: u32, official: bool) -> Finished {
+        Finished {
+            user_id: user.into(),
+            song_id: "s1".into(),
+            part: GUITAR,
+            score: 0,
+            progress: Progress { hit, total, ..Default::default() },
+            band_size: 2,
+            official,
+        }
+    }
+
+    #[test]
+    fn only_official_songs_are_awarded() {
+        assert!(award_args("l1", Some(5.0), &[finished("ann", 9, 10, false)]).is_none());
+        assert!(award_args("l1", Some(5.0), &[]).is_none());
+        let args = award_args("l1", Some(5.0), &[finished("ann", 9, 10, true)]).unwrap();
+        assert_eq!(args["game"], "encore");
+        assert_eq!(args["reference_id"], "encore:l1:5:s1");
+    }
+
+    #[test]
+    fn each_person_counts_once_at_their_best_accuracy() {
+        let args = award_args(
+            "l1",
+            Some(5.0),
+            &[finished("ann", 5, 10, true), finished("bo", 0, 0, true), finished("ann", 19, 20, true)],
+        )
+        .unwrap();
+        assert_eq!(
+            args["players"],
+            serde_json::json!([
+                { "user_id": "ann", "accuracy": 0.95 },
+                { "user_id": "bo", "accuracy": 0.0 },
+            ])
+        );
+    }
+
+    #[test]
+    fn each_play_of_a_song_gets_its_own_reference() {
+        let first = award_args("l1", Some(1000.0), &[finished("ann", 1, 1, true)]).unwrap();
+        let again = award_args("l1", Some(2000.0), &[finished("ann", 1, 1, true)]).unwrap();
+        assert_ne!(first["reference_id"], again["reference_id"]);
     }
 
     #[test]

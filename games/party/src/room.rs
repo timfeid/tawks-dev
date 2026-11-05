@@ -384,6 +384,16 @@ pub struct PlayedBout {
     pub players: Vec<(String, usize)>,
 }
 
+/// A table game that just ended, by Tawks user id. Bots are left out.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FinishedTable {
+    /// Unique to this deal, so a rematch in the same room is a new game.
+    pub id: String,
+    pub key: &'static str,
+    pub winners: Vec<String>,
+    pub others: Vec<String>,
+}
+
 /// One person's rating of a bout, with what it needs to be filed.
 #[derive(Clone, Debug)]
 pub struct BoutFeedback {
@@ -451,6 +461,9 @@ pub struct Room {
     pub table: Option<Box<dyn TableGame>>,
     /// Room seat for each table seat, in table order.
     table_order: Vec<u8>,
+    tables: u32,
+    table_id: String,
+    pub last_table: Option<FinishedTable>,
     pub tick: u64,
     phase_ticks: u32,
     bot_think: u32,
@@ -507,6 +520,9 @@ impl Room {
             board: None,
             table: None,
             table_order: Vec::new(),
+            tables: 0,
+            table_id: String::new(),
+            last_table: None,
             tick: 0,
             phase_ticks: 0,
             bot_think: 0,
@@ -1222,6 +1238,8 @@ impl Room {
         }
         self.table = Some((spec.create)(order.len(), self.rng.random()));
         self.table_order = order;
+        self.tables += 1;
+        self.table_id = format!("{}:{}:{}", self.match_id, self.tables, self.rng.random::<u64>());
         self.phase = Phase::Table;
         self.bot_think = BOT_THINK_TICKS;
         self.dirty = true;
@@ -1297,8 +1315,22 @@ impl Room {
             self.dirty = true;
         }
         let Some(winning_seats) = game.winners() else { return };
+        let key = game.key();
         let winners: Vec<u8> = winning_seats.iter().map(|s| self.table_order[*s as usize]).collect();
         let losers: Vec<u8> = self.table_order.iter().copied().filter(|s| !winners.contains(s)).collect();
+        let people = |seats: &[u8]| -> Vec<String> {
+            seats
+                .iter()
+                .filter_map(|seat| self.members.iter().find(|m| m.seat == *seat && !m.is_bot))
+                .map(|m| m.user_id.clone())
+                .collect()
+        };
+        self.last_table = Some(FinishedTable {
+            id: self.table_id.clone(),
+            key,
+            winners: people(&winners),
+            others: people(&losers),
+        });
         for member in self.members.iter_mut() {
             if winners.contains(&member.seat) {
                 member.wins += 1;
@@ -1354,6 +1386,10 @@ impl Room {
         self.bot_think = BOT_THINK_TICKS;
         self.dirty = true;
         Ok(())
+    }
+
+    pub fn party_id(&self) -> &str {
+        &self.party_id
     }
 
     /// Rates the last bout played, once per person who played it.

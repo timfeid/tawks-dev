@@ -327,6 +327,21 @@ impl EncoreServer {
         }
     }
 
+    fn report_award(&self, lobby_id: &str, started_at_ms: Option<f64>, finished: &[Finished]) {
+        let Some(args) = crate::room::award_args(lobby_id, started_at_ms, finished) else {
+            return;
+        };
+        let Some(sdk) = self.inner.bot.read().unwrap().clone() else {
+            warn!("no bot connection yet; an Encore award was not reported");
+            return;
+        };
+        tokio::spawn(async move {
+            if let Err(error) = sdk.web_client.mutate::<_, Value>("game_award", &args).await {
+                warn!(%error, "an Encore game_award did not send");
+            }
+        });
+    }
+
     pub fn ws_url(&self) -> &str {
         &self.inner.ws_url
     }
@@ -840,6 +855,7 @@ async fn run_room(
                 let finished = room.tick(now_ms());
                 server.inner.store.record(&finished);
                 server.report_milestones(&match_id, &finished);
+                server.report_award(&match_id, room.start_at, &finished);
                 if room.dirty {
                     room.dirty = false;
                     server.inner.presence.insert(match_id.clone(), room.presence());

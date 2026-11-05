@@ -54,6 +54,9 @@ impl TriviaState {
 
     pub async fn register(&mut self) -> Result<()> {
         self.registered = true;
+        if let Some(bot) = &self.tawks_client {
+            crate::award::install(bot.sdk.web_client.clone());
+        }
         let state = Arc::new(self.clone());
 
         let actions = register_server_actions(state.clone()).await?;

@@ -277,7 +277,7 @@ The sandbox behaves like devhost, with a few differences:
 - Lobbies live in memory and close after half an hour without use. Each visitor gets lobbies of their own, and the Copy link button shares one.
 - A sandbox bot can register 20 workflows and 100 server actions, and each workflow can be at most 256 KB. An activity must use one of the bot's own workflows.
 - Each tawks account can have five sandbox bots. Delete one on the token page to make another; deleting it stops its token at once.
-- Nothing reaches real tawks: no hubs, no notifications, no score.
+- Nothing reaches real tawks: no hubs, no notifications, no XP or tokens.
 
 The sandbox is devhost with `DEVHOST_PUBLIC_HOST` set, so you can run one yourself from the tawks-dev repository with `docker build -f tools/devhost/Dockerfile .`.
 

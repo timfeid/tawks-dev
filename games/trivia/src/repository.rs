@@ -109,6 +109,7 @@ pub struct TriviaUserAnswer {
 #[derive(Debug, Clone)]
 pub struct CreateTriviaArgs {
     pub community_id: String,
+    pub author_id: Option<String>,
     pub title: String,
     pub topic: String,
     pub description: String,
@@ -387,10 +388,12 @@ impl TriviaRepository {
     pub async fn save_generated_model(
         &self,
         quiz_model: GeneratedTrivia,
+        author_id: Option<String>,
     ) -> anyhow::Result<TriviaWithQuestions> {
         let trivia = self
             .create_trivia(CreateTriviaArgs {
                 community_id: "tawks".into(),
+                author_id,
                 topic: quiz_model.topic.clone(),
                 title: quiz_model.title.clone(),
                 description: quiz_model.description.clone(),
@@ -444,8 +447,8 @@ impl TriviaRepository {
 
         let row = query_as::<_, TriviaRow>(
             r#"
-            INSERT INTO trivia (id, topic, community_id, title, description, closes_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, now(), now())
+            INSERT INTO trivia (id, topic, community_id, title, description, closes_at, author_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
             RETURNING
               id,
               topic,
@@ -463,6 +466,7 @@ impl TriviaRepository {
         .bind(args.title)
         .bind(args.description)
         .bind(args.closes_at)
+        .bind(args.author_id)
         .fetch_one(self.pool.deref())
         .await?;
 
@@ -755,6 +759,15 @@ RETURNING
         .bind(attempt_id)
         .fetch_one(self.pool.deref())
         .await
+    }
+
+    /// Who generated the quiz; quizzes made before this was recorded have nobody.
+    pub async fn author_of(&self, trivia_id: &str) -> Result<Option<String>, sqlx::Error> {
+        Ok(query_scalar::<_, Option<String>>("SELECT author_id FROM trivia WHERE id = $1")
+            .bind(trivia_id)
+            .fetch_optional(self.pool.deref())
+            .await?
+            .flatten())
     }
 
     #[instrument(skip_all, fields(trivia_id = %trivia_id))]

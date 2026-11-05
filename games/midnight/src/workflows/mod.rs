@@ -19,6 +19,7 @@ pub async fn register(
     engine: Arc<GameEngine<GameState>>,
     ids: MidnightActionIds,
 ) -> Result<()> {
+    crate::award::install(bot.sdk.web_client.clone());
     // base workflows
     sus_animation::register(bot).await?;
     view_lobby::register(bot, &ids).await?;

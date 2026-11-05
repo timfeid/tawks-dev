@@ -269,6 +269,9 @@ pub struct GameState {
     pub timer_expires_at: Option<DateTime<Utc>>,
 
     pub winner: Option<Alliance>,
+    /// When the current game was dealt; names it for awards.
+    #[serde(default)]
+    pub started_at_ms: i64,
     sabotaged_inputs: HashMap<(String, String), (PlayerRole, HashMap<String, Value>)>,
 }
 
@@ -317,6 +320,10 @@ impl GameLogic for GameState {
     type InitArgs = MidnightInitArgs;
     fn get_instance_id_for_player_id(&self, player_id: &str) -> Option<String> {
         self.players.get(player_id).map(|p| p.instance_id.clone())
+    }
+
+    fn lobby_started(&mut self, lobby_id: &str) {
+        self.lobby_id = lobby_id.to_string();
     }
 
     #[instrument]
@@ -828,6 +835,7 @@ impl GameState {
         self.generate_stages();
 
         // ---- Begin day phase ----
+        self.started_at_ms = Utc::now().timestamp_millis();
         self.stage = GameStage::Day;
         self.current_stage = None;
         self.timer_expires_at = Some(Utc::now() + Duration::seconds(52));
@@ -995,6 +1003,7 @@ impl GameState {
         }
 
         let winner = self.winner.as_ref();
+        self.report_award();
 
         for (pid, player) in &self.players {
             let role = player.effective_role_card(None);
@@ -1037,6 +1046,20 @@ impl GameState {
                 });
             }
         }
+    }
+
+    fn report_award(&self) {
+        let winner = self.winner.as_ref();
+        let results = self.players.iter().map(|(id, player)| {
+            let won = winner.is_some_and(|w| player.effective_role_card(None).alliance == *w);
+            (id.as_str(), won)
+        });
+        crate::award::report(json!({
+            "game": crate::award::GAME,
+            "reference_id": crate::award::reference_id(&self.lobby_id, self.started_at_ms),
+            "lobby_id": (!self.lobby_id.is_empty()).then_some(&self.lobby_id),
+            "players": crate::award::players(results),
+        }));
     }
 
     #[instrument(skip(self, who, what))]

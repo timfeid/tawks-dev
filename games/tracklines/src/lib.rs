@@ -11,6 +11,7 @@ use game_framework::engine::GameEngine;
 use tawks_bot::{full_avatar_url, types::UserResource};
 
 pub mod ai;
+pub mod award;
 pub mod game;
 pub mod logic;
 pub mod map;

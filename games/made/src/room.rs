@@ -43,6 +43,10 @@ pub mod async_trait_free {
             version: i32,
             lines: Vec<(String, String)>,
         ) -> Fut<'a, ()>;
+        /// Reports a finished round to Tawks to pay; never awaited by the room.
+        fn award(&self, _args: serde_json::Value) -> Fut<'_, ()> {
+            Box::pin(async {})
+        }
     }
 }
 
@@ -119,6 +123,7 @@ pub struct Room {
     sim_key: Option<String>,
     sim_events: Option<mpsc::UnboundedReceiver<SimdEvent>>,
     round: u32,
+    opened_ms: u64,
     last_frame: Option<SceneFrame>,
     running: bool,
     ended_at: Option<Instant>,
@@ -142,6 +147,7 @@ impl Room {
             sim_key: None,
             sim_events: None,
             round: 0,
+            opened_ms: now_ms() as u64,
             last_frame: None,
             running: false,
             ended_at: None,
@@ -254,6 +260,26 @@ impl Room {
     /// A hub lobby seats whoever is connected; a test lobby has its seats from the API.
     fn hub_lobby(&self) -> bool {
         self.config.as_ref().is_some_and(|c| c.seats.is_empty())
+    }
+
+    /// Test lobbies restart at will, so only a hub lobby's rounds pay.
+    fn report_award(&self, placements: &[Vec<u8>], reason: &EndReason) {
+        if !self.hub_lobby() || !crate::award::pays(reason) {
+            return;
+        }
+        let players = crate::award::players(&self.roster, placements);
+        if players.is_empty() {
+            return;
+        }
+        let args = serde_json::json!({
+            "game": crate::award::GAME,
+            "reference_id": crate::award::reference_id(&self.lobby_id, self.opened_ms, self.round),
+            "lobby_id": self.lobby_id,
+            "players": players,
+            "meta": { "activity_id": self.config.as_ref().map(|c| c.activity_id.clone()) },
+        });
+        let backend = self.backend.clone();
+        tokio::spawn(async move { backend.award(args).await });
     }
 
     fn seat_of(&self, user_id: &str) -> Option<u8> {
@@ -574,6 +600,7 @@ impl Room {
                             .collect()
                     })
                     .unwrap_or_default();
+                self.report_award(&placements, &reason);
                 self.broadcast(&RelayMsg::End {
                     placements,
                     reason: reason.clone(),

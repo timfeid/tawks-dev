@@ -610,9 +610,11 @@ let view = card.view();
 - `lines` are short text rows shown under the headline.
 - `play` must be an in-app path starting with `/niche/`.
 
-## Scores
+## XP and tokens
 
-Users have a tawks score that shows on their profile. Score is awarded by first-party games for now. Your bot can keep its own points, streaks and leaderboards in responses or in your own storage and show them with the displays in the [Display reference](05-displays.md).
+XP levels you up. Tokens are for playing with. Tickets get you the good stuff.
+
+Each user has XP, which sets the rank on their profile and never goes down, and tokens, which they spend on things like skipping a song in a lobby. Only first-party games award XP and tokens for now. Your bot can keep its own points, streaks and leaderboards in responses or in your own storage and show them with the displays in the [Display reference](05-displays.md).
 
 ## The top bar
 

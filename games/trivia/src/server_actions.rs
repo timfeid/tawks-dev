@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Result, anyhow};
-use serde_json::{Value, json};
+use serde_json::json;
 use tracing::{error, instrument, trace, warn};
 
 use tawks_bot::{ServerActionHandler, TawksBot};
@@ -43,7 +43,6 @@ pub struct TriviaServerActions {
     pub wf_action_submit_answer: String,
     pub wf_action_record_final_score: String,
     pub record_final_score: String,
-    pub wf_action_db_added: String,
 }
 
 impl TriviaServerActions {
@@ -64,7 +63,6 @@ impl TriviaServerActions {
             wf_action_run_generate: "run_generate".to_string(),
             wf_action_submit_answer: "submit_answer".to_string(),
             wf_action_record_final_score: "record_final_score".to_string(),
-            wf_action_db_added: "db_score.added".to_string(),
         }
     }
 }
@@ -430,7 +428,7 @@ async fn mp_gen_run_impl(
             ])));
         }
     };
-    let trivia = state.repo.save_generated_model(quiz_model).await?;
+    let trivia = state.repo.save_generated_model(quiz_model, Some(ctx.workflow.user_id.clone())).await?;
     let trivia_resource = TriviaResource::from(&trivia);
     load_trivia_into_lobby(&state, &ctx, &trivia_resource).await?;
     Ok(ServerActionResult::UpdateContextAndResponses {
@@ -617,9 +615,6 @@ async fn quiz_reveal_impl(
             ("revealed".into(), json!(true)),
             ("no_answer".into(), json!(no_answer)),
             ("current_question".into(), json!(new_current_question)),
-            ("db_delta".into(), json!(points_awarded)),
-            ("db_anim_should_run".into(), json!(points_awarded > 0)),
-            ("db_anim_key".into(), json!(ulid::Ulid::new().to_string())),
         ]),
     })
 }
@@ -678,7 +673,7 @@ async fn gen_run_impl(
         }
     };
 
-    let trivia = state.repo.save_generated_model(quiz_model).await?;
+    let trivia = state.repo.save_generated_model(quiz_model, Some(ctx.workflow.user_id.clone())).await?;
 
     let trivia_resource = TriviaResource::from(&trivia);
     let preview_question_0 = trivia_resource
@@ -750,21 +745,22 @@ async fn quiz_advance_impl(
                 bot.daily_finishes("trivia")
                     .report(&ctx.workflow.user_id, None);
             }
-            let payload = json!({
-                "amount": score,
-                "reason": "TRIVIA_SCORE",
-                "reference_id": ctx.workflow.instance_id.clone(),
-                "meta": {
-                    "total_questions": total_questions,
-                    "final_score": score,
-                    "audit": audit
-                },
+            let author = state.repo.author_of(&quiz.id).await.unwrap_or_else(|e| {
+                warn!(error = %e, quiz = %quiz.id, "quiz author lookup failed");
+                None
             });
+            let best = questions.iter().map(|q| q.points.max(0)).sum();
+            crate::award::report(crate::award::quiz_args(
+                &quiz.id,
+                &ctx.workflow.user_id,
+                crate::award::accuracy(score, best),
+                author.as_deref(),
+                total_questions,
+            ));
 
             let db_job = schedule_record_final_score(&ids, &attempt_id);
-            let noti_job = schedule_notify_final_score(&ids, &attempt_id, payload);
             return Ok(ServerActionResult::ScheduleJobs {
-                jobs: vec![db_job, noti_job],
+                jobs: vec![db_job],
                 context,
                 inputs,
                 reconcile_node: true,
@@ -827,25 +823,6 @@ async fn quiz_advance_impl(
             ("selected".into(), json!(null)),
         ]),
     })
-}
-
-#[instrument()]
-fn schedule_notify_final_score(
-    ids: &TriviaServerActions,
-    attempt_id: &str,
-    payload: Value,
-) -> ScheduledJob {
-    use workflow::schedule::job::{ScheduledAction, ScheduledJob};
-
-    ScheduledJob {
-        idempotency_key: format!("trivia-notify-final-score:{}", attempt_id),
-        after_ms: 0,
-        guard: None,
-        action: ScheduledAction::RunServerAction {
-            action_id: ids.wf_action_db_added.clone(),
-            payload,
-        },
-    }
 }
 
 #[instrument()]

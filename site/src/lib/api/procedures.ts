@@ -206,7 +206,7 @@ export const procedures: Procedure[] = [
     name: 'game_result_record',
     kind: 'mutation',
     group: 'Lobbies and games',
-    summary: 'Records a finished match and awards tawks score to the players. In a lobby, it also posts a one-line summary to the lobby chat.',
+    summary: 'Records a finished match and awards XP and tokens to the players. In a lobby, it also posts a one-line summary to the lobby chat.',
     input: { lobby_id: '...', game_id: 'mygame', home_team: 'Ana', away_team: 'Ben', home_score: 3, away_score: 1, home_humans: 1, away_humans: 1, players: [{ user_id: 'USR-...', side: 'home' }, { user_id: 'USR-...', side: 'away' }] },
     returns: 'the result id',
     doc: ['Building games', 'games'],

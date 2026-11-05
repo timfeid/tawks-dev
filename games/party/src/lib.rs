@@ -43,6 +43,7 @@ pub mod chimney_dash;
 pub mod garden_snapshot;
 pub mod memory;
 pub mod margin_run;
+pub mod awards;
 pub mod milestones;
 pub mod minecart;
 pub mod reef_bloom;

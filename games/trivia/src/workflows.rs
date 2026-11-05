@@ -217,13 +217,6 @@ pub fn build_trivia_creator(sa: &TriviaServerActions) -> CreateWorkflowDefinitio
 }
 
 pub fn build_trivia_player(sa: &TriviaServerActions) -> CreateWorkflowDefinition {
-    let record_db_score = WorkflowActionBuilder::new(sa.wf_action_db_added.clone())
-        .run_server_action()
-        .progress_node(false)
-        .target(&sa.wf_action_db_added)
-        .allow_while_loading()
-        .build();
-
     let record_final_score_action =
         WorkflowActionBuilder::new(sa.wf_action_record_final_score.clone())
             .run_server_action()
@@ -421,22 +414,6 @@ pub fn build_trivia_player(sa: &TriviaServerActions) -> CreateWorkflowDefinition
         primary_action("Return to Lobby", act("exit_quiz")).full_width(),
     ];
 
-    let mut meta = HashMap::new();
-    meta.insert("from_id".into(), marked(FINAL_SCORE).into());
-    meta.insert("amount".into(), "{db_delta}".into());
-    meta.insert("unit".into(), "DB".into());
-    meta.insert("once_guard_path".into(), "db_anim_should_run".into());
-    meta.insert("once_set_path".into(), "db_anim_should_run".into());
-    meta.insert("once_set_value".into(), "false".into());
-    meta.insert("key".into(), "{db_anim_key}".into());
-    let db_score_anim_visual = WorkflowVisualBuilder::new("db_score_anim").animation(
-        "#db-score-{$user_id}",
-        "score_add",
-        Some("on_appear".into()),
-        Some(250),
-        meta,
-    );
-
     let game_node = WorkflowNodeBuilder::new("Game Loop")
         .condition(Cond::not(is("is_finished", json!(true))))
         .visual(game_page("card", question_card))
@@ -448,7 +425,6 @@ pub fn build_trivia_player(sa: &TriviaServerActions) -> CreateWorkflowDefinition
         .parent_id("game_loop")
         .condition(is("is_finished", json!(true)))
         .visual(game_page("res", result_card))
-        .visual(db_score_anim_visual.build())
         .build();
 
     WorkflowDefinitionBuilder::new("daily_mind_bender", "DBZ Trivia")
@@ -466,16 +442,12 @@ pub fn build_trivia_player(sa: &TriviaServerActions) -> CreateWorkflowDefinition
         .response("trivia_share", json!(null))
         .response("results_recorded", json!(false))
         .response("revealed", json!(false))
-        .add_action(record_db_score)
         .add_action(submit_action)
         .add_action(record_final_score_action)
         .add_action(advance_action)
         .add_action(finish_action)
         .add_node("game_loop", game_node)
         .add_node("results", result_node)
-        .response("db_delta", json!(0))
-        .response("db_anim_should_run", json!(false))
-        .response("db_anim_key", json!(""))
         .build()
 }
 
@@ -513,13 +485,6 @@ pub fn build_trivia_multiplayer(
     let answer_action = WorkflowActionBuilder::new("games.trivia.answer")
         .run_server_action()
         .target(&actions.answer)
-        .build();
-
-    let record_db_score = WorkflowActionBuilder::new(sa.wf_action_db_added.clone())
-        .run_server_action()
-        .progress_node(false)
-        .target(&sa.wf_action_db_added)
-        .allow_while_loading()
         .build();
 
     let start_generate = WorkflowActionBuilder::new("start_generate")
@@ -853,7 +818,6 @@ pub fn build_trivia_multiplayer(
         .add_action(join_action)
         .add_action(start_action)
         .add_action(answer_action)
-        .add_action(record_db_score)
         .add_action(list_start_action)
         .add_action(start_generate)
         .add_action(poll_generate)

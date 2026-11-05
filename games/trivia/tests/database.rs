@@ -22,7 +22,7 @@ async fn migrations_run_twice_and_a_quiz_can_be_played() {
         .generate("Hockey")
         .await
         .unwrap();
-    let saved = repo.save_generated_model(quiz).await.unwrap();
+    let saved = repo.save_generated_model(quiz, Some("author".into())).await.unwrap();
     assert!(!saved.questions.is_empty());
 
     let loaded = repo.get_trivia(saved.trivia.id.clone()).await.unwrap();

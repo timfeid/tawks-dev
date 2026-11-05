@@ -686,7 +686,7 @@ Game state lives in memory, so a restart starts every lobby over. Players still 
 
 After each change every player gets their own view, one call per player. Keep views to what the screen needs: the table, your hand, recent events. A few kilobytes per view is typical. Moves from an activity are capped at 16 KB.
 
-## Results and score
+## Results, XP and tokens
 
 ### Recording a result
 
@@ -704,7 +704,7 @@ A bot records a finished match with the `game_result_record` mutation, which the
 
 It returns the result's id. When the match was played in a lobby, tawks also posts a one-line summary such as `Ben 4 at Ana 1 (Final): Ben beat Ana` to the lobby chat.
 
-Each player with a side is awarded points on their tawks score: 10 for playing, 50 more for a win, 25 more for a shutout, and 25 more for winning by 3 or more. A result against a side with no humans counts half.
+Each player with a side earns XP and the same number of tokens: 10 for playing, 50 more for a win, 25 more for a shutout, and 25 more for winning by 3 or more. A result against a side with no humans counts half.
 
 For a game with three or more players, put the winner alone on `home` with their score, and everyone else on `away` with the runner-up's score. The winner gets the win, everyone else gets credit for playing, and the lobby summary reads naturally. Set `home_humans` to 1 and `away_humans` to the number of other people.
 
@@ -719,9 +719,9 @@ The tawks app does not show these for third-party games yet. Show them on a page
 
 `presence_set_activity { user_ids, activity: { game, detail? }, ttl_secs? }` shows "Playing Number Duel" (with the detail after it) next to those players in the member list and on their profile cards. It expires after `ttl_secs`, 120 by default, so refresh it while the game runs and send `activity: null` to clear it. It only reaches players who are in a public hub with your bot, since it shows on every list they're on; the rest are skipped.
 
-### Other score
+### Other XP and tokens
 
-First-party daily puzzles also award tawks score directly through a built-in server action. That action is limited to first-party games, so a third-party game's score comes from recorded results. Milestones are also defined by tawks and exist for first-party games only.
+First-party daily puzzles also award XP and tokens directly through a built-in server action. That action is limited to first-party games, so a third-party game's players earn only from recorded results. Milestones are also defined by tawks and exist for first-party games only.
 
 ## Table games and the cards game
 

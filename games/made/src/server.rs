@@ -91,6 +91,15 @@ impl Backend for ApiBackend {
             }
         })
     }
+
+    fn award(&self, args: serde_json::Value) -> Fut<'_, ()> {
+        Box::pin(async move {
+            let Some(web) = self.web() else { return };
+            if let Err(error) = web.mutate::<_, serde_json::Value>("game_award", &args).await {
+                tracing::warn!(%error, "made game_award failed");
+            }
+        })
+    }
 }
 
 struct Inner {

@@ -40,6 +40,7 @@ pub struct TracklinesState {
     /// any other instance starts a fresh table.
     pub finished_instances: HashSet<String>,
     pub finished_announced: bool,
+    pub lobby_id: String,
 }
 
 const MAX_AI_MOVES_PER_TICK: usize = 6;
@@ -62,6 +63,7 @@ impl TracklinesState {
         }
         self.finished_announced = true;
         self.finished_instances = self.viewer_instances.values().cloned().collect();
+        self.report_award();
         let winner = self
             .game
             .winner_id
@@ -102,6 +104,25 @@ impl TracklinesState {
         effects
     }
 
+    fn report_award(&self) {
+        let standings: Vec<crate::award::Standing> = self
+            .game
+            .players
+            .iter()
+            .map(|p| crate::award::Standing {
+                id: &p.id,
+                is_ai: p.is_ai,
+                rank: (p.score, p.tickets.len()),
+            })
+            .collect();
+        crate::award::report(serde_json::json!({
+            "game": crate::award::GAME,
+            "reference_id": crate::award::reference_id(&self.lobby_id, self.game.seed),
+            "lobby_id": (!self.lobby_id.is_empty()).then_some(&self.lobby_id),
+            "players": crate::award::players(&standings),
+        }));
+    }
+
     fn apply_game(&mut self, player_id: &str, action: Action) -> Result<Vec<GameEffect>> {
         self.game.apply(player_id, action)?;
         Ok(self.finish_effects())
@@ -126,7 +147,12 @@ impl GameLogic for TracklinesState {
             viewer_instances: HashMap::new(),
             finished_instances: HashSet::new(),
             finished_announced: false,
+            lobby_id: String::new(),
         }
+    }
+
+    fn lobby_started(&mut self, lobby_id: &str) {
+        self.lobby_id = lobby_id.to_string();
     }
 
     fn get_instance_id_for_player_id(&self, player_id: &str) -> Option<String> {

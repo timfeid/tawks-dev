@@ -3,15 +3,12 @@ use std::collections::HashMap;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tracing::instrument;
 
 use crate::{OptionResource, QuestionResource, TriviaResource, scoring};
 use game_framework::{GameEffect, GameLogic};
 
 const DEFAULT_REVEAL_MS: i64 = 5_000;
-const DB_SCORE_ACTION: &str = "db_score.added";
-const SCORE_REASON: &str = "TRIVIA_SCORE";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -70,7 +67,6 @@ struct TriviaPlayer {
     last_correct: bool,
     join_index: usize,
     audit: Vec<TriviaAnswerAuditView>,
-    score_recorded: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -137,6 +133,9 @@ pub struct TriviaGameState {
     join_counter: usize,
     question_duration_ms: i64,
     reveal_duration_ms: i64,
+    lobby_id: String,
+    /// Names the game in progress, so each played game is reported once.
+    game_id: Option<String>,
 }
 
 impl Default for TriviaGameState {
@@ -151,6 +150,8 @@ impl Default for TriviaGameState {
             join_counter: 0,
             question_duration_ms: scoring::DEFAULT_TOTAL_MS,
             reveal_duration_ms: DEFAULT_REVEAL_MS,
+            lobby_id: String::new(),
+            game_id: None,
         }
     }
 }
@@ -272,30 +273,28 @@ impl TriviaGameState {
             self.stage = TriviaStage::Finished;
             self.question_ends_at = None;
             self.reveal_ends_at = None;
-            let mut effects = Vec::new();
-            let trivia_id = self.trivia.as_ref().map(|t| t.id.clone());
-            for player in self.players.values_mut() {
-                if player.score_recorded {
-                    continue;
-                }
-                player.score_recorded = true;
-                let mut inputs = HashMap::new();
-                inputs.insert("amount".into(), json!(player.total_score));
-                inputs.insert("reason".into(), json!(SCORE_REASON));
-                inputs.insert("reference_id".into(), json!(player.instance_id.clone()));
-                if let Some(trivia_id) = trivia_id.as_ref() {
-                    inputs.insert("meta".into(), json!({ "trivia_id": trivia_id }));
-                }
-                effects.push(GameEffect::RunServerAction {
-                    instance_id: player.instance_id.clone(),
-                    action_id: DB_SCORE_ACTION.into(),
-                    inputs,
-                });
+            if let Some(args) = self.finished_award() {
+                crate::award::report(args);
             }
-            return effects;
+            return vec![];
         }
         self.start_question(next_idx);
         vec![]
+    }
+
+    /// The finished game's report, the first time it is asked for.
+    fn finished_award(&mut self) -> Option<serde_json::Value> {
+        let game_id = self.game_id.take()?;
+        let totals: Vec<(String, i64)> = self
+            .players
+            .values()
+            .map(|p| (p.id.clone(), p.total_score))
+            .collect();
+        if totals.is_empty() {
+            return None;
+        }
+        let trivia_id = self.trivia.as_ref().map(|t| t.id.as_str());
+        Some(crate::award::lobby_game_args(&self.lobby_id, &game_id, trivia_id, &totals))
     }
 
     fn correct_answer_label(&self, question: &QuestionResource) -> String {
@@ -334,6 +333,10 @@ impl GameLogic for TriviaGameState {
         self.players.get(player_id).map(|p| p.instance_id.clone())
     }
 
+    fn lobby_started(&mut self, lobby_id: &str) {
+        self.lobby_id = lobby_id.to_string();
+    }
+
     fn new(args: Self::InitArgs) -> Self {
         Self {
             stage: TriviaStage::Lobby,
@@ -370,7 +373,6 @@ impl GameLogic for TriviaGameState {
                     last_correct: false,
                     join_index: self.join_counter,
                     audit: Vec::new(),
-                    score_recorded: false,
                 };
                 self.join_counter += 1;
                 self.players.insert(player_id.to_string(), player);
@@ -393,7 +395,6 @@ impl GameLogic for TriviaGameState {
                         player.last_points = 0;
                         player.last_correct = false;
                         player.audit.clear();
-                        player.score_recorded = false;
                     }
                 }
             }
@@ -404,6 +405,7 @@ impl GameLogic for TriviaGameState {
                 if self.stage == TriviaStage::Question {
                     return Ok(vec![]);
                 }
+                self.game_id = Some(ulid::Ulid::new().to_string());
                 self.start_question(0);
             }
             TriviaAction::SubmitAnswer { answer_id } => {
@@ -642,6 +644,7 @@ mod tests {
     use super::*;
     use crate::OptionResource;
     use chrono::{Duration, Utc};
+    use serde_json::json;
 
     fn sample_trivia() -> TriviaResource {
         TriviaResource {
@@ -877,5 +880,43 @@ mod tests {
             state.update("system", action).unwrap();
         }
         assert_eq!(state.stage, TriviaStage::Finished);
+    }
+
+    #[test]
+    fn a_finished_game_is_reported_once_with_tied_totals_sharing_a_place() {
+        let mut state = TriviaGameState::new(TriviaInitArgs::default());
+        state.lobby_started("lobby-1");
+        for (id, instance) in [("user-1", "i-1"), ("user-2", "i-2"), ("user-3", "i-3")] {
+            state
+                .update(
+                    id,
+                    TriviaAction::Join {
+                        name: id.into(),
+                        avatar: String::new(),
+                        instance_id: instance.into(),
+                    },
+                )
+                .unwrap();
+        }
+        state
+            .update("user-1", TriviaAction::SetTrivia { trivia: sample_trivia() })
+            .unwrap();
+        assert!(state.finished_award().is_none());
+
+        state.update("user-1", TriviaAction::Begin).unwrap();
+        let first_game = state.game_id.clone().unwrap();
+        for (id, total) in [("user-1", 40), ("user-2", 90), ("user-3", 40)] {
+            state.players.get_mut(id).unwrap().total_score = total;
+        }
+        let args = state.finished_award().unwrap();
+        assert_eq!(args["game"], "trivia");
+        assert_eq!(args["lobby_id"], "lobby-1");
+        assert_eq!(args["reference_id"], format!("trivia:lobby-1:{first_game}"));
+        assert_eq!(args["placements"], json!([["user-2"], ["user-1", "user-3"]]));
+        assert!(state.finished_award().is_none());
+
+        state.stage = TriviaStage::Finished;
+        state.update("user-1", TriviaAction::Begin).unwrap();
+        assert_ne!(state.game_id.clone().unwrap(), first_game);
     }
 }

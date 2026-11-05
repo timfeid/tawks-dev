@@ -450,6 +450,8 @@ impl CardGameState {
             GameFormat::Operator => "operator",
         };
 
+        self.report_award(format_str);
+
         // Winner is the remaining player in turn_order
         if let Some(winner_id) = self.turn_order.first().cloned() {
             // Practice AI seats are not users; a score ledger row for one fails.
@@ -486,6 +488,23 @@ impl CardGameState {
                 });
             }
         }
+    }
+
+    fn report_award(&self, format: &str) {
+        let players = crate::award::players(
+            self.turn_order.first().map(String::as_str),
+            self.players.iter().map(|(id, p)| (id.as_str(), p.is_ai)),
+        );
+        if players.is_empty() {
+            return;
+        }
+        crate::award::report(serde_json::json!({
+            "game": crate::award::GAME,
+            "reference_id": crate::award::reference_id(&self.lobby_id, self.random_seed),
+            "lobby_id": (!self.lobby_id.is_empty()).then_some(&self.lobby_id),
+            "players": players,
+            "meta": { "format": format, "rounds": self.round },
+        }));
     }
 
     fn update_inner(&mut self, player_id: &str, action: CardGameAction) -> Result<Vec<GameEffect>> {
@@ -855,6 +874,10 @@ impl GameLogic for CardGameState {
             ruleset,
             ..Default::default()
         }
+    }
+
+    fn lobby_started(&mut self, lobby_id: &str) {
+        self.lobby_id = lobby_id.to_string();
     }
 
     fn get_instance_id_for_player_id(&self, player_id: &str) -> Option<String> {

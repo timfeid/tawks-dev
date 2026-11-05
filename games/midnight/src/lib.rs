@@ -1,3 +1,4 @@
+pub mod award;
 pub mod gamestate;
 mod nodes;
 pub mod registrar;

@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::{Value, json};
 
+use crate::awards;
 use crate::room::{Phase, PlayedBout, Room};
 
 pub const GAME_ID: &str = "tawkathon";
@@ -26,6 +27,8 @@ pub struct MilestoneTracker {
     guests: HashSet<String>,
     last_bout: Option<(u32, u32, &'static str)>,
     party: Option<Party>,
+    last_table: Option<String>,
+    awards: Vec<Value>,
 }
 
 impl MilestoneTracker {
@@ -37,15 +40,28 @@ impl MilestoneTracker {
         }
     }
 
+    /// `game_award` arguments for whatever finished since the last call to `observe`.
+    pub fn take_awards(&mut self) -> Vec<Value> {
+        std::mem::take(&mut self.awards)
+    }
+
     /// `milestone_event` arguments for whatever finished since the last call.
     pub fn observe(&mut self, room: &Room) -> Vec<Value> {
         let mut out = Vec::new();
         let bout = room.last_bout.as_ref().map(|b| (b.number, b.round, b.key));
+        let table = room.last_table.as_ref().map(|t| t.id.clone());
         if room.sandbox {
             self.party = None;
             self.last_bout = bout;
+            self.last_table = table;
             return out;
         }
+        if table.is_some() && table != self.last_table {
+            if let Some(finished) = room.last_table.as_ref() {
+                self.awards.extend(awards::table(&room.match_id, finished, &self.guests));
+            }
+        }
+        self.last_table = table;
         let board = room.board.as_ref().filter(|_| !room.city_mode);
         match (board, self.party.as_mut()) {
             (None, _) => self.party = None,
@@ -66,6 +82,7 @@ impl MilestoneTracker {
         if bout.is_some() && bout != self.last_bout {
             if let Some(played) = room.last_bout.as_ref() {
                 self.bout_finished(room, played, &mut out);
+                self.awards.extend(awards::bout(room.party_id(), &room.match_id, played, &self.guests));
             }
         }
         self.last_bout = bout;
@@ -73,6 +90,13 @@ impl MilestoneTracker {
         {
             if !party.finished {
                 self.party_finished(room, party, standings, &mut out);
+                let seated: Vec<(u8, String)> = room
+                    .members
+                    .iter()
+                    .filter(|m| m.in_round && !m.is_bot && !self.guests.contains(&m.user_id))
+                    .map(|m| (m.seat, m.user_id.clone()))
+                    .collect();
+                self.awards.extend(awards::party(room.party_id(), &room.match_id, standings, &seated));
             }
             if let Some(party) = self.party.as_mut() {
                 party.finished = true;
@@ -216,6 +240,34 @@ mod tests {
     }
 
     #[test]
+    fn each_finished_bout_and_table_game_is_awarded_once() {
+        let mut room = Room::new("lobby", 1);
+        let mut tracker = MilestoneTracker::default();
+        room.last_bout = bout(1, &[("a", 1), ("b", 2)]);
+        tracker.observe(&room);
+        let awards = tracker.take_awards();
+        assert_eq!(awards.len(), 1);
+        assert_eq!(awards[0]["game"], "tawkathon-bout");
+        tracker.observe(&room);
+        assert!(tracker.take_awards().is_empty());
+        let table = |id: &str| crate::room::FinishedTable {
+            id: id.into(),
+            key: "landlord",
+            winners: vec!["a".into()],
+            others: vec!["b".into()],
+        };
+        room.last_table = Some(table("lobby:1:7"));
+        tracker.observe(&room);
+        tracker.observe(&room);
+        let awards = tracker.take_awards();
+        assert_eq!(awards.len(), 1);
+        assert_eq!(awards[0]["reference_id"], "landlord:lobby:1:7");
+        room.last_table = Some(table("lobby:2:8"));
+        tracker.observe(&room);
+        assert_eq!(tracker.take_awards()[0]["reference_id"], "landlord:lobby:2:8", "a rematch is a new game");
+    }
+
+    #[test]
     fn a_finished_tawkathon_reports_once_per_person() {
         let mut room = Room::new("lobby", 7);
         room.connect("a", "A", "").unwrap();
@@ -255,6 +307,11 @@ mod tests {
             }
         }
         assert_eq!(finished.len(), 2, "{finished:?}");
+        let parties: Vec<_> = tracker.take_awards().into_iter().filter(|a| a["game"] == "tawkathon").collect();
+        assert_eq!(parties.len(), 1, "{parties:?}");
+        let paid = parties[0]["placements"].as_array().unwrap().iter().map(|g| g.as_array().unwrap().len()).sum::<usize>()
+            + parties[0]["players"].as_array().unwrap().len();
+        assert_eq!(paid, 2, "only the two people are reported, not the bot");
         for event in &finished {
             let meta = &event["meta"];
             assert_eq!(meta["players"], 2);

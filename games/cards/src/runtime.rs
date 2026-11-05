@@ -14,6 +14,7 @@ use crate::state::{CardGameInitArgs, CardGameState};
 use crate::CardGameActionIds;
 
 pub async fn register_runtime(bot: &TawksBot, pool: Arc<PgPool>) -> Result<CardGameActionIds> {
+    crate::award::install(bot.sdk.web_client.clone());
     let engine = Arc::new(GameEngine::<CardGameState>::new(
         CardGameInitArgs {
             pool: Some(pool.clone()),

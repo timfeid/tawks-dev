@@ -4,6 +4,7 @@
 //! deltas. A sim's room (sim_room) shares the socket and the sandbox link.
 //! See made_protocol for every message.
 
+pub mod award;
 pub mod link;
 pub mod room;
 pub mod runtime;

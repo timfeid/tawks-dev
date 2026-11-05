@@ -156,6 +156,21 @@ impl PartyServer {
             });
         }
     }
+    fn report_awards(&self, awards: Vec<serde_json::Value>) {
+        if awards.is_empty() {
+            return;
+        }
+        let Some(web) = self.inner.milestone_web.read().unwrap().clone() else { return };
+        for award in awards {
+            let web = web.clone();
+            tokio::spawn(async move {
+                match web.mutate::<_, serde_json::Value>("game_award", &award).await {
+                    Ok(outcome) => info!(game = %award["game"], reference = %award["reference_id"], %outcome, "game award reported"),
+                    Err(error) => warn!(%error, game = %award["game"], reference = %award["reference_id"], "a game award did not send"),
+                }
+            });
+        }
+    }
     fn pet_hello(&self, user: &str) {
         let Some(web) = self.inner.wardrobe_web.read().ok().and_then(|web| web.clone()) else { return };
         let user = user.to_string();
@@ -677,6 +692,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
             _ = interval.tick() => {
                 events.extend(room.step());
                 server.report_milestones(milestones.observe(&room));
+                server.report_awards(milestones.take_awards());
 
                 // Anyone watching gets a seat as soon as the lobby has room.
                 if room.phase == Phase::Lobby && room.tick % TICK_HZ as u64 == 0 {

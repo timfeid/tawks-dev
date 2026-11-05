@@ -19,6 +19,7 @@ use game_framework::engine::GameEngine;
 pub mod action;
 #[cfg(feature = "art")]
 pub mod art;
+pub mod award;
 pub mod builder;
 pub mod card;
 pub mod card_catalog;
