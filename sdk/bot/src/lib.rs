@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 pub mod activity;
 pub mod game;
 pub mod channel_action;
+pub mod command;
 pub mod daily;
 pub mod bot;
 pub mod notify;
@@ -22,6 +23,7 @@ pub mod types;
 pub mod web_client;
 
 pub use activity::Activity;
+pub use command::Command;
 pub use daily::DailyFinishes;
 pub use store::Product;
 pub use bot::*;

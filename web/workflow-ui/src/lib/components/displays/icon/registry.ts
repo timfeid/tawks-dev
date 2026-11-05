@@ -2,6 +2,8 @@
 // import Twitter from '@icons-pack/svelte-simple-icons/icons/SiX';
 import {
   Bug,
+  Dices,
+  Swords,
   UserPlus,
   Volume2,
   Download,
@@ -254,6 +256,8 @@ export const LUCIDE_REGISTRY: Record<string, any> = {
   'smile-plus': SmilePlus,
   annoyed: Annoyed,
   angry: Angry,
+  dices: Dices,
+  swords: Swords,
 };
 
 // Optional: export a helper type for stronger typing elsewhere

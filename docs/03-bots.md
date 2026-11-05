@@ -456,6 +456,20 @@ let _: serde_json::Value = bot.sdk.web_client.mutate("chat_create_message", &rep
 
 For a chat channel, the chat id is the channel id. Group chats and DMs have their own ids, which arrive as `chat_id` on chat events. Posting in a friend group's chat requires your bot to be a member of that group. Mentions, push notifications and link previews work the same as for a person's message.
 
+### Slash commands
+
+A command shows in the chat composer's slash menu, such as `/roll 2d6+3`. Running it starts a workflow of yours, so register one whose starting server action does the work, then the command:
+
+```rust
+let roll = bot.register_server_action("dice.roll", roll_handler).await?;
+let workflow = bot
+    .register_workflow(WorkflowDefinitionBuilder::new("dice_roll", "Roll").starting_server_action(&roll).build())
+    .await?;
+bot.register_command(&Command::new("roll", "Roll dice", workflow).placeholder("formula").icon("dices")).await?;
+```
+
+The handler reads the text typed after the command from the context as `text`, the chat it was typed in as `chat_id`, and the person as `$user`. Answer with `chat_create_message` in that chat. Commands are listed everywhere, so answer only in the chats you serve and return an error elsewhere; the person who ran it sees the error.
+
 ### Pushing live updates to open pages
 
 To change the page for everyone who has it open, without waiting for a click, call `workflow_broadcast_updates`:

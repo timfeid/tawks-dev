@@ -221,6 +221,17 @@ Treat `state` as the only truth. Draw whatever arrives, and don't apply a move l
 
 Key presses inside the frame never reach tawks, so a player's push-to-talk key stops working while the game has focus. tawks tells your app the player's binding with `{ type: "push_to_talk", binding }`. `binding` is a `KeyboardEvent.key` in lower case, `mouse3` to `mouse5` for mouse buttons, or `null` when push-to-talk is off. Post `{ type: "push_to_talk", down: true }` on the port when that key or button goes down and `down: false` when it comes up, and also send `down: false` when the window loses focus.
 
+### Showing whose turn it is
+
+A turn-based game can light up the lobby stage tile of whoever is up, with a short label such as a character's name. The frame can't reach the stage, so your bot says it:
+
+```rust
+bot.sdk.set_lobby_turn(&lobby_id, &[user_id], Some("Mira")).await?;
+bot.sdk.set_lobby_turn(&lobby_id, &[], None).await?; // nobody is up
+```
+
+From the JavaScript SDK, call `lobby_set_turn` with `{ lobby_id, user_ids, label }`. Only the bot running the lobby's game may set it, `user_ids` holds up to 8 people, and the label is cut to 48 characters. People who join the lobby later see the current turn too. Clear it when your game ends.
+
 ## Developing locally
 
 ### Without tawks

@@ -19,6 +19,7 @@ members = [
     "games/trivia",
     "games/party",
     "games/encore",
+    "games/longtable",
 ]
 resolver = "2"
 

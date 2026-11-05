@@ -1642,6 +1642,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "longtable"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "dashmap",
+ "futures",
+ "hmac",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tawks-bot",
+ "tokio",
+ "tokio-tungstenite 0.26.2",
+ "tracing",
+ "workflow-model",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
