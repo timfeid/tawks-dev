@@ -18,7 +18,9 @@ use tokio::sync::mpsc;
 use crate::link::SimdLink;
 use crate::room::async_trait_free::{Backend, Fut};
 use crate::room::{Room, RoomCmd, RoomConfig};
+use crate::sim_room::SimRoom;
 use crate::token::{self, Claims};
+use made_protocol::sim::MadeKind;
 
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 /// A socket that falls this far behind on frames is dropped rather than buffered.
@@ -175,24 +177,31 @@ impl MadeServer {
             .with_state(self.clone())
     }
 
-    fn room(&self, lobby_id: &str) -> mpsc::UnboundedSender<RoomCmd> {
-        if let Some(tx) = self.inner.rooms.get(lobby_id) {
+    /// A lobby's room; a sim and a game in the same lobby are kept apart by kind.
+    fn room(&self, lobby_id: &str, kind: MadeKind) -> mpsc::UnboundedSender<RoomCmd> {
+        let key = match kind {
+            MadeKind::Game => lobby_id.to_string(),
+            MadeKind::Sim => format!("{lobby_id}#sim"),
+        };
+        if let Some(tx) = self.inner.rooms.get(&key) {
             if !tx.is_closed() {
                 return tx.clone();
             }
         }
         let (tx, rx) = mpsc::unbounded_channel();
-        self.inner.rooms.insert(lobby_id.to_string(), tx.clone());
-        let room = Room::new(
-            lobby_id.to_string(),
+        self.inner.rooms.insert(key.clone(), tx.clone());
+        let server = self.clone();
+        let (link, backend, lobby) = (
             self.inner.link.clone(),
             self.inner.backend.clone(),
+            lobby_id.to_string(),
         );
-        let server = self.clone();
-        let lobby = lobby_id.to_string();
         tokio::spawn(async move {
-            room.run(rx).await;
-            server.inner.rooms.remove_if(&lobby, |_, tx| tx.is_closed());
+            match kind {
+                MadeKind::Game => Room::new(lobby, link, backend).run(rx).await,
+                MadeKind::Sim => SimRoom::new(lobby, link, backend).run(rx).await,
+            }
+            server.inner.rooms.remove_if(&key, |_, tx| tx.is_closed());
         });
         tx
     }
@@ -236,7 +245,7 @@ async fn serve(server: MadeServer, socket: WebSocket) {
         return;
     };
     let conn = server.inner.next_conn.fetch_add(1, Ordering::Relaxed);
-    let room = server.room(&claims.lobby_id);
+    let room = server.room(&claims.lobby_id, claims.kind);
     let (out, mut outbox) = mpsc::unbounded_channel::<String>();
     if room.send(RoomCmd::Join { conn, claims, out }).is_err() {
         return;

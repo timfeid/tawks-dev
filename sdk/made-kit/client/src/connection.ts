@@ -92,7 +92,7 @@ export class MadeSocket implements MadeSource {
       } catch {
         return;
       }
-      if (message.type === 'welcome') this.setStatus('online');
+      if (message.type === 'welcome' || message.type === 'sim_welcome') this.setStatus('online');
       if (message.type === 'error' && message.fatal) this.needsPass = true;
       for (const handler of this.handlers) handler(message);
     };

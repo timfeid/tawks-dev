@@ -23,6 +23,8 @@ struct MayJoin {
     version: i32,
     seat: Option<u8>,
     owner: bool,
+    #[serde(default)]
+    kind: made_protocol::sim::MadeKind,
 }
 
 pub async fn register(bot: &TawksBot, server: &MadeServer) -> Result<()> {
@@ -81,6 +83,7 @@ fn join_handler(
                 name,
                 owner: allowed.owner,
                 exp: 0,
+                kind: allowed.kind,
             });
             let made = MadeJoin {
                 ws_url: server.ws_url().to_string(),
@@ -89,6 +92,7 @@ fn join_handler(
                 activity_id: allowed.activity_id,
                 version: allowed.version,
                 seat: allowed.seat,
+                kind: allowed.kind,
             };
             let mut responses = HashMap::new();
             responses.insert("made".to_string(), serde_json::to_value(made)?);

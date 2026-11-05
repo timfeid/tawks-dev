@@ -18,6 +18,8 @@ pub struct Claims {
     pub name: String,
     pub owner: bool,
     pub exp: i64,
+    #[serde(default)]
+    pub kind: made_protocol::sim::MadeKind,
 }
 
 pub fn sign(claims: &Claims, secret: &[u8]) -> String {
@@ -66,6 +68,7 @@ mod tests {
             name: "U".into(),
             owner: true,
             exp: 100,
+            kind: Default::default(),
         }
     }
 

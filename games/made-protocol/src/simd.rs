@@ -8,6 +8,7 @@ use specta::Type;
 
 use crate::protocol::{GameMeta, Input, LogLine, RosterSeat};
 use crate::scene::SceneFrame;
+use crate::sim::{SimControl, SimFrame, SimMeta, SimReport, SimShot};
 
 /// A seat as the sandbox sees it. `skill` is the 0 to 1 level.
 #[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -43,6 +44,20 @@ pub enum SimdRequest {
         spec: PlayoutSpec,
     },
     Ping,
+    /// Starts (or restarts) a sim room from `source`; it opens paused.
+    SimOpen {
+        room: String,
+        source: String,
+        seed: u32,
+    },
+    SimControl {
+        room: String,
+        control: SimControl,
+    },
+    /// Runs the sim gates headless and answers with one `sim_report`.
+    SimPlayout {
+        source: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -74,6 +89,17 @@ pub enum SimdEvent {
         report: Box<PlayoutReport>,
     },
     Pong,
+    SimOpened {
+        room: String,
+        meta: Box<SimMeta>,
+    },
+    SimFrame {
+        room: String,
+        frame: Box<SimFrame>,
+    },
+    SimReport {
+        report: Box<SimReport>,
+    },
 }
 
 #[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,6 +195,10 @@ pub struct PlayoutReport {
 /// still (no interpolation; effects may be ignored), and then sets
 /// `window.__madeReady = true`, or `window.__madeError = "<why>"` when it
 /// cannot. The service screenshots the page once ready, within 60 seconds.
+///
+/// A sim's stills come as `sim` with `shots` empty: the page fetches a
+/// [`crate::sim::SimRenderShot`] (its `kind` is "sim") and draws the canvas
+/// with its panel, readouts and plots.
 #[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RenderRequest {
     pub roster: Vec<RosterSeat>,
@@ -177,6 +207,14 @@ pub struct RenderRequest {
     pub width: u32,
     #[serde(default = "default_height")]
     pub height: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sim: Option<SimRender>,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SimRender {
+    pub meta: SimMeta,
+    pub shots: Vec<SimShot>,
 }
 
 fn default_width() -> u32 {

@@ -24,6 +24,7 @@ const BANNED: &[(&str, &str)] = &[
 ];
 
 const KIT: &str = "@tawks/made-kit";
+pub const SIM_KIT: &str = "@tawks/made-kit/sim";
 
 #[derive(Debug, PartialEq)]
 enum Token {
@@ -81,8 +82,17 @@ fn tokens(src: &str) -> Vec<Token> {
     out
 }
 
-/// The problems, as sentences for the agent; empty when it passes.
+/// The problems with a game.js, as sentences for the agent; empty when it passes.
 pub fn lint(src: &str) -> Vec<String> {
+    lint_against(src, KIT)
+}
+
+/// The same checks for a sim.js, whose one import is the sim kit.
+pub fn lint_sim(src: &str) -> Vec<String> {
+    lint_against(src, SIM_KIT)
+}
+
+fn lint_against(src: &str, kit: &str) -> Vec<String> {
     let toks = tokens(src);
     let mut problems = Vec::new();
     let mut push = |p: String| {
@@ -110,18 +120,17 @@ pub fn lint(src: &str) -> Vec<String> {
                 }
                 if name == "import" {
                     match toks.get(i + 1) {
-                        Some(Token::Punct('(')) => push(
-                            "`import()` loads other code; only `@tawks/made-kit` may be imported"
-                                .into(),
-                        ),
+                        Some(Token::Punct('(')) => push(format!(
+                            "`import()` loads other code; only `{kit}` may be imported"
+                        )),
                         Some(Token::Punct('.')) => push("`import.meta` is not available".into()),
                         _ => {}
                     }
                 }
                 if name == "from" || name == "import" {
                     if let Some(Token::Str(spec)) = toks.get(i + 1) {
-                        if spec != KIT {
-                            push(format!("`{spec}` cannot be imported; only `{KIT}`"));
+                        if spec != kit {
+                            push(format!("`{spec}` cannot be imported; only `{kit}`"));
                         }
                     }
                 }
@@ -144,7 +153,7 @@ pub fn lint(src: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::lint;
+    use super::{lint, lint_sim};
 
     #[test]
     fn the_example_passes() {
@@ -162,6 +171,13 @@ mod tests {
         assert!(p.iter().any(|p| p.contains("fetch")));
         assert!(p.iter().any(|p| p.contains("URL")));
         assert!(p.iter().any(|p| p.contains("import()")));
+    }
+
+    #[test]
+    fn a_sim_imports_only_the_sim_kit() {
+        assert!(lint_sim(include_str!("../../../sdk/made-kit/examples/spring-lab.js")).is_empty());
+        let p = lint_sim("import { defineGame } from '@tawks/made-kit';");
+        assert!(p.iter().any(|p| p.contains("cannot be imported")), "{p:?}");
     }
 
     #[test]

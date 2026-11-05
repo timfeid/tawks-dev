@@ -19,7 +19,15 @@ export type ClientMsg = { type: "hello"; token: string } | { type: "input"; inpu
  * The owner asks for a new round with the seats the test lobby has now
  * (after `activity_test_restart` changed them, or as they are).
  */
-{ type: "restart" }
+{ type: "restart" } | 
+/**
+ * A sim's controller works a control, the transport or the canvas.
+ */
+{ type: "sim"; control: SimControl } | 
+/**
+ * Anyone watching a sim takes over its controls.
+ */
+{ type: "take_control" }
 
 /**
  * Palette names; the renderer owns the actual colours. `seat` takes the
@@ -140,6 +148,8 @@ name: string; ok: boolean;
  */
 warning: boolean; detail: string }
 
+export type GrabPhase = "start" | "move" | "end"
+
 export type Ground = "grass" | "stone" | "snow" | "wood" | "sand"
 
 /**
@@ -191,7 +201,28 @@ at: number; level: LogLevel; text: string }
  * The response the `made_join` action stores at `responses.made`, which the
  * made canvas display reads.
  */
-export type MadeJoin = { ws_url: string; token: string; lobby_id: string; activity_id: string; version: number; seat: number | null }
+export type MadeJoin = { ws_url: string; token: string; lobby_id: string; activity_id: string; version: number; seat: number | null; kind?: MadeKind }
+
+export type MadeKind = "game" | "sim"
+
+export type ParamKind = "slider" | "number" | "toggle" | "choice" | 
+/**
+ * A press, such as Fire or Shock the market; its value stays false.
+ */
+"button"
+
+export type ParamOption = { value: string; label: string }
+
+/**
+ * One control in the panel.
+ */
+export type ParamSpec = { key: string; label: string; kind: ParamKind; value: ParamValue; min?: number | null; max?: number | null; step?: number | null; unit?: string | null; options: ParamOption[]; 
+/**
+ * Changing it starts the run over with the new value.
+ */
+restart?: boolean; help?: string | null }
+
+export type ParamValue = boolean | number | string
 
 export type PlayoutReport = { 
 /**
@@ -207,12 +238,35 @@ first_error: string | null;
  */
 summary: string; roster: RosterSeat[]; shots: Shot[] }
 
+/**
+ * The newest samples of one plot. `epoch` changes when the plot starts over
+ * (a reset); `total` counts the samples since then, so a client that holds
+ * some of them appends only the ones it lacks. Each point is `[t, v1, v2...]`
+ * in the order of the plot's series.
+ */
+export type PlotChunk = { id: string; epoch: number; total: number; points: number[][] }
+
+/**
+ * A live line plot of samples against time.
+ */
+export type PlotSpec = { id: string; title: string; y_label: string; series: SeriesSpec[]; 
+/**
+ * Seconds of sim time across the plot.
+ */
+window: number; 
+/**
+ * A fixed y range; absent to fit the data.
+ */
+y?: [number, number] | null }
+
 export type Pose = "idle" | "ride" | "cheer" | "sad" | "fall" | "sit" | "wave" | "play"
 
 /**
  * Running counts of presses, so a tap shorter than one tick is not lost.
  */
 export type Presses = { action?: number; alt?: number }
+
+export type Readout = { label: string; value?: number | null; text?: string | null; unit?: string | null; digits?: number | null; color?: SimColor | null }
 
 export type RelayMsg = { type: "welcome"; welcome: Welcome } | { type: "roster"; roster: RosterSeat[] } | { type: "frame"; frame: FrameDelta } | 
 /**
@@ -226,7 +280,15 @@ export type RelayMsg = { type: "welcome"; welcome: Welcome } | { type: "roster";
 /**
  * With `fatal` the socket closes after this; fetch a new pass and rejoin.
  */
-{ type: "error"; message: string; fatal: boolean } | { type: "pong"; t: number; now: number }
+{ type: "error"; message: string; fatal: boolean } | { type: "pong"; t: number; now: number } | 
+/**
+ * A sim's first message, in place of `welcome`.
+ */
+{ type: "sim_welcome"; welcome: SimWelcome } | { type: "sim_frame"; frame: SimDelta } | 
+/**
+ * Who drives the sim now, and everyone looking at it.
+ */
+{ type: "controller"; controller: SimViewer | null; viewers: SimViewer[] }
 
 /**
  * What the render service is asked to draw: frames with the roster their
@@ -240,8 +302,12 @@ export type RelayMsg = { type: "welcome"; welcome: Welcome } | { type: "roster";
  * still (no interpolation; effects may be ignored), and then sets
  * `window.__madeReady = true`, or `window.__madeError = "<why>"` when it
  * cannot. The service screenshots the page once ready, within 60 seconds.
+ * 
+ * A sim's stills come as `sim` with `shots` empty: the page fetches a
+ * [`crate::sim::SimRenderShot`] (its `kind` is "sim") and draws the canvas
+ * with its panel, readouts and plots.
  */
-export type RenderRequest = { roster: RosterSeat[]; shots: Shot[]; width?: number; height?: number }
+export type RenderRequest = { roster: RosterSeat[]; shots: Shot[]; width?: number; height?: number; sim?: SimRender | null }
 
 export type RenderResponse = { shots: RenderedShot[] }
 
@@ -279,11 +345,170 @@ connected?: boolean }
  */
 export type SceneFrame = { n: number; t: number; stage: Stage; camera: Camera; hud: Hud; entities: Entity[]; effects: Effect[] }
 
+export type SeriesSpec = { key: string; label: string; color: SimColor }
+
+/**
+ * One shape. Positions and sizes are world units; `width` and `size` are
+ * screen pixels so lines and labels stay readable at any zoom.
+ */
+export type Shape = { id: string; kind: ShapeKind; x: number; y: number; x2?: number | null; y2?: number | null; r?: number | null; w?: number | null; h?: number | null; angle?: number | null; points?: ([number, number])[] | null; closed?: boolean | null; coils?: number | null; 
+/**
+ * The outline or line colour.
+ */
+color?: SimColor | null; 
+/**
+ * The fill, for circles, rects and closed paths.
+ */
+fill?: SimColor | null; width?: number | null; dash?: boolean | null; 
+/**
+ * 0 to 1.
+ */
+alpha?: number | null; 
+/**
+ * A short label drawn beside the shape (an arrow's name, a mass).
+ */
+label?: string | null; text?: string | null; size?: number | null; align?: TextAlign | null; 
+/**
+ * The controller can drag it; the sim's `grab` hook gets the moves.
+ */
+drag?: boolean | null }
+
+export type ShapeKind = 
+/**
+ * `x, y, r`.
+ */
+"circle" | 
+/**
+ * Centred on `x, y`, `w` by `h`, turned by `angle` radians.
+ */
+"rect" | 
+/**
+ * From `x, y` to `x2, y2`.
+ */
+"line" | 
+/**
+ * Through `points`, `closed` to fill it.
+ */
+"path" | 
+/**
+ * A vector from its tail `x, y` to its head `x2, y2`.
+ */
+"arrow" | 
+/**
+ * A coil from `x, y` to `x2, y2`, `coils` turns `r` wide.
+ */
+"spring" | 
+/**
+ * `text` at `x, y`.
+ */
+"text"
+
 export type Shot = { 
 /**
  * "1s", "5s" or "end".
  */
 label: string; frame: SceneFrame }
+
+/**
+ * Palette names; the client maps each to the Tawks theme for light and dark.
+ */
+export type SimColor = 
+/**
+ * The text colour: black on light, white on dark.
+ */
+"ink" | "muted" | 
+/**
+ * Thin rules and grid lines.
+ */
+"faint" | 
+/**
+ * The panel colour, for shapes that read as solid ground or walls.
+ */
+"surface" | 
+/**
+ * The Tawks brand colour.
+ */
+"accent" | "blue" | "orange" | "green" | "yellow" | "pink" | "purple" | "red" | "teal" | "sky" | "earth" | "water"
+
+/**
+ * What the controller does.
+ */
+export type SimControl = { do: "set"; key: string; value: ParamValue } | { do: "play" } | { do: "pause" } | 
+/**
+ * One frame's worth of steps while paused.
+ */
+{ do: "step" } | { do: "reset" } | { do: "speed"; speed: number } | 
+/**
+ * Dragging a shape drawn with `drag`, at world point `x, y`.
+ */
+{ do: "grab"; id: string; x: number; y: number; phase: GrabPhase }
+
+/**
+ * A frame as the relay sends it: the shapes that changed since frame
+ * `base` and the ids that went away. With `base` null it is full.
+ */
+export type SimDelta = { n: number; base: number | null; t: number; playing: boolean; speed: number; params: Partial<{ [key in string]: ParamValue }>; set: Shape[]; del: string[]; readouts: Readout[]; plots: PlotChunk[]; notice?: string | null }
+
+/**
+ * The whole sim at sim time `t`.
+ */
+export type SimFrame = { n: number; t: number; playing: boolean; speed: number; params: Partial<{ [key in string]: ParamValue }>; shapes: Shape[]; readouts: Readout[]; plots: PlotChunk[]; 
+/**
+ * A short line over the canvas, such as "Landed at 41.2 m".
+ */
+notice?: string | null }
+
+/**
+ * A sim's `meta`, as checked by the kit's `defineSim`.
+ */
+export type SimMeta = { name: string; 
+/**
+ * One line: what it shows.
+ */
+about: string; 
+/**
+ * Two or three sentences: what to try.
+ */
+explain: string; world: SimWorld; params: ParamSpec[]; plots: PlotSpec[]; 
+/**
+ * Fixed steps per second of sim time.
+ */
+rate: number; tools: SimTools }
+
+export type SimRender = { meta: SimMeta; shots: SimShot[] }
+
+/**
+ * What the render page fetches for one sim still: `kind` is always "sim".
+ */
+export type SimRenderShot = { kind: string; meta: SimMeta; frame: SimFrame; width: number; height: number }
+
+export type SimShot = { label: string; frame: SimFrame }
+
+export type SimTools = { ruler: boolean; stopwatch: boolean }
+
+/**
+ * Someone looking at a sim in a lobby.
+ */
+export type SimViewer = { user_id: string; name: string }
+
+export type SimWelcome = { user_id: string; 
+/**
+ * Whoever started the test lobby; they may take control at any time.
+ */
+owner: boolean; lobby_id: string; activity_id: string; version: number; meta: SimMeta; controller: SimViewer | null; viewers: SimViewer[] }
+
+/**
+ * The part of the world the canvas shows, in world units, y up.
+ */
+export type SimWorld = { x: [number, number]; y: [number, number]; 
+/**
+ * What one world unit is, e.g. "m"; the ruler reads in it.
+ */
+unit: string; 
+/**
+ * Grid spacing in world units; absent for no grid.
+ */
+grid?: number | null }
 
 export type Skill = "relaxed" | "steady" | "sharp" | "ruthless"
 
@@ -301,6 +526,8 @@ water: boolean;
  * A floor under the play area, or none.
  */
 ground: Ground | null }
+
+export type TextAlign = "left" | "center" | "right"
 
 export type Vec2 = { x: number; z: number }
 

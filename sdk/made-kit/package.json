@@ -1,13 +1,15 @@
 {
   "name": "@tawks/made-kit",
   "version": "0.1.0",
-  "description": "Write a real-time party minigame as one pure game.js; the kit draws it and the server runs it.",
+  "description": "Write a real-time party minigame as one pure game.js, or an interactive simulation as one sim.js; the kit draws it and the server runs it.",
   "type": "module",
   "exports": {
     ".": "./src/index.js",
     "./core": "./src/core.js",
     "./runner": "./src/runner.js",
-    "./scene": "./src/scene.ts"
+    "./scene": "./src/scene.ts",
+    "./sim": "./src/sim.js",
+    "./sim-runner": "./src/sim-runner.js"
   },
   "scripts": {
     "test": "node --test test/*.test.js"

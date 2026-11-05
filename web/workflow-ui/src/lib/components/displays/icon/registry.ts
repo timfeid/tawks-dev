@@ -1,6 +1,7 @@
 // import Reddit from '@icons-pack/svelte-simple-icons/icons/SiReddit';
 // import Twitter from '@icons-pack/svelte-simple-icons/icons/SiX';
 import {
+  Atom,
   Bug,
   Dices,
   Swords,
@@ -247,6 +248,7 @@ export const LUCIDE_REGISTRY: Record<string, any> = {
   timer: Timer,
   'cooking-pot': CookingPot,
   'gamepad-2': Gamepad2,
+  atom: Atom,
   wifi: Wifi,
   bot: Bot,
   sparkle: Sparkle,

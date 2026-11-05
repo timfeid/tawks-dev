@@ -23,7 +23,9 @@ fn room_of(event: &SimdEvent) -> Option<&str> {
         | SimdEvent::Frame { room, .. }
         | SimdEvent::End { room, .. }
         | SimdEvent::Log { room, .. }
-        | SimdEvent::Failed { room, .. } => Some(room),
+        | SimdEvent::Failed { room, .. }
+        | SimdEvent::SimOpened { room, .. }
+        | SimdEvent::SimFrame { room, .. } => Some(room),
         _ => None,
     }
 }
@@ -45,7 +47,9 @@ impl SimdLink {
                         warn!(%error, path, "made-simd is not reachable");
                         // Requests made while it is down fail their rooms now rather than later.
                         while let Ok(request) = inbox.try_recv() {
-                            if let SimdRequest::Open { room, .. } = request {
+                            if let SimdRequest::Open { room, .. }
+                            | SimdRequest::SimOpen { room, .. } = request
+                            {
                                 if let Some(tx) = rooms.get(&room) {
                                     let _ = tx.send(SimdEvent::Failed {
                                         room: room.clone(),

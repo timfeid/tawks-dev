@@ -5,6 +5,8 @@
   import { toState } from '../src/scene-buffer';
   import MadeHud from '../src/made-hud.svelte';
   import MadePodium from '../src/made-podium.svelte';
+  import SimView from '../src/sim-view.svelte';
+  import type { SimRenderShot } from '../src/contract';
 
   type Request = { frame: SceneFrame; roster: Seat[]; meta: Meta | null; seat: number | null; placements?: Placements | null };
 
@@ -15,7 +17,9 @@
   let mySeat = $state<number | null>(null);
   let placements = $state<Placements | null>(null);
   let renderer: MadeRenderer | null = null;
+  let simShot = $state<SimRenderShot | null>(null);
 
+  let simReady: () => void = () => {};
   const nextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 
   onMount(() => {
@@ -48,8 +52,18 @@
     const shotUrl = new URLSearchParams(location.search).get('shot');
     if (shotUrl) {
       fetch(shotUrl)
-        .then((response) => (response.ok ? (response.json() as Promise<RenderShot>) : Promise.reject(new Error(`the shot is ${response.status}`))))
-        .then((shot) => show({ frame: shot.frame, roster: shot.roster, meta: null, seat: null }))
+        .then((response) => (response.ok ? (response.json() as Promise<RenderShot | SimRenderShot>) : Promise.reject(new Error(`the shot is ${response.status}`))))
+        .then((shot) => {
+          if ('kind' in shot && shot.kind === 'sim') {
+            // The sim view draws itself and says when; the page is ready a paint after that.
+            return new Promise<unknown>((resolve) => {
+              simReady = () => nextPaint().then(() => setTimeout(() => resolve({ sim: true }), 200));
+              simShot = shot;
+            });
+          }
+          const game = shot as RenderShot;
+          return show({ frame: game.frame, roster: game.roster, meta: null, seat: null });
+        })
         .then((stats) => {
           page.__madeStats = stats;
           page.__madeReady = true;
@@ -60,7 +74,12 @@
   });
 </script>
 
-<div class="relative h-screen w-screen overflow-hidden">
+{#if simShot}
+  <div class="h-screen w-screen overflow-hidden">
+    <SimView still={simShot} onready={() => simReady()} />
+  </div>
+{/if}
+<div class="relative h-screen w-screen overflow-hidden" class:hidden={!!simShot}>
   <canvas bind:this={canvas} class="absolute inset-0 block h-full w-full"></canvas>
   <MadeHud {hud} {meta} {roster} {mySeat} status="online" colorOf={(seat) => renderer?.seatColor(seat) ?? '#ffd23f'} showBrief={false} ended={!!placements} muted={false} fullscreen={false} ontogglemute={() => {}} />
   {#if placements}

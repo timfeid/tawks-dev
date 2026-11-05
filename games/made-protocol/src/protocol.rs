@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::scene::FrameDelta;
+use crate::sim::{MadeKind, SimControl, SimDelta, SimViewer, SimWelcome};
 
 pub const MAX_CLIENT_MSG_BYTES: usize = 512;
 pub const MAX_INPUTS_PER_SEC: u32 = 60;
@@ -218,6 +219,12 @@ pub enum ClientMsg {
     /// The owner asks for a new round with the seats the test lobby has now
     /// (after `activity_test_restart` changed them, or as they are).
     Restart,
+    /// A sim's controller works a control, the transport or the canvas.
+    Sim {
+        control: SimControl,
+    },
+    /// Anyone watching a sim takes over its controls.
+    TakeControl,
 }
 
 #[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -264,6 +271,18 @@ pub enum RelayMsg {
         t: f64,
         now: f64,
     },
+    /// A sim's first message, in place of `welcome`.
+    SimWelcome {
+        welcome: SimWelcome,
+    },
+    SimFrame {
+        frame: SimDelta,
+    },
+    /// Who drives the sim now, and everyone looking at it.
+    Controller {
+        controller: Option<SimViewer>,
+        viewers: Vec<SimViewer>,
+    },
 }
 
 /// The response the `made_join` action stores at `responses.made`, which the
@@ -276,4 +295,6 @@ pub struct MadeJoin {
     pub activity_id: String,
     pub version: i32,
     pub seat: Option<u8>,
+    #[serde(default)]
+    pub kind: MadeKind,
 }

@@ -23,10 +23,12 @@
 //!   sound files (bump to punch, splash to drip, crack to ice, and so on).
 //! - Screenshots: the render service draws [`simd::RenderShot`]s with the
 //!   kit renderer page; see [`simd::RenderRequest`] for the page contract.
+//! - Simulations are the other kind of made activity; see [`sim`].
 
 pub mod lint;
 pub mod protocol;
 pub mod scene;
+pub mod sim;
 pub mod simd;
 
 pub use protocol::*;
@@ -57,7 +59,14 @@ pub fn types() -> specta::TypeCollection {
         .register::<simd::PlayoutReport>()
         .register::<simd::RenderRequest>()
         .register::<simd::RenderShot>()
-        .register::<simd::RenderResponse>();
+        .register::<simd::RenderResponse>()
+        .register::<sim::SimMeta>()
+        .register::<sim::SimFrame>()
+        .register::<sim::SimDelta>()
+        .register::<sim::SimControl>()
+        .register::<sim::SimWelcome>()
+        .register::<sim::SimRenderShot>()
+        .register::<sim::MadeKind>();
     types
 }
 

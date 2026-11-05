@@ -405,7 +405,7 @@ impl Room {
                 self.load_config().await;
                 self.start_round().await;
             }
-            ClientMsg::Hello { .. } => {}
+            ClientMsg::Hello { .. } | ClientMsg::Sim { .. } | ClientMsg::TakeControl => {}
         }
     }
 
@@ -614,7 +614,7 @@ impl Room {
                 }
                 self.sim_events = None;
             }
-            SimdEvent::PlayoutDone { .. } | SimdEvent::Pong => {}
+            _ => {}
         }
     }
 }
