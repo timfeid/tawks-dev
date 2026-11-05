@@ -8,7 +8,7 @@ pub const KEYS: [&str; 2] = ["pet_ringout", "pet_teamfight"];
 pub const NAMES: [&str; 2] = ["Skyline Scramble", "Crownfall Clash"];
 pub const RULES: [&str; 2] = [
     "Launch rivals out of the ring. Small pets move quickly; broad pets hit farther and harder, and resist launches. Charge a heavy strike for a knockout.",
-    "Draft four combat roles and break the enemy Crown to win. Clear minions to push a lane, capture relays for Crown pressure, and claim the dragon for a team buff.",
+    "Choose a champion and break the enemy Crown to win. Full teams fill four combat roles. Clear minions to push a lane, capture relays for Crown pressure, and claim the dragon for a team buff.",
 ];
 pub const CHAMPIONS: [&str; 10] = [
     "Cinderfox",
@@ -1209,6 +1209,13 @@ impl Bout for PetArena {
                 .find(|(seat, _)| *seat == self.players[index].seat)
                 .map(|(_, input)| *input)
                 .unwrap_or_default();
+            let open_draft = self.kind == 1
+                && self
+                    .players
+                    .iter()
+                    .filter(|other| other.team == self.players[index].team)
+                    .count()
+                    < 4;
             let p = &mut self.players[index];
             for cd in &mut p.cooldown {
                 *cd = (*cd - dt).max(0.0);
@@ -1239,9 +1246,12 @@ impl Bout for PetArena {
                 if input.yaw.is_finite()
                     && input.yaw >= 0.0
                     && input.yaw < 10.0
-                    && CHAMPION_ROLE[pick] == p.role
+                    && (open_draft || CHAMPION_ROLE[pick] == p.role)
                 {
                     p.champ = pick;
+                    if open_draft {
+                        p.role = CHAMPION_ROLE[pick];
+                    }
                     p.selected = true;
                 }
                 if !p.selected {
@@ -1759,6 +1769,58 @@ mod tests {
         assert_eq!(game.team_score[0], 1);
         assert!(game.players[1].respawn > 3.4);
         assert_eq!(game.players[0].score, 1);
+    }
+    #[test]
+    fn smaller_teams_can_pick_any_champion_but_full_teams_fill_roles() {
+        let duel = [
+            Contestant::person(0).on_team(0),
+            Contestant::person(1).on_team(1),
+        ];
+        let mut small = PetArena::new(1, &duel, 2);
+        small.step(
+            &[(
+                0,
+                Input {
+                    yaw: 0.0,
+                    ..Default::default()
+                },
+            )],
+            1.0 / 60.0,
+            &mut Vec::new(),
+        );
+        assert!(small.players[0].selected);
+        assert_eq!(small.players[0].champ, 0);
+        assert_eq!(small.players[0].role, CHAMPION_ROLE[0]);
+
+        let full = (0..8)
+            .map(|seat| Contestant::person(seat).on_team(seat % 2))
+            .collect::<Vec<_>>();
+        let mut large = PetArena::new(1, &full, 2);
+        large.step(
+            &[(
+                0,
+                Input {
+                    yaw: 0.0,
+                    ..Default::default()
+                },
+            )],
+            1.0 / 60.0,
+            &mut Vec::new(),
+        );
+        assert!(!large.players[0].selected);
+        large.step(
+            &[(
+                0,
+                Input {
+                    yaw: 3.0,
+                    ..Default::default()
+                },
+            )],
+            1.0 / 60.0,
+            &mut Vec::new(),
+        );
+        assert!(large.players[0].selected);
+        assert_eq!(large.players[0].role, 0);
     }
     #[test]
     fn an_unpicked_champion_cannot_fight_and_can_choose_after_the_clock() {
