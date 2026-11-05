@@ -45,6 +45,7 @@ pub mod memory;
 pub mod margin_run;
 pub mod awards;
 pub mod milestones;
+pub mod stakes;
 pub mod minecart;
 pub mod reef_bloom;
 pub mod mugshot;

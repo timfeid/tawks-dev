@@ -156,6 +156,19 @@ impl PartyServer {
             });
         }
     }
+    fn report_stakes(&self, reports: Vec<serde_json::Value>) {
+        if reports.is_empty() {
+            return;
+        }
+        let Some(web) = self.inner.milestone_web.read().unwrap().clone() else { return };
+        tokio::spawn(async move {
+            for report in reports {
+                if let Err(error) = web.mutate::<_, ()>("game_stake_report", &report).await {
+                    warn!(%error, "a stake report did not send");
+                }
+            }
+        });
+    }
     fn report_awards(&self, awards: Vec<serde_json::Value>) {
         if awards.is_empty() {
             return;
@@ -465,6 +478,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
     let mut events = Vec::new();
     let mut pending_feedback=std::collections::HashSet::new();
     let mut milestones = crate::milestones::MilestoneTracker::default();
+    let mut stakes = crate::stakes::StakeTracker::default();
     // Tawks counts a pet's hello once a day; once per room is enough to ask.
     let mut greeted = std::collections::HashSet::new();
 
@@ -692,6 +706,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
             _ = interval.tick() => {
                 events.extend(room.step());
                 server.report_milestones(milestones.observe(&room));
+                server.report_stakes(stakes.observe(&room));
                 server.report_awards(milestones.take_awards());
 
                 // Anyone watching gets a seat as soon as the lobby has room.
@@ -731,6 +746,7 @@ async fn run_room(server: PartyServer, match_id: String, mut rx: mpsc::Unbounded
     if room.recording().is_some() {
         stop_recording(&server, &match_id, &mut room);
     }
+    server.report_stakes(stakes.closed(&room).into_iter().collect());
     drop(rx);
     server
         .inner
