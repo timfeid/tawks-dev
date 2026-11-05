@@ -1,4 +1,4 @@
-import { DEFAULT_BINDINGS, type Bindings, type Control, type Layout } from './input';
+import { DEFAULT_BINDINGS, cleanBindings, type Bindings, type Control, type Layout } from './input';
 
 export type Settings = {
   /** How late this player's presses land, in milliseconds; subtracted when judging. */
@@ -41,7 +41,8 @@ export function readSettings(raw: unknown): Settings {
     const saved = (from.bindings?.[layout] ?? {}) as Partial<Bindings>;
     bindings[layout] = { ...DEFAULT_BINDINGS[layout] };
     for (const control of Object.keys(DEFAULT_BINDINGS[layout]) as Control[]) {
-      if (Array.isArray(saved[control])) bindings[layout][control] = saved[control]!;
+      const clean = cleanBindings(saved[control]);
+      if (clean) bindings[layout][control] = clean;
     }
   }
   return {

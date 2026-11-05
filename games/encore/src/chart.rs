@@ -232,6 +232,8 @@ pub(crate) struct Options {
     pub hopo_threshold: u64,
     pub sustain_cutoff: u64,
     pub offset_ms: f64,
+    /// `.mid` rule: a single note whose fret was in the chord before it is not a natural hammer-on.
+    pub chord_subset_strums: bool,
 }
 
 pub(crate) fn build(
@@ -474,8 +476,13 @@ fn build_track(clock: &Clock, mut raw: RawTrack, options: &Options) -> Option<(T
         } else {
             let mut hopo = match previous {
                 Some((prev_tick, prev_lanes)) => {
+                    let new_fret = if prev_lanes.count_ones() == 1 {
+                        lanes != prev_lanes
+                    } else {
+                        !options.chord_subset_strums || prev_lanes & lanes == 0
+                    };
                     lanes.count_ones() == 1
-                        && lanes != prev_lanes
+                        && new_fret
                         && tick - prev_tick <= options.hopo_threshold
                 }
                 None => false,
@@ -548,6 +555,7 @@ mod tests {
             hopo_threshold: 65,
             sustain_cutoff: 16,
             offset_ms: 0.0,
+            chord_subset_strums: false,
         }
     }
 
@@ -622,6 +630,41 @@ mod tests {
             ]
         );
         assert_eq!(chart.tracks[0].notes[4].lanes, 0b11000);
+    }
+
+    fn kinds(notes: &[(u64, u8)], chord_subset_strums: bool) -> Vec<NoteKind> {
+        let mut track = RawTrack::new(Instrument::Guitar, Difficulty::Expert);
+        for &(tick, lane) in notes {
+            track.notes.push(RawNote { tick, len: 0, lane });
+        }
+        let options = Options {
+            chord_subset_strums,
+            ..options()
+        };
+        let chart = build(&tempo(120.0), vec![track], vec![], options);
+        chart.tracks[0].notes.iter().map(|n| n.kind).collect()
+    }
+
+    #[test]
+    fn hammer_ons_need_a_close_single_note_on_a_new_fret() {
+        use NoteKind::{Hopo, Strum};
+        assert_eq!(
+            kinds(&[(0, 0), (65, 1), (131, 2), (200, 2)], false),
+            vec![Strum, Hopo, Strum, Strum]
+        );
+        assert_eq!(kinds(&[(0, 0), (48, 5)], false), vec![Strum, Hopo]);
+        assert_eq!(
+            kinds(&[(0, 0), (48, 1), (48, 2), (96, 3)], false),
+            vec![Strum, Strum, Hopo]
+        );
+    }
+
+    #[test]
+    fn a_note_out_of_the_chord_before_it_strums_only_in_midi() {
+        use NoteKind::{Hopo, Strum};
+        let notes = [(0, 0), (0, 1), (48, 1), (96, 0), (96, 1), (144, 2)];
+        assert_eq!(kinds(&notes, false), vec![Strum, Hopo, Strum, Hopo]);
+        assert_eq!(kinds(&notes, true), vec![Strum, Strum, Strum, Hopo]);
     }
 
     #[test]

@@ -121,13 +121,12 @@ pub fn read_chart_text(text: &str, hints: IniHints) -> Result<Chart> {
     tempo.signatures.sort_by_key(|(tick, _)| *tick);
     let resolution = tempo.resolution.max(1);
     let options = Options {
-        hopo_threshold: hints.hopo_frequency.unwrap_or(if hints.eighth_note_hopo {
-            resolution / 2
-        } else {
-            resolution * 65 / 192
-        }),
-        sustain_cutoff: hints.sustain_cutoff.unwrap_or(resolution / 12),
+        hopo_threshold: hints
+            .hopo_frequency
+            .unwrap_or(resolution / if hints.eighth_note_hopo { 2 } else { 3 } + resolution / 192),
+        sustain_cutoff: hints.sustain_cutoff.unwrap_or(0),
         offset_ms: offset_s * 1000.0 + hints.delay_ms,
+        chord_subset_strums: false,
     };
     if let Some(start) = phrase_start {
         phrases.push((start, start + resolution * 8));
@@ -311,13 +310,13 @@ pub fn read_midi(bytes: &[u8], hints: IniHints) -> Result<Chart> {
     sections.sort_by_key(|(tick, _)| *tick);
 
     let options = Options {
-        hopo_threshold: hints.hopo_frequency.unwrap_or(if hints.eighth_note_hopo {
-            resolution / 2
-        } else {
-            resolution * 170 / 480
-        }),
+        hopo_threshold: hints
+            .hopo_frequency
+            .unwrap_or(resolution / if hints.eighth_note_hopo { 2 } else { 3 })
+            + 1,
         sustain_cutoff: hints.sustain_cutoff.unwrap_or(resolution / 3),
         offset_ms: hints.delay_ms,
+        chord_subset_strums: true,
     };
     let offset = options.offset_ms;
     let mut chart = build(&tempo, tracks, sections, options);

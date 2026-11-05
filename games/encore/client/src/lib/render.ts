@@ -163,7 +163,7 @@ export function drawHighway(c: CanvasRenderingContext2D, w: number, h: number, f
   for (let i = start; i < end; i++) {
     const note = notes[i];
     if (!note.len) continue;
-    const held = engine.sustain?.index === i;
+    const held = engine.isSustaining(i);
     if (engine.judged[i] === HIT && !held) continue;
     const from = Math.max(0, z(note.t));
     const to = Math.min(1, z(note.t + note.len));

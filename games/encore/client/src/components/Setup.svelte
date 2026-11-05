@@ -8,9 +8,15 @@
     CONTROL_LABELS,
     Controls,
     DEFAULT_BINDINGS,
+    MAX_AXIS_THRESHOLD,
+    MIN_AXIS_THRESHOLD,
+    AXIS_THRESHOLD,
     captureBinding,
     connectedPads,
     describeBinding,
+    padName,
+    readAxis,
+    type AxisBinding,
     type Control,
     type Layout,
   } from '../lib/input';
@@ -34,6 +40,7 @@
 
   function listen() {
     tester?.stop();
+    held = new Set();
     tester = new Controls($state.snapshot(draft.bindings[layout]), (control, down) => {
       if (layout === 'drums' && down && control.startsWith('lane')) {
         kit ??= new DrumKit();
@@ -55,8 +62,11 @@
   });
 
   const padTimer = setInterval(() => (pads = connectedPads()), 1000);
+  let axisTick = $state(0);
+  const axisTimer = setInterval(() => axisTick++, 50);
   onDestroy(() => {
     clearInterval(padTimer);
+    clearInterval(axisTimer);
     tester?.stop();
     kit?.dispose();
     abort?.abort();
@@ -73,6 +83,20 @@
     if (binding) draft.bindings[layout][control] = [...draft.bindings[layout][control], binding];
     listen();
   }
+
+  function axisReading(binding: AxisBinding) {
+    void axisTick;
+    return readAxis($state.snapshot(binding) as AxisBinding);
+  }
+
+  function setThreshold(control: Control, index: number, value: number) {
+    draft.bindings[layout][control] = draft.bindings[layout][control].map((b, i) =>
+      i === index && b.kind === 'axis' ? { ...b, threshold: value } : b,
+    );
+  }
+
+  /** Places a reading from -1 to 1 along the meter, as a percentage. */
+  const meterAt = (value: number) => `${((value + 1) / 2) * 100}%`;
 
   function remove(control: Control, index: number) {
     draft.bindings[layout][control] = draft.bindings[layout][control].filter((_, i) => i !== index);
@@ -149,7 +173,7 @@
           <div class="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5">
             <span class="text-sm">
               Press the <span class="font-semibold text-primary">{CONTROL_LABELS[layout][step]?.toLowerCase()}</span>
-              on your controller
+              on your controller{step === 'star' && layout === 'guitar' ? ', or tilt the guitar up' : ''}
             </span>
             <span class="text-xs text-neutral-500">
               {CONTROLS[layout].indexOf(step) + 1} of {CONTROLS[layout].length}
@@ -170,27 +194,65 @@
         </p>
         <div class="divide-y divide-white/5 rounded-lg border border-white/10">
           {#each CONTROLS[layout] as control (control)}
-            <div class="flex items-center gap-3 px-3 py-2">
-              <span class="size-2.5 rounded-full {held.has(control) ? 'bg-primary' : 'bg-white/10'}"></span>
-              <span class="w-28 text-sm">{CONTROL_LABELS[layout][control]}</span>
-              <div class="flex flex-1 flex-wrap gap-1">
-                {#each draft.bindings[layout][control] as binding, i (i)}
-                  <span class="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 font-mono text-xs">
-                    {describeBinding(binding)}
-                    <button class="text-neutral-400 hover:text-white" onclick={() => remove(control, i)} aria-label="Remove">
-                      <X class="size-3" />
-                    </button>
-                  </span>
-                {/each}
+            <div>
+              <div class="flex items-center gap-3 px-3 py-2">
+                <span class="size-2.5 rounded-full {held.has(control) ? 'bg-primary' : 'bg-white/10'}"></span>
+                <span class="w-28 text-sm">{CONTROL_LABELS[layout][control]}</span>
+                <div class="flex flex-1 flex-wrap gap-1">
+                  {#each draft.bindings[layout][control] as binding, i (i)}
+                    <span class="flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 font-mono text-xs">
+                      {describeBinding(binding)}
+                      <button class="text-neutral-400 hover:text-white" onclick={() => remove(control, i)} aria-label="Remove">
+                        <X class="size-3" />
+                      </button>
+                    </span>
+                  {/each}
+                </div>
+                <button
+                  class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs {capturing === control
+                    ? 'border-primary text-primary'
+                    : 'border-white/10 text-neutral-400 hover:text-white'}"
+                  onclick={() => add(control)}
+                >
+                  {#if capturing === control}{control === 'star' ? 'Press or tilt now' : 'Press it now'}{:else}<Plus class="size-3" /> Bind{/if}
+                </button>
               </div>
-              <button
-                class="flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs {capturing === control
-                  ? 'border-primary text-primary'
-                  : 'border-white/10 text-neutral-400 hover:text-white'}"
-                onclick={() => add(control)}
-              >
-                {#if capturing === control}Press it now{:else}<Plus class="size-3" /> Bind{/if}
-              </button>
+              {#each draft.bindings[layout][control] as binding, i (i)}
+                {#if binding.kind === 'axis'}
+                  {@const reading = axisReading(binding)}
+                  {@const threshold = binding.threshold ?? AXIS_THRESHOLD}
+                  <div class="flex items-center gap-3 px-3 pb-2 text-xs">
+                    <span class="size-2.5 shrink-0"></span>
+                    <span class="w-28 shrink-0 text-neutral-400">{describeBinding(binding)} point</span>
+                    <div class="relative h-2 w-24 shrink-0 rounded-full bg-white/10" title="Live reading">
+                      {#if reading !== null}
+                        <div
+                          class="absolute inset-y-0 left-0 rounded-full {reading > threshold ? 'bg-primary' : 'bg-white/30'}"
+                          style="width: {meterAt(reading)}"
+                        ></div>
+                      {/if}
+                      <div class="absolute -inset-y-0.5 w-0.5 bg-white" style="left: {meterAt(threshold)}"></div>
+                    </div>
+                    <input
+                      type="range"
+                      min={MIN_AXIS_THRESHOLD}
+                      max={MAX_AXIS_THRESHOLD}
+                      step="0.05"
+                      value={threshold}
+                      oninput={(e) => setThreshold(control, i, Number(e.currentTarget.value))}
+                      onchange={listen}
+                      class="min-w-0 flex-1"
+                      aria-label="{CONTROL_LABELS[layout][control]} trigger point"
+                    />
+                    <span class="w-10 text-right font-mono">{Math.round(threshold * 100)}%</span>
+                  </div>
+                  {#if binding.pad}
+                    <p class="px-3 pb-2 pl-[2.125rem] text-[11px] text-neutral-500">
+                      Only on {padName(binding.pad)}. Slide left to trigger with less movement.
+                    </p>
+                  {/if}
+                {/if}
+              {/each}
             </div>
           {/each}
         </div>

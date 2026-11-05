@@ -23,6 +23,14 @@ describe('fretsMatch', () => {
     expect(fretsMatch(0, OPEN)).toBe(true);
     expect(fretsMatch(1, OPEN)).toBe(false);
   });
+
+  it('lets hammer-on and tap chords anchor below their lowest fret', () => {
+    expect(fretsMatch(0b00111, 0b00110, 'strum')).toBe(false);
+    expect(fretsMatch(0b00111, 0b00110, 'hopo')).toBe(true);
+    expect(fretsMatch(0b01001, 0b00110, 'tap')).toBe(false);
+    expect(fretsMatch(0b00010, 0b00110, 'hopo')).toBe(false);
+    expect(fretsMatch(0b00011, OPEN | 0b10, 'hopo')).toBe(false);
+  });
 });
 
 describe('Engine', () => {
@@ -47,8 +55,9 @@ describe('Engine', () => {
     press(engine, 'strum', 1000);
     expect(engine.streak).toBe(1);
     press(engine, 'strum', 1500);
+    engine.update(1530);
     expect(engine.streak).toBe(0);
-    expect(engine.overstrumAt).toBe(1500);
+    expect(engine.overstrumAt).toBe(1525);
     expect(engine.judged[1]).toBe(PENDING);
   });
 
@@ -153,5 +162,170 @@ describe('Engine', () => {
     expect(engine.isAutoKick(1)).toBe(false);
     expect(engine.progress().auto_kick).toBe(true);
     expect(new Engine(track(notes, 'guitar'), beats, { autoKick: true }).autoKick).toBe(false);
+  });
+
+  it('plays a lower note over an extended sustain without dropping it', () => {
+    const engine = new Engine(track([note(1000, 0b100, 'strum', 1000), note(1500, 0b001)]), beats);
+    press(engine, 'lane2', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane0', 1490);
+    press(engine, 'strum', 1500);
+    expect([...engine.judged]).toEqual([HIT, HIT]);
+    expect(engine.streak).toBe(2);
+    expect(engine.overstrumAt).toBeLessThan(0);
+    expect(engine.isSustaining(0)).toBe(true);
+    engine.update(2000);
+    expect(engine.score).toBe(100 + 2 * 25);
+  });
+
+  it('plays a chord and a hammer-on over an extended sustain', () => {
+    const notes = [note(1000, 0b00001, 'strum', 1500), note(1400, 0b00110), note(1600, 0b01000, 'hopo')];
+    const engine = new Engine(track(notes), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane1', 1395);
+    press(engine, 'lane2', 1396);
+    press(engine, 'strum', 1400);
+    press(engine, 'lane1', 1590, false);
+    press(engine, 'lane2', 1590, false);
+    press(engine, 'lane3', 1600);
+    expect([...engine.judged]).toEqual([HIT, HIT, HIT]);
+    expect(engine.isSustaining(0)).toBe(true);
+    engine.update(2600);
+    expect(engine.score).toBe(50 + 100 + 50 + 3 * 25);
+  });
+
+  it('drops a sustain on an overstrum or when its fret lets go', () => {
+    const notes = [note(1000, 0b001, 'strum', 2000), note(2000, 0b010), note(4000, 0b001, 'strum', 1000)];
+    const engine = new Engine(track(notes), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'strum', 1250);
+    engine.update(1300);
+    expect(engine.isSustaining(0)).toBe(false);
+    expect(engine.overstrumAt).toBe(1275);
+    expect(engine.score).toBe(50 + 13);
+    press(engine, 'lane1', 1990);
+    press(engine, 'strum', 2000);
+    press(engine, 'lane1', 2100, false);
+    press(engine, 'strum', 4000);
+    expect(engine.isSustaining(2)).toBe(true);
+    press(engine, 'lane0', 4100, false);
+    engine.update(4200);
+    expect(engine.isSustaining(2)).toBe(false);
+  });
+
+  it('forgives a brief let-go and an early release right at the end of a sustain', () => {
+    const engine = new Engine(track([note(1000, 1, 'strum', 1000)]), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane0', 1500, false);
+    press(engine, 'lane0', 1510);
+    engine.update(1600);
+    expect(engine.isSustaining(0)).toBe(true);
+    press(engine, 'lane0', 1985, false);
+    engine.update(2100);
+    expect(engine.score).toBe(50 + 2 * 25);
+  });
+
+  it('waits a moment after a strum for the frets to catch up', () => {
+    const engine = new Engine(track([note(1000, 1), note(2000, 2), note(3000, 4)]), beats);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane0', 1030);
+    expect(engine.judged[0]).toBe(HIT);
+    press(engine, 'strum', 2000);
+    press(engine, 'lane0', 2001, false);
+    press(engine, 'lane1', 2060);
+    expect(engine.judged[1]).toBe(PENDING);
+    expect(engine.overstrumAt).toBe(2050);
+    expect(engine.streak).toBe(0);
+  });
+
+  it('counts a quick second strum on nothing as an overstrum', () => {
+    const engine = new Engine(track([note(1000, 1), note(3000, 1)]), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'strum', 1200);
+    press(engine, 'strum', 1210);
+    expect(engine.overstrumAt).toBe(1210);
+  });
+
+  it('eats one strum just after a hammer-on, but not a second', () => {
+    const engine = new Engine(track([note(1000, 1), note(1100, 2, 'hopo'), note(3000, 2)]), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane1', 1100);
+    press(engine, 'strum', 1175);
+    engine.update(1250);
+    expect(engine.streak).toBe(2);
+    press(engine, 'strum', 1300);
+    engine.update(1400);
+    expect(engine.streak).toBe(0);
+  });
+
+  it('needs a strum for a hammer-on after a wrong fret is hammered in its window', () => {
+    const engine = new Engine(track([note(1000, 1), note(1200, 2, 'hopo')]), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane2', 1150);
+    press(engine, 'lane2', 1160, false);
+    press(engine, 'lane1', 1170);
+    expect(engine.judged[1]).toBe(PENDING);
+    press(engine, 'strum', 1180);
+    expect(engine.judged[1]).toBe(HIT);
+  });
+
+  it('plays a hammer-on fretted at the front of its window but not one fretted before it', () => {
+    const engine = new Engine(track([note(1000, 1), note(1100, 2, 'hopo'), note(1400, 1), note(1500, 2, 'hopo')]), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'lane1', 1040);
+    expect(engine.judged[1]).toBe(HIT);
+    press(engine, 'lane1', 1300, false);
+    press(engine, 'strum', 1400);
+    press(engine, 'lane1', 1420);
+    engine.update(1500);
+    expect(engine.judged[3]).toBe(PENDING);
+  });
+
+  it('skips past an unplayable note only once the streak is gone', () => {
+    const notes = [note(1000, 1), note(1040, 2), note(1080, 4), note(2000, 1), note(2040, 2)];
+    const engine = new Engine(track(notes), beats);
+    press(engine, 'lane2', 990);
+    press(engine, 'strum', 1050);
+    expect([...engine.judged.slice(0, 3)]).toEqual([MISSED, MISSED, HIT]);
+    expect(engine.streak).toBe(1);
+    press(engine, 'lane2', 1900, false);
+    press(engine, 'lane1', 1990);
+    press(engine, 'strum', 2000);
+    expect(engine.judged[4]).toBe(PENDING);
+    engine.update(2060);
+    expect(engine.streak).toBe(0);
+  });
+
+  it('breaks the star phrase being played on an overstrum', () => {
+    const notes = [note(1000, 1), note(2000, 1), note(2500, 1)];
+    const engine = new Engine(track(notes, 'guitar', [[1900, 2600]]), beats);
+    press(engine, 'lane0', 990);
+    press(engine, 'strum', 1000);
+    press(engine, 'strum', 2000);
+    press(engine, 'strum', 2200);
+    press(engine, 'strum', 2500);
+    engine.update(2700);
+    expect(engine.inStarPhrase(2)).toBe(false);
+    expect(engine.starMeter).toBe(0);
+  });
+
+  it('drains star power over eight measures', () => {
+    const bars = Array.from({ length: 200 }, (_, i) => ({ t: i * 500, bar: i % 3 === 0 }));
+    const notes = [note(1000, 1), note(1500, 1), note(2000, 1), note(2500, 1)];
+    const engine = new Engine(track(notes, 'guitar', [[900, 1600], [1900, 2600]]), bars);
+    press(engine, 'lane0', 0);
+    for (const t of [1000, 1500, 2000, 2500]) press(engine, 'strum', t);
+    press(engine, 'star', 3000);
+    engine.update(3000 + 4 * 1500 - 10);
+    expect(engine.starActive).toBe(true);
+    engine.update(3000 + 4 * 1500 + 10);
+    expect(engine.starActive).toBe(false);
   });
 });
