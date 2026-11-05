@@ -51,6 +51,16 @@ pub const TEAM_POSITIONS: [&str; 4] = ["Top", "Bottom Carry", "Bottom Support", 
 pub const CHAMPION_ROLE: [usize; 10] = [1, 1, 2, 0, 3, 1, 2, 0, 3, 2];
 pub const ROLE_DEFAULT: [usize; 4] = [3, 5, 4, 2];
 pub const BASIC_RANGE: [f32; 10] = [6.3, 2.9, 6.0, 2.8, 5.5, 8.2, 5.7, 3.0, 5.2, 5.7];
+pub fn aimed_range(champion: usize, slot: usize, width: f32) -> f32 {
+    let champion = champion % CHAMPIONS.len();
+    let reach = BodyProfile::new(width).reach;
+    match slot {
+        0 => [8.0,4.0,7.0,2.7,7.0,9.0,7.0,2.5,7.0,6.0][champion] * reach,
+        1 => if matches!(champion, 0 | 2 | 6) { 6.2 * reach } else { 7.0 * reach },
+        2 => [4.5,6.5,3.8,4.0,5.2,5.4,4.3,5.0,5.0,4.1][champion],
+        _ => [6.5,3.5,7.5,4.0,6.0,9.0,6.0,4.5,6.5,6.0][champion] * reach,
+    }
+}
 pub const SHOP_ITEMS: [&str; 3] = ["Hourglass", "Renewal Flask", "Wind Charm"];
 pub const SHOP_COST: [u16; 3] = [140, 95, 115];
 pub fn champion_allowed(position: usize, champion: usize) -> bool {
@@ -68,61 +78,61 @@ pub const ABILITY_HELP: [[&str; 4]; 10] = [
         "Orb toward an enemy",
         "Charm and stun",
         "Dash toward your aim",
-        "Blast nearby enemies",
+        "Aim a falling star; it bursts on impact",
     ],
     [
         "Close shadow strike",
         "Brief invulnerability",
         "Long blink",
-        "Burst nearby enemies",
+        "Aim a shadow burst at a vulnerable target",
     ],
     [
         "Bolt toward an enemy",
         "Bind and stun",
         "Short warp",
-        "Storm around you",
+        "Launch an arc storm that bursts on impact",
     ],
     [
         "Heavy close swipe",
         "Gain a large shield",
         "Charge and hit",
-        "Shockwave nearby foes",
+        "Aim a groundbreak shockwave",
     ],
     [
         "Dart toward an enemy",
-        "Heal nearest ally",
+        "Aim at an ally to mend; self if no ally",
         "Swift dash",
-        "Heal allies; hurt foes",
+        "Aim a sanctuary burst; heal allies inside",
     ],
     [
         "Long range shot",
         "Trap and stun",
         "Invulnerable roll",
-        "Overload nearby foes",
+        "Aim an overload blast into the fight",
     ],
     [
         "Shard toward an enemy",
         "Freeze and stun",
         "Invulnerable burrow",
-        "Whiteout nearby foes",
+        "Aim a whiteout burst; slow enemies inside",
     ],
     [
         "Heavy close bite",
         "Gain a large shield",
         "Pounce and hit",
-        "Frenzy around you",
+        "Aim a solar frenzy burst",
     ],
     [
         "Splash toward an enemy",
-        "Heal nearest ally",
+        "Aim at an ally to bubble; self if no ally",
         "Surf and hit",
-        "Heal allies; hurt foes",
+        "Aim a high tide burst; heal allies inside",
     ],
     [
         "Spore toward an enemy",
         "Bomb and stun",
         "Vine step",
-        "Bloom around you",
+        "Aim a wild bloom burst",
     ],
 ];
 pub const DRAFT: f32 = 45.0;
@@ -188,6 +198,20 @@ struct SparBot {
     hp: f32,
     shot: f32,
 }
+#[derive(Clone, Debug)]
+struct Skillshot {
+    owner: usize,
+    slot: u8,
+    x: f32,
+    z: f32,
+    vx: f32,
+    vz: f32,
+    remaining: f32,
+    damage: f32,
+    stun: f32,
+    radius: f32,
+    lock: Option<ShotLock>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AutoTarget {
@@ -195,6 +219,8 @@ enum AutoTarget {
     Champion(usize),
     Spar(usize),
 }
+#[derive(Clone, Copy, Debug)]
+enum ShotLock { Champion(u8), Minion(u32), Spar(usize) }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SideKind { Portal, Rift }
@@ -286,6 +312,7 @@ pub struct PetArena {
     towers: Vec<Tower>,
     minion_wave: f32,
     spar: [SparBot; 2],
+    skillshots: Vec<Skillshot>,
     result: Option<Vec<Vec<u8>>>,
     portal_queue: Option<PortalQueue>,
     portal_cd: f32,
@@ -817,6 +844,23 @@ impl PetArena {
         };
         let interval = 1.1 - 0.35 * ((self.time - DRAFT) / 300.0).clamp(0.0, 1.0);
         let seat = self.players[index].seat;
+        if self.players[index].champ == 5 {
+            let (x,z,lock) = match target {
+                AutoTarget::Spar(team) => (self.spar[team].x,self.spar[team].z,ShotLock::Spar(team)),
+                AutoTarget::Minion(i) => (self.minions[i].x,self.minions[i].z,ShotLock::Minion(self.minions[i].id)),
+                AutoTarget::Champion(i) => (self.players[i].runner.x,self.players[i].runner.z,
+                    ShotLock::Champion(self.players[i].seat)),
+            };
+            let p = &self.players[index];
+            let yaw = (x-p.runner.x).atan2(z-p.runner.z);
+            let range = BASIC_RANGE[5] * BodyProfile::new(p.width).reach;
+            self.launch_skillshot(index, 4, yaw, range, 15.0, 0.0);
+            if let Some(shot) = self.skillshots.last_mut() { shot.lock = Some(lock); }
+            self.players[index].auto_cd = 0.62 - 0.14 * ((self.time-DRAFT)/300.0).clamp(0.0,1.0);
+            self.players[index].cast = 4;
+            self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+            return;
+        }
         match target {
           AutoTarget::Spar(team) => {
             let bot = &mut self.spar[team];
@@ -1079,6 +1123,7 @@ impl PetArena {
                     shot: 2.0,
                 },
             ],
+            skillshots: Vec::new(),
             result: None,
             portal_queue: None,
             portal_cd: 0.0,
@@ -1253,36 +1298,44 @@ impl PetArena {
         events.push(json!({"kind":"pet_crown_hit","seat":p.seat,"team":team,
             "target":target,"hp":self.crown_hp[target],"damage":damage,"x":x,"z":z}));
     }
-    fn best_gank(&self, index: usize) -> Option<usize> {
+    fn gank_score(&self, index: usize, enemy_index: usize) -> Option<f32> {
         let roamer = &self.players[index];
         if self.kind != 1 || roamer.position != Some(3)
-            || self.time < DRAFT + 25.0 || self.time >= RIFT_UNLOCK - 20.0
+            || self.time < DRAFT + 25.0
+            || (self.time >= RIFT_UNLOCK - 20.0 && !self.rift_used)
             || roamer.respawn > 0.0 || roamer.busy
             || roamer.hp < Self::max_hp(roamer.level) * 0.55 || roamer.mana < 20.0 {
             return None;
         }
-        self.players.iter().enumerate().filter_map(|(enemy_index, enemy)| {
-            if enemy.team == roamer.team || !enemy.selected || enemy.respawn > 0.0
-                || enemy.busy || self.hidden_from(index, enemy_index)
-                || (enemy.runner.z.abs() - LANE_Z[0]).abs() > 7.0 { return None; }
-            let allies = self.players.iter().filter(|ally| ally.team == roamer.team
+        let enemy = &self.players[enemy_index];
+        if enemy.team == roamer.team || !enemy.selected || enemy.respawn > 0.0
+            || enemy.busy || self.hidden_from(index, enemy_index)
+            || (enemy.runner.z.abs() - LANE_Z[0]).abs() > 7.0
+            || distance(roamer, enemy) > 40.0 { return None; }
+        let allies = self.players.iter().filter(|ally| ally.team == roamer.team
                 && ally.seat != roamer.seat && ally.selected && ally.respawn <= 0.0
+                && ally.hp > Self::max_hp(ally.level) * 0.4
                 && distance(ally, enemy) < 15.0).count();
-            if allies == 0 { return None; }
-            let backup = self.players.iter().filter(|other| other.team == enemy.team
+        if allies == 0 { return None; }
+        let backup = self.players.iter().filter(|other| other.team == enemy.team
                 && other.seat != enemy.seat && other.respawn <= 0.0
                 && distance(other, enemy) < 12.0).count();
-            let tower_cover = self.towers.iter().any(|tower| tower.team == enemy.team
+        if backup > allies { return None; }
+        let tower_cover = self.towers.iter().any(|tower| tower.team == enemy.team
                 && tower.hp > 0.0 && (tower.x-enemy.runner.x).hypot(tower.z-enemy.runner.z) < 8.0);
-            if tower_cover { return None; }
-            let vulnerable = 1.0 - enemy.hp / Self::max_hp(enemy.level);
-            let overextended = if (roamer.team == 0 && enemy.runner.x < -4.0)
+        if tower_cover { return None; }
+        let vulnerable = 1.0 - enemy.hp / Self::max_hp(enemy.level);
+        let overextended = if (roamer.team == 0 && enemy.runner.x < -4.0)
                 || (roamer.team == 1 && enemy.runner.x > 4.0) { 0.75 } else { 0.0 };
-            let travel = distance(roamer, enemy);
-            let score = vulnerable * 1.5 + overextended + allies.min(2) as f32 * 0.5
-                - backup as f32 * 0.45 - (travel / 60.0);
-            (score >= 0.95).then_some((enemy_index, score))
-        }).max_by(|a,b| a.1.total_cmp(&b.1)).map(|(index,_)| index)
+        let travel = distance(roamer, enemy);
+        Some(vulnerable * 1.5 + overextended + allies.min(2) as f32 * 0.5
+            - backup as f32 * 0.45 - (travel / 60.0))
+    }
+    fn best_gank(&self, index: usize) -> Option<usize> {
+        self.players.iter().enumerate()
+            .filter_map(|(enemy, _)| self.gank_score(index, enemy)
+                .filter(|score| *score >= 0.95).map(|score| (enemy, score)))
+            .max_by(|a,b| a.1.total_cmp(&b.1)).map(|(index,_)| index)
     }
     fn target(&self, index: usize, yaw: f32, range: f32, cone: f32) -> Option<usize> {
         let (dx, dz) = direction(yaw);
@@ -1307,6 +1360,19 @@ impl PetArena {
             })
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(i, _)| i)
+    }
+    fn aimed_ally(&self, index: usize, yaw: f32, range: f32) -> Option<usize> {
+        let (dx,dz) = direction(yaw);
+        let caster = &self.players[index];
+        self.players.iter().enumerate().filter(|(i,p)| *i != index
+            && p.team == caster.team && p.selected && p.respawn <= 0.0)
+            .filter_map(|(i,p)| {
+                let (x,z) = (p.runner.x-caster.runner.x,p.runner.z-caster.runner.z);
+                let dist = x.hypot(z);
+                (dist <= range && (x*dx+z*dz)/dist.max(0.01) >= 0.82)
+                    .then_some((i,dist))
+            })
+            .min_by(|a,b| a.1.total_cmp(&b.1)).map(|(i,_)| i)
     }
     fn hit_brawl(&mut self, from: usize, to: usize, power: f32, yaw: f32, events: &mut Vec<Value>) {
         if self.players[to].invuln > 0.0 || self.players[to].respawn > 0.0
@@ -1441,12 +1507,191 @@ impl PetArena {
             events.push(json!({"kind":"pet_ring_swing","seat":self.players[index].seat}));
         }
     }
+    fn launch_skillshot(&mut self, owner: usize, slot: u8, yaw: f32,
+        range: f32, damage: f32, stun: f32) {
+        let (dx, dz) = direction(yaw);
+        let p = &self.players[owner];
+        self.skillshots.push(Skillshot {
+            owner, slot, x: p.runner.x + dx * 0.8, z: p.runner.z + dz * 0.8,
+            vx: dx * if slot == 4 { 25.0 } else if slot == 3 { 12.0 }
+                else if slot == 0 { 18.0 } else { 15.0 },
+            vz: dz * if slot == 4 { 25.0 } else if slot == 3 { 12.0 }
+                else if slot == 0 { 18.0 } else { 15.0 },
+            remaining: (range - 0.8).max(0.1), damage, stun,
+            radius: if slot == 4 { 0.38 } else if slot == 0 { 0.72 } else { 0.9 },
+            lock: None,
+        });
+    }
+    fn detonate_skillshot(&mut self, shot: &Skillshot, events: &mut Vec<Value>) {
+        let team = self.players[shot.owner].team;
+        let champ = self.players[shot.owner].champ;
+        let radius = if matches!(champ, 2 | 6 | 8) { 3.7 } else { 3.0 };
+        let victims = self.players.iter().enumerate().filter(|(index,p)|
+            *index != shot.owner && p.team != team && p.selected && p.respawn <= 0.0
+            && (p.runner.x-shot.x).hypot(p.runner.z-shot.z) < radius)
+            .map(|(index,_)| index).collect::<Vec<_>>();
+        for victim in victims {
+            self.hit_team(shot.owner, victim, shot.damage,
+                if matches!(champ, 2 | 6 | 9) { 0.8 } else { 0.25 }, events);
+        }
+        if self.time < DRAFT {
+            let spar = &mut self.spar[team as usize];
+            if (spar.x-shot.x).hypot(spar.z-shot.z) < radius {
+                spar.hp = (spar.hp-shot.damage).max(0.0);
+                if spar.hp == 0.0 { spar.hp = 150.0; }
+            }
+        } else {
+            let mut kills = 0u16;
+            for minion in &mut self.minions {
+                if minion.team != team && minion.hp > 0.0
+                    && (minion.x-shot.x).hypot(minion.z-shot.z) < radius {
+                    minion.hp -= shot.damage;
+                    if minion.hp <= 0.0 { kills += 1; }
+                }
+            }
+            if kills > 0 {
+                self.players[shot.owner].last_hits = self.players[shot.owner].last_hits.saturating_add(kills);
+                self.players[shot.owner].gold = self.players[shot.owner].gold.saturating_add(kills*25);
+                self.gain_xp(shot.owner, kills*22, events);
+            }
+            if let Some(index) = self.towers.iter().enumerate().find(|(index,t)|
+                t.team != team && t.hp > 0.0 && self.tower_open(*index)
+                && (t.x-shot.x).hypot(t.z-shot.z) < radius).map(|(index,_)| index) {
+                self.hit_tower(index, shot.damage, events);
+            }
+            if self.crown_open(team as usize) {
+                let crown = CROWN_POS[1-team as usize];
+                if (crown.0-shot.x).hypot(crown.1-shot.z) < radius {
+                    let pressure = if self.players.len() == 4 { 0.08 } else { 0.06 };
+                    let damage = shot.damage * pressure
+                        * if self.team_buff[team as usize] > 0.0 { 1.25 } else { 1.0 };
+                    self.crown_hp[1-team as usize] = (self.crown_hp[1-team as usize]-damage).max(0.0);
+                    events.push(json!({"kind":"pet_crown_hit","seat":self.players[shot.owner].seat,
+                        "team":team,"target":1-team,"hp":self.crown_hp[1-team as usize],
+                        "damage":damage,"x":crown.0,"z":crown.1}));
+                }
+            }
+        }
+        if matches!(champ, 4 | 8) {
+            for ally in &mut self.players {
+                if ally.team == team && ally.selected && ally.respawn <= 0.0
+                    && (ally.runner.x-shot.x).hypot(ally.runner.z-shot.z) < radius + 1.5 {
+                    ally.hp = (ally.hp+75.0).min(Self::max_hp(ally.level));
+                    ally.shield = (ally.shield+35.0).min(150.0);
+                }
+            }
+        }
+        events.push(json!({"kind":"pet_arena_blast","seat":self.players[shot.owner].seat,
+            "champ":champ,"slot":shot.slot,"x":shot.x,"z":shot.z,"radius":radius}));
+    }
+    fn step_skillshots(&mut self, dt: f32, events: &mut Vec<Value>) {
+        if self.kind != 1 { return; }
+        let mut active = Vec::new();
+        for mut shot in std::mem::take(&mut self.skillshots) {
+            let speed = shot.vx.hypot(shot.vz);
+            let distance = (speed * dt).min(shot.remaining);
+            let steps = (distance / 0.35).ceil().max(1.0) as usize;
+            let mut hit = false;
+            for _ in 0..steps {
+                if let Some(lock) = shot.lock {
+                    let target = match lock {
+                        ShotLock::Champion(seat) => self.players.iter().find(|p|
+                            p.seat == seat && p.respawn <= 0.0 && p.selected)
+                            .map(|p| (p.runner.x,p.runner.z)),
+                        ShotLock::Minion(id) => self.minions.iter().find(|m| m.id == id && m.hp > 0.0)
+                            .map(|m| (m.x,m.z)),
+                        ShotLock::Spar(team) => Some((self.spar[team].x,self.spar[team].z)),
+                    };
+                    let Some((tx,tz)) = target else { shot.remaining = 0.0; break };
+                    let yaw = (tx-shot.x).atan2(tz-shot.z);
+                    let (dx,dz) = direction(yaw);
+                    shot.vx = dx * speed;
+                    shot.vz = dz * speed;
+                }
+                shot.x += shot.vx / speed * distance / steps as f32;
+                shot.z += shot.vz / speed * distance / steps as f32;
+                shot.remaining -= distance / steps as f32;
+                if self.time >= DRAFT && inside_jungle_wall(shot.x, shot.z, 0.0) {
+                    hit = true;
+                    break;
+                }
+                let owner = &self.players[shot.owner];
+                let team = owner.team;
+                let champ = self.players.iter().enumerate().find(|(index, p)|
+                    *index != shot.owner && p.team != team && p.selected
+                    && p.respawn <= 0.0 && !p.busy
+                    && shot.lock.is_none_or(|lock| matches!(lock, ShotLock::Champion(seat) if seat == p.seat))
+                    && (p.runner.x-shot.x).hypot(p.runner.z-shot.z) < shot.radius + 0.45)
+                    .map(|(index,_)| index);
+                if let Some(index) = champ {
+                    if shot.slot != 3 { self.hit_team(shot.owner, index, shot.damage, shot.stun, events); }
+                    hit = true;
+                } else if self.time < DRAFT && shot.lock.is_none_or(|lock|
+                    matches!(lock, ShotLock::Spar(spar_team) if spar_team == team as usize)) {
+                    let spar = &mut self.spar[team as usize];
+                    if (spar.x-shot.x).hypot(spar.z-shot.z) < shot.radius + 0.55 {
+                        if shot.slot != 3 {
+                            spar.hp = (spar.hp - shot.damage).max(0.0);
+                            if spar.hp == 0.0 { spar.hp = 150.0; }
+                        }
+                        hit = true;
+                    }
+                } else if let Some(index) = self.minions.iter().position(|m|
+                    m.team != team && m.hp > 0.0
+                    && shot.lock.is_none_or(|lock| matches!(lock, ShotLock::Minion(id) if id == m.id))
+                    && (m.x-shot.x).hypot(m.z-shot.z) < shot.radius + 0.4) {
+                    if shot.slot != 3 { self.minions[index].hp -= shot.damage; }
+                    if shot.slot != 3 && self.minions[index].hp <= 0.0 {
+                        self.players[shot.owner].last_hits = self.players[shot.owner].last_hits.saturating_add(1);
+                        self.players[shot.owner].gold = self.players[shot.owner].gold.saturating_add(25);
+                        self.players[shot.owner].mana = (self.players[shot.owner].mana + 8.0)
+                            .min(Self::max_mana(self.players[shot.owner].level));
+                        self.gain_xp(shot.owner, 22, events);
+                        events.push(json!({"kind":"pet_minion_farm","seat":self.players[shot.owner].seat,
+                            "count":1,"xp":22,"mana":8,"x":shot.x,"z":shot.z}));
+                    }
+                    hit = true;
+                } else if let Some(index) = self.towers.iter().enumerate().position(|(index,t)|
+                    shot.lock.is_none() && t.team != team && t.hp > 0.0 && self.tower_open(index)
+                    && (t.x-shot.x).hypot(t.z-shot.z) < shot.radius + 1.0) {
+                    if shot.slot != 3 { self.hit_tower(index, shot.damage, events); }
+                    hit = true;
+                } else if shot.lock.is_none() && self.crown_open(team as usize) {
+                    let crown = CROWN_POS[1-team as usize];
+                    if (crown.0-shot.x).hypot(crown.1-shot.z) < shot.radius + 1.2 {
+                        let pressure = if self.players.len() == 4 { 0.08 } else { 0.06 };
+                        let buff = if self.team_buff[team as usize] > 0.0 { 1.25 } else { 1.0 };
+                        let damage = shot.damage * pressure * buff;
+                        if shot.slot != 3 {
+                            self.crown_hp[1-team as usize] = (self.crown_hp[1-team as usize]-damage).max(0.0);
+                            events.push(json!({"kind":"pet_crown_hit","seat":self.players[shot.owner].seat,
+                                "team":team,"target":1-team,"hp":self.crown_hp[1-team as usize],
+                                "damage":damage,"x":crown.0,"z":crown.1}));
+                        }
+                        hit = true;
+                    }
+                }
+                if hit { break; }
+            }
+            if shot.slot == 3 && (hit || shot.remaining <= 0.01) {
+                self.detonate_skillshot(&shot, events);
+            }
+            if hit || shot.slot == 3 && shot.remaining <= 0.01 {
+                events.push(json!({"kind":"pet_arena_shot_impact","seat":self.players[shot.owner].seat,
+                    "slot":shot.slot,"x":shot.x,"z":shot.z}));
+            } else if shot.remaining > 0.01 {
+                active.push(shot);
+            }
+        }
+        self.skillshots = active;
+    }
     fn cast(&mut self, index: usize, slot: usize, yaw: f32, events: &mut Vec<Value>) {
         let mana_cost = [12.0, 25.0, 22.0, 55.0][slot];
         if self.players[index].cooldown[slot] > 0.0
             || self.players[index].respawn > 0.0
             || self.players[index].lock > 0.0
             || self.players[index].mana < mana_cost
+            || slot == 3 && self.time >= DRAFT && self.time < RIFT_UNLOCK
         {
             return;
         }
@@ -1463,45 +1708,22 @@ impl PetArena {
         let from = (self.players[index].runner.x, self.players[index].runner.z);
         events.push(json!({"kind":"pet_arena_cast","seat":seat,"champ":champ,
             "slot":slot,"x":from.0,"z":from.1,"yaw":yaw}));
-        let reach = BodyProfile::new(self.players[index].width).reach;
         match slot {
             0 => {
-                let range = [8.0, 4.0, 7.0, 2.7, 7.0, 9.0, 7.0, 2.5, 7.0, 6.0][champ] * reach;
+                let range = aimed_range(champ, 0, self.players[index].width);
                 let damage = [46.0, 60.0, 43.0, 58.0, 34.0, 52.0, 40.0, 62.0, 36.0, 42.0][champ];
-                if let Some(to) = self.target(index, yaw, range, 0.72) {
-                    let slow = if matches!(champ, 2 | 6 | 9) {
-                        0.35
-                    } else {
-                        0.0
-                    };
-                    self.hit_team(index, to, damage, slow, events);
-                }
+                let slow = if matches!(champ, 2 | 6 | 9) { 0.35 } else { 0.0 };
+                self.launch_skillshot(index, 0, yaw, range, damage, slow);
             }
             1 => match champ {
                 0 | 2 | 6 => {
-                    if let Some(to) = self.target(index, yaw, 6.2, 0.55) {
-                        self.hit_team(index, to, 28.0, 0.8, events);
-                    }
+                    self.launch_skillshot(index, 1, yaw,
+                        aimed_range(champ, 1, self.players[index].width), 28.0, 0.8);
                 }
                 4 | 8 => {
-                    let ally = self
-                        .players
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, p)| {
-                            *i != index
-                                && p.team == self.players[index].team
-                                && p.selected
-                                && p.respawn <= 0.0
-                                && distance(&self.players[index], p) <= 6.5
-                        })
-                        .min_by(|a, b| {
-                            distance(&self.players[index], a.1)
-                                .total_cmp(&distance(&self.players[index], b.1))
-                        })
-                        .map(|(i, _)| i)
-                        .unwrap_or(index);
-                    self.players[ally].hp = (self.players[ally].hp + 80.0).min(MAX_HP);
+                    let ally = self.aimed_ally(index, yaw, 6.5).unwrap_or(index);
+                    self.players[ally].hp = (self.players[ally].hp + 80.0)
+                        .min(Self::max_hp(self.players[ally].level));
                 }
                 1 => {
                     self.players[index].invuln = 1.15;
@@ -1510,9 +1732,8 @@ impl PetArena {
                     self.players[index].shield = (self.players[index].shield + 90.0).min(150.0);
                 }
                 5 | 9 => {
-                    if let Some(to) = self.target(index, yaw, 7.0, 0.45) {
-                        self.hit_team(index, to, 42.0, 0.55, events);
-                    }
+                    self.launch_skillshot(index, 1, yaw,
+                        aimed_range(champ, 1, self.players[index].width), 42.0, 0.55);
                 }
                 _ => {}
             },
@@ -1539,62 +1760,20 @@ impl PetArena {
                 let damage = [
                     110.0, 145.0, 105.0, 95.0, 70.0, 120.0, 100.0, 115.0, 75.0, 105.0,
                 ][champ];
-                let range = [6.5, 3.5, 7.5, 4.0, 6.0, 9.0, 6.0, 4.5, 6.5, 6.0][champ];
-                let targets = self
-                    .players
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, p)| {
-                        *i != index
-                            && p.team != self.players[index].team
-                            && p.selected
-                            && p.respawn <= 0.0
-                            && distance(&self.players[index], p) < range
-                    })
-                    .map(|(i, _)| i)
-                    .collect::<Vec<_>>();
-                for to in targets {
-                    self.hit_team(
-                        index,
-                        to,
-                        damage,
-                        if champ == 6 { 0.85 } else { 0.25 },
-                        events,
-                    );
-                }
-                if matches!(champ, 4 | 8) {
-                    let team = self.players[index].team;
-                    for p in &mut self.players {
-                        if p.team == team && p.selected && p.respawn <= 0.0 {
-                            p.hp = (p.hp + 75.0).min(MAX_HP);
-                            p.shield = (p.shield + 35.0).min(150.0);
-                        }
-                    }
-                }
+                let range = aimed_range(champ, 3, self.players[index].width);
+                self.launch_skillshot(index, 3, yaw, range, damage, 0.0);
             }
             _ => {}
         }
         match slot {
-            0 => {
-                self.damage_spar(index, 46.0, 8.0 * reach, yaw, 0.6, events);
-                self.damage_minions(index, 46.0, 8.0 * reach, yaw, 0.6, events);
-                let range = [8.0, 4.0, 7.0, 2.7, 7.0, 9.0, 7.0, 2.5, 7.0, 6.0][champ] * reach;
-                self.damage_towers(index, 46.0, range, yaw, 0.72, events);
-                self.damage_crown(index, 46.0, yaw, range, 0.72, events);
-            }
+            0 => {}
             2 => {
                 self.damage_spar(index, 30.0, 2.6, yaw, -1.0, events);
                 self.damage_minions(index, 30.0, 2.6, yaw, -1.0, events);
                 self.damage_towers(index, 30.0, 2.6, yaw, -1.0, events);
                 self.damage_crown(index, 30.0, yaw, 2.6, -1.0, events);
             }
-            3 => {
-                self.damage_spar(index, 110.0, 6.5, yaw, -1.0, events);
-                self.damage_minions(index, 110.0, 6.5, yaw, -1.0, events);
-                let range = [6.5, 3.5, 7.5, 4.0, 6.0, 9.0, 6.0, 4.5, 6.5, 6.0][champ];
-                self.damage_towers(index, 110.0, range, yaw, -1.0, events);
-                self.damage_crown(index, 110.0, yaw, range, -1.0, events);
-            }
+            3 => {}
             _ => {}
         }
     }
@@ -1663,6 +1842,7 @@ impl Bout for PetArena {
             before + dt
         };
         if self.kind == 1 && before < DRAFT && self.time >= DRAFT {
+            self.skillshots.clear();
             self.minion_wave = 0.0;
             let count = self.players.len();
             for (index, p) in self.players.iter_mut().enumerate() {
@@ -1939,6 +2119,7 @@ impl Bout for PetArena {
                 self.auto_attack(index, events);
             }
         }
+        self.step_skillshots(dt, events);
         self.step_minions(dt, events);
         self.step_towers(dt, events);
         self.step_relays(dt, events);
@@ -2014,8 +2195,8 @@ impl Bout for PetArena {
             let locked = p.gank_target.filter(|_| p.gank_until > self.time)
                 .and_then(|target| self.players.iter().enumerate()
                     .find(|(other_index,other)| other.seat == target
-                        && other.team != p.team && other.respawn <= 0.0
-                        && other.selected && !other.busy && !self.hidden_from(index,*other_index))
+                        && other.team != p.team
+                        && self.gank_score(index, *other_index).is_some_and(|score| score >= 0.45))
                     .map(|(other_index,_)| other_index));
             let gank = if queued { None } else { locked.or_else(|| self.best_gank(index)) };
             if let Some(target_index) = gank {
@@ -2072,6 +2253,36 @@ impl Bout for PetArena {
             }
         }
         if self.kind == 1 {
+            let threat = self.players.iter().enumerate()
+                .filter(|(other_index, other)| *other_index != index
+                    && other.team != p.team && other.selected && other.respawn <= 0.0
+                    && !other.busy && !self.hidden_from(index, *other_index)
+                    && distance(p, other) < 9.0)
+                .filter(|(other_index, other)|
+                    p.last_hit == Some(*other_index) && p.reveal > 0.0
+                    || other.hp < Self::max_hp(other.level) * 0.3)
+                .filter(|(_, other)| !self.towers.iter().any(|tower| tower.team == other.team
+                    && tower.hp > 0.0
+                    && (tower.x-other.runner.x).hypot(tower.z-other.runner.z) < 8.0))
+                .min_by(|a, b| distance(p, a.1).total_cmp(&distance(p, b.1)));
+            if let Some((_, enemy)) = threat {
+                let dx = enemy.runner.x - p.runner.x;
+                let dz = enemy.runner.z - p.runner.z;
+                let dist = dx.hypot(dz).max(0.01);
+                let range = BASIC_RANGE[p.champ] * BodyProfile::new(p.width).reach;
+                return Input {
+                    stick: if dist > range * 0.75 { Stick { x:dx/dist, z:dz/dist } }
+                        else { Stick::default() },
+                    yaw: dx.atan2(dz),
+                    arena_target: Some(ArenaTarget::Champion { seat: enemy.seat }),
+                    fire: dist < range && p.cooldown[0] <= 0.0,
+                    jump: dist < 6.0 && p.cooldown[1] <= 0.0,
+                    crouch: dist > 4.0 && p.cooldown[2] <= 0.0,
+                    press: (dist < 5.8 && p.cooldown[3] <= 0.0)
+                        .then_some(crate::bout::Press::Both),
+                    ..Default::default()
+                };
+            }
             if let Some(minion) = self
                 .minions
                 .iter()
@@ -2328,6 +2539,11 @@ impl Bout for PetArena {
             "crown_collapse_in":(self.crown_collapse_start()-self.time).max(0.0),
             "relays":relays,"relay_pulse":self.relay_pulse,
             "dragon":dragon,"players":players,"minions":minions,"towers":towers,
+            "skillshots":self.skillshots.iter().map(|shot| json!({
+                "seat":self.players[shot.owner].seat,"slot":shot.slot,
+                "champ":self.players[shot.owner].champ,
+                "x":shot.x,"z":shot.z,"yaw":shot.vx.atan2(shot.vz)
+            })).collect::<Vec<_>>(),
             "spar":self.spar.iter().map(|bot|json!({"x":bot.x,"z":bot.z,"hp":bot.hp})).collect::<Vec<_>>(),
             "props":[]});
         snapshot["portal"] = json!({
@@ -2506,7 +2722,9 @@ mod tests {
         game.players[1].runner.x = 1.0;
         game.players[1].runner.z = 0.0;
         game.players[1].selected = true;
+        game.time = RIFT_UNLOCK;
         game.cast(0, 3, std::f32::consts::FRAC_PI_2, &mut events);
+        game.step_skillshots(0.3, &mut events);
         assert!(game.players[1].hp < 150.0);
         game.players[1].hp = 30.0;
         game.step(
@@ -2867,6 +3085,150 @@ mod tests {
         assert_eq!(game.best_gank(roamer), None, "do not dive an active enemy tower");
     }
     #[test]
+    fn roamer_rechecks_a_gank_and_can_gank_after_the_rift() {
+        let contestants = (0..8)
+            .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
+            .collect::<Vec<_>>();
+        let mut game = PetArena::new(1, &contestants, 17);
+        game.time = RIFT_UNLOCK + 15.0;
+        game.rift_used = true;
+        let roamer = game.players.iter().position(|p| p.team == 0 && p.position == Some(3)).unwrap();
+        let ally = game.players.iter().position(|p| p.team == 0 && p.position == Some(0)).unwrap();
+        let enemy = game.players.iter().position(|p| p.team == 1 && p.position == Some(0)).unwrap();
+        for p in &mut game.players {
+            p.runner = Runner::at(if p.team == 0 { -34.0 } else { 34.0 }, -31.0);
+        }
+        game.players[roamer].runner = Runner::at(-13.0, 0.0);
+        game.players[ally].runner = Runner::at(-9.0, 31.0);
+        game.players[enemy].runner = Runner::at(-8.0, 31.0);
+        game.players[enemy].hp = 60.0;
+        let roamer_seat = game.players[roamer].seat;
+        let enemy_seat = game.players[enemy].seat;
+        assert_eq!(game.best_gank(roamer), Some(enemy));
+        assert_eq!(game.bot_input(roamer_seat, 1.0/60.0).arena_target,
+            Some(ArenaTarget::Champion { seat: enemy_seat }));
+        game.players[enemy].runner = Runner::at(16.0, 31.0);
+        assert_ne!(game.bot_input(roamer_seat, 1.0/60.0).arena_target,
+            Some(ArenaTarget::Champion { seat: enemy_seat }),
+            "a target reaching tower cover must end a locked gank");
+    }
+    #[test]
+    fn laner_defends_against_recent_attacker_then_resumes_last_hits() {
+        let contestants = [Contestant::bot(0, 0.7).on_team(0),
+            Contestant::bot(1, 0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 23);
+        game.time = DRAFT + 40.0;
+        game.players[0].runner = Runner::at(-10.0, 31.0);
+        game.players[1].runner = Runner::at(-8.0, 31.0);
+        game.players[0].last_hit = Some(1);
+        game.players[0].reveal = 1.0;
+        game.minions.push(Minion { id: 77, team: 1, lane: 0,
+            x: -9.0, z: 31.0, hp: 30.0, attack: 0.0 });
+        let defend = game.bot_input(0, 1.0/60.0);
+        assert_eq!(defend.arena_target, Some(ArenaTarget::Champion { seat: 1 }));
+        assert!(defend.fire);
+        game.players[0].reveal = 0.0;
+        let farm = game.bot_input(0, 1.0/60.0);
+        assert_eq!(farm.arena_target, None);
+        assert!(farm.fire, "the bot should resume farming after the threat passes");
+    }
+    #[test]
+    fn ultimate_unlocks_when_the_crown_rift_opens() {
+        let contestants = [Contestant::person(0).on_team(0), Contestant::bot(1, 0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 11);
+        game.players[0].selected = true;
+        game.players[0].mana = MAX_MANA;
+        let mut events = Vec::new();
+        game.time = RIFT_UNLOCK - 0.1;
+        game.cast(0, 3, 0.0, &mut events);
+        assert_eq!(game.players[0].cooldown[3], 0.0);
+        assert_eq!(game.players[0].mana, MAX_MANA);
+        game.time = RIFT_UNLOCK;
+        game.cast(0, 3, 0.0, &mut events);
+        assert!(game.players[0].cooldown[3] > 0.0);
+        assert!(game.players[0].mana < MAX_MANA);
+    }
+    #[test]
+    fn rune_bolt_is_a_dodgeable_travelling_skillshot() {
+        let contestants = [Contestant::person(0).on_team(0), Contestant::person(1).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 19);
+        game.time = DRAFT + 20.0;
+        game.players[0].selected = true;
+        game.players[1].selected = true;
+        game.players[0].champ = 2;
+        game.players[0].runner = Runner::at(0.0, 0.0);
+        game.players[1].runner = Runner::at(4.0, 0.0);
+        let mut events = Vec::new();
+        game.cast(0, 0, 0.0, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP, "casting alone must not apply damage");
+        game.step_skillshots(0.4, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP, "a sideways shot must miss");
+        game.players[0].cooldown[0] = 0.0;
+        game.cast(0, 0, std::f32::consts::FRAC_PI_2, &mut events);
+        game.step_skillshots(0.08, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP, "the bolt has flight time");
+        game.step_skillshots(0.3, &mut events);
+        assert!(game.players[1].hp < MAX_HP);
+        assert!(events.iter().any(|event| event["kind"] == "pet_arena_shot_impact"));
+    }
+    #[test]
+    fn voltkit_auto_shots_follow_the_ordered_target() {
+        let contestants = [Contestant::person(0).on_team(0), Contestant::person(1).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 21);
+        game.time = DRAFT + 35.0;
+        game.players[0].selected = true;
+        game.players[1].selected = true;
+        game.players[0].champ = 5;
+        game.players[0].runner = Runner::at(0.0, 0.0);
+        game.players[1].runner = Runner::at(4.0, 0.0);
+        game.players[0].arena_target = Some(ArenaTarget::Champion { seat: 1 });
+        let mut events = Vec::new();
+        game.auto_attack(0, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP);
+        assert_eq!(game.skillshots.len(), 1);
+        game.players[1].runner = Runner::at(4.0, 1.0);
+        game.step_skillshots(0.3, &mut events);
+        assert!(game.players[1].hp < MAX_HP);
+        assert!(game.players[0].auto_cd < 0.7);
+    }
+    #[test]
+    fn ultimate_blast_goes_where_it_is_aimed() {
+        let contestants = [Contestant::person(0).on_team(0), Contestant::person(1).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 26);
+        game.time = RIFT_UNLOCK;
+        game.players[0].selected = true;
+        game.players[1].selected = true;
+        game.players[0].champ = 2;
+        game.players[0].runner = Runner::at(0.0, 0.0);
+        game.players[1].runner = Runner::at(0.0, 5.0);
+        let mut events = Vec::new();
+        game.cast(0, 3, std::f32::consts::FRAC_PI_2, &mut events);
+        game.step_skillshots(0.7, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP, "a badly aimed ultimate must miss");
+        game.players[0].mana = MAX_MANA;
+        game.players[0].cooldown[3] = 0.0;
+        game.cast(0, 3, 0.0, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP);
+        game.step_skillshots(0.7, &mut events);
+        assert!(game.players[1].hp < MAX_HP);
+        assert!(events.iter().any(|event| event["kind"] == "pet_arena_blast"));
+    }
+    #[test]
+    fn healer_aims_mend_at_one_ally() {
+        let contestants = [Contestant::person(0).on_team(0),
+            Contestant::person(1).on_team(0), Contestant::person(2).on_team(0)];
+        let mut game = PetArena::new(1, &contestants, 29);
+        game.time = DRAFT + 25.0;
+        for p in &mut game.players { p.selected = true; p.hp = 100.0; }
+        game.players[0].champ = 4;
+        game.players[0].runner = Runner::at(0.0,0.0);
+        game.players[1].runner = Runner::at(4.0,0.0);
+        game.players[2].runner = Runner::at(0.0,4.0);
+        game.cast(0,1,std::f32::consts::FRAC_PI_2,&mut Vec::new());
+        assert_eq!(game.players[1].hp,180.0);
+        assert_eq!(game.players[2].hp,100.0);
+    }
+    #[test]
     fn explicit_attack_order_tracks_the_exact_enemy() {
         let contestants = [Contestant::person(0).on_team(0), Contestant::bot(1,0.7).on_team(1)];
         let mut game = PetArena::new(1, &contestants, 8);
@@ -2991,11 +3353,14 @@ mod tests {
         game.players[0].selected = true;
         game.players[0].runner.x = -36.0;
         game.players[0].runner.z = 5.0;
+        game.players[0].champ = 0;
         game.players[0].mana = 0.0;
         game.cast(0, 0, std::f32::consts::FRAC_PI_2, &mut Vec::new());
         assert_eq!(game.spar[0].hp, 150.0);
         game.players[0].mana = 120.0;
         game.cast(0, 0, std::f32::consts::FRAC_PI_2, &mut Vec::new());
+        assert_eq!(game.spar[0].hp, 150.0, "the shot must travel before it hits");
+        game.step_skillshots(0.3, &mut Vec::new());
         assert!(game.spar[0].hp < 150.0);
         game.time = DRAFT - 0.01;
         game.step(&[], 0.02, &mut Vec::new());
