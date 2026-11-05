@@ -28,7 +28,7 @@ pub const ROLES: [&str; 10] = [
     "rune caster",
     "frontline tank",
     "swift medic",
-    "long range striker",
+    "rapid-fire carry",
     "frost controller",
     "diving bruiser",
     "wave healer",
@@ -2270,8 +2270,11 @@ impl Bout for PetArena {
                 let dz = enemy.runner.z - p.runner.z;
                 let dist = dx.hypot(dz).max(0.01);
                 let range = BASIC_RANGE[p.champ] * BodyProfile::new(p.width).reach;
+                // A ranged carry keeps firing while backing out of a melee threat.
+                let carry_step = p.champ == 5 && dist < range * 0.48;
                 return Input {
-                    stick: if dist > range * 0.75 { Stick { x:dx/dist, z:dz/dist } }
+                    stick: if carry_step { Stick { x:-dx/dist, z:-dz/dist } }
+                        else if dist > range * 0.78 { Stick { x:dx/dist, z:dz/dist } }
                         else { Stick::default() },
                     yaw: dx.atan2(dz),
                     arena_target: Some(ArenaTarget::Champion { seat: enemy.seat }),
@@ -2283,19 +2286,28 @@ impl Bout for PetArena {
                     ..Default::default()
                 };
             }
+            let range = BASIC_RANGE[p.champ] * BodyProfile::new(p.width).reach;
             if let Some(minion) = self
                 .minions
                 .iter()
                 .filter(|m| m.team != p.team && m.hp > 0.0)
-                .filter(|m| (m.x - p.runner.x).hypot(m.z - p.runner.z) < 7.0)
+                .filter(|m| (m.x - p.runner.x).hypot(m.z - p.runner.z) < range)
                 .min_by(|a, b| {
-                    (a.x - p.runner.x)
-                        .hypot(a.z - p.runner.z)
-                        .total_cmp(&(b.x - p.runner.x).hypot(b.z - p.runner.z))
+                    // Secure a last hit before starting a fresh minion.
+                    a.hp.total_cmp(&b.hp).then_with(||
+                        (a.x - p.runner.x).hypot(a.z - p.runner.z)
+                            .total_cmp(&(b.x - p.runner.x).hypot(b.z - p.runner.z)))
                 })
             {
+                let dx = minion.x - p.runner.x;
+                let dz = minion.z - p.runner.z;
+                let dist = dx.hypot(dz).max(0.01);
                 return Input {
-                    yaw: (minion.x - p.runner.x).atan2(minion.z - p.runner.z),
+                    stick: if p.champ == 5 && dist < range * 0.45 {
+                        Stick { x: -dx / dist, z: -dz / dist }
+                    } else { Stick::default() },
+                    yaw: dx.atan2(dz),
+                    arena_target: Some(ArenaTarget::Minion { id: minion.id }),
                     fire: p.cooldown[0] <= 0.0,
                     ..Default::default()
                 };
@@ -3129,8 +3141,33 @@ mod tests {
         assert!(defend.fire);
         game.players[0].reveal = 0.0;
         let farm = game.bot_input(0, 1.0/60.0);
-        assert_eq!(farm.arena_target, None);
+        assert_eq!(farm.arena_target, Some(ArenaTarget::Minion { id: 77 }));
         assert!(farm.fire, "the bot should resume farming after the threat passes");
+    }
+    #[test]
+    fn voltkit_bot_last_hits_from_range_and_kites_a_threat() {
+        let contestants = [Contestant::bot(0, 0.7).on_team(0),
+            Contestant::bot(1, 0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 25);
+        game.time = DRAFT + 40.0;
+        game.players[0].champ = 5;
+        game.players[0].position = Some(1);
+        game.players[0].runner = Runner::at(-10.0, -31.0);
+        game.players[1].runner = Runner::at(15.0, -31.0);
+        game.minions.extend([
+            Minion { id: 50, team: 1, lane: 1, x: -4.0, z: -31.0, hp: 80.0, attack: 0.0 },
+            Minion { id: 51, team: 1, lane: 1, x: -5.0, z: -31.0, hp: 12.0, attack: 0.0 },
+        ]);
+        let farm = game.bot_input(0, 1.0/60.0);
+        assert_eq!(farm.arena_target, Some(ArenaTarget::Minion { id: 51 }));
+        game.step(&[(0, farm)], 1.0/60.0, &mut Vec::new());
+        assert!(game.skillshots.iter().any(|shot| matches!(shot.lock, Some(ShotLock::Minion(51)))));
+        game.players[1].runner = Runner::at(-7.0, -31.0);
+        game.players[0].last_hit = Some(1);
+        game.players[0].reveal = 1.0;
+        let defend = game.bot_input(0, 1.0/60.0);
+        assert_eq!(defend.arena_target, Some(ArenaTarget::Champion { seat: 1 }));
+        assert!(defend.stick.x < 0.0, "carry should back away from a nearby threat");
     }
     #[test]
     fn ultimate_unlocks_when_the_crown_rift_opens() {
