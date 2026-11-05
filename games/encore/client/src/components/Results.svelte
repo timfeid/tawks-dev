@@ -2,6 +2,7 @@
   import { Trophy } from '@lucide/svelte';
   import type { RoomConnection } from '../lib/room.svelte';
   import { INSTRUMENT_LABELS, bestKey } from '../lib/types';
+  import { readSettings } from '../lib/settings';
 
   let { conn }: { conn: RoomConnection } = $props();
 
@@ -18,6 +19,18 @@
   const previousBest = key ? (conn.bests[key] ?? 0) : 0;
   const newBest = !!key && !!mine && !mine.progress.auto_kick && mine.progress.score > previousBest;
   if (key && mine && newBest) conn.bests = { ...conn.bests, [key]: mine.progress.score };
+
+  const timing = conn.timing;
+  conn.timing = null;
+  let timingOpen = $state(!!timing);
+  const describeLate = (ms: number) => `${Math.abs(ms)} ms ${ms > 0 ? 'late' : 'early'}`;
+
+  function applyTiming() {
+    if (!timing) return;
+    const saved = readSettings(conn.settings);
+    conn.saveSettings({ ...saved, inputOffset: Math.max(-300, Math.min(300, saved.inputOffset + timing.late)) });
+    timingOpen = false;
+  }
 </script>
 
 <div class="flex h-full flex-col items-center justify-center gap-6 p-6">
@@ -28,6 +41,24 @@
     <div class="mt-2 font-mono text-3xl font-bold text-primary">{total.toLocaleString()}</div>
     <div class="text-xs text-neutral-500">band score</div>
   </div>
+
+  {#if timing && timingOpen}
+    <div class="flex w-full max-w-xl items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm">
+      {#if timing.adjusted !== null}
+        <span class="text-neutral-300">
+          Your hits averaged {describeLate(timing.late)}. Audio offset moved {timing.adjusted > 0 ? '+' : ''}{timing.adjusted} ms.
+        </span>
+        <button class="ml-auto text-xs text-neutral-400 hover:text-white" onclick={() => (timingOpen = false)}>OK</button>
+      {:else}
+        <span class="text-neutral-300">Your hits averaged {describeLate(timing.late)}. Adjust audio offset?</span>
+        <button
+          class="ml-auto rounded-lg bg-white px-3 py-1 text-xs font-semibold text-black hover:bg-neutral-200"
+          onclick={applyTiming}>Apply</button
+        >
+        <button class="text-xs text-neutral-400 hover:text-white" onclick={() => (timingOpen = false)}>Not now</button>
+      {/if}
+    </div>
+  {/if}
 
   <div class="w-full max-w-xl space-y-2">
     {#each band as player, i (player.conn)}

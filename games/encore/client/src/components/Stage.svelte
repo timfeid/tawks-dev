@@ -12,7 +12,8 @@
   import { host, listen, type HeardSample } from '../lib/voice';
   import type { MicrophoneState } from '@tawks/activity-sdk';
   import type { RoomConnection } from '../lib/room.svelte';
-  import type { Settings } from '../lib/settings';
+  import { readSettings, type Settings } from '../lib/settings';
+  import { autoStep, playSuggestion } from '../lib/calibration';
   import { DIFFICULTIES, INSTRUMENT_LABELS, type Chart, type Instrument, type PartChoice, type Track } from '../lib/types';
   import BandList from './BandList.svelte';
   import Lyrics from './Lyrics.svelte';
@@ -205,6 +206,21 @@
     }
   }
 
+  /** After a full song, notes how the hits landed and, with auto adjust on, moves the audio offset a step. */
+  function learnTiming(engine: Engine) {
+    const late = playSuggestion(engine.hitErrors);
+    conn.timing = null;
+    if (late === null) return;
+    if (!settings.autoAdjust) {
+      conn.timing = { late, adjusted: null };
+      return;
+    }
+    const saved = readSettings(conn.settings);
+    const inputOffset = autoStep(saved.inputOffset, late);
+    conn.saveSettings({ ...saved, inputOffset });
+    conn.timing = { late, adjusted: inputOffset - saved.inputOffset };
+  }
+
   /** Schedules the kick sound for each auto kick just ahead, on the song's own audio clock. */
   function scheduleAutoKicks(engine: Engine, heard: number) {
     if (!kit || !player || !engine.autoKick) return;
@@ -347,6 +363,7 @@
       }
       applyMissing(judged);
       const done = heard > songEnd;
+      if (done && !sentDone) learnTiming(engine);
       if ((now - lastSent > PROGRESS_EVERY_MS && !sentDone) || (done && !sentDone)) {
         lastSent = now;
         sentDone = done;

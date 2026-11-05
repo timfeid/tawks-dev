@@ -103,12 +103,19 @@ export class Engine {
   /** When the strum still waiting for frets runs out, or null. */
   private strumUntil: number | null = null;
   private hopoLeniencyUntil = -1e9;
-  /** A fret change (or a strummed hit) that hammer-ons and taps may still be played with. */
+  /**
+   * A fret change, or a strummed hit, since the last hammer-on or tap. While
+   * set, the frets held play a hammer-on or tap as soon as its window opens,
+   * however early they went down.
+   */
   private tapped = true;
-  /** Hammer-ons and taps starting after this need a newer fret change. */
-  private tapFrontEnd = Infinity;
-  /** A wrong fret was hammered during the note's window, so it needs a strum. */
-  private ghosted = false;
+  private strumAt = -1e9;
+  /**
+   * Signed timing error of each hit the player made with a strum, a fret press
+   * or a pad, in judged milliseconds. Notes played by frets already held when
+   * their window opened are left out, since they say nothing of timing.
+   */
+  readonly hitErrors: number[] = [];
   private phrases: Phrase[];
   private phraseOf: Int32Array;
   private bars: number[];
@@ -178,7 +185,7 @@ export class Engine {
     if (down) this.presses[lane] = time;
     const before = this.held;
     this.held = down ? this.held | bit : this.held & ~bit;
-    if (this.held !== before) this.fretChange(before, time);
+    if (this.held !== before) this.fretChange(time);
   }
 
   /** Marks notes that slipped past, settles waiting strums, scores sustains and drains star power up to `time`. */
@@ -188,17 +195,9 @@ export class Engine {
     this.lastTime = time;
 
     if (this.autoKick) this.kickUntil(time);
-    if (this.strumUntil !== null && this.strumUntil < time) {
-      const until = this.strumUntil;
-      this.missUntil(until);
-      this.tryHit(until);
-      if (this.strumUntil !== null) {
-        this.strumUntil = null;
-        this.overstrum(until);
-      }
-    }
+    if (!this.drums) this.catchUp(time - dt, time);
     this.missUntil(time);
-    if (!this.drums && (this.strumUntil !== null || this.tapped)) this.tryHit(time);
+    if (!this.drums && (this.strumUntil !== null || this.tapped)) this.tryHit(time, 'auto');
     this.holdSustains(time);
 
     if (this.starActive) {
@@ -240,6 +239,36 @@ export class Engine {
       if (this.judged[i] === PENDING && this.notes[i].lanes === 1) {
         this.presses[0] = this.notes[i].t;
         this.hitNote(i, this.notes[i].t);
+      }
+    }
+  }
+
+  /**
+   * Plays out what the frets held since `from` did up to `to`: each hammer-on
+   * or tap whose window opened in between is judged the moment it opened, and
+   * a strum still waiting runs out when it would have, so a slow frame never
+   * turns a held note into a miss.
+   */
+  private catchUp(from: number, to: number) {
+    const points: number[] = [];
+    if (this.strumUntil !== null && this.strumUntil < to) points.push(this.strumUntil);
+    for (let i = this.next; i < this.notes.length; i++) {
+      const note = this.notes[i];
+      const open = note.t - EARLY_MS;
+      if (open > to) break;
+      if (this.judged[i] !== PENDING) continue;
+      if (open > from) points.push(open);
+      const closed = note.t + LATE_MS + 0.001;
+      if (closed > from && closed < to) points.push(closed);
+    }
+    points.sort((x, y) => x - y);
+    for (const at of points) {
+      this.missUntil(at);
+      if (this.strumUntil !== null || this.tapped) this.tryHit(at, 'auto');
+      if (this.strumUntil !== null && this.strumUntil <= at) {
+        const until = this.strumUntil;
+        this.strumUntil = null;
+        this.overstrum(until);
       }
     }
   }
@@ -303,7 +332,7 @@ export class Engine {
   }
 
   /** Plays the first note the current frets, strum and fret changes allow, missing any skipped. */
-  private tryHit(time: number) {
+  private tryHit(time: number, cause: 'strum' | 'fret' | 'auto') {
     let first = true;
     for (let i = this.next; i < this.notes.length; i++) {
       if (this.judged[i] !== PENDING) continue;
@@ -317,12 +346,12 @@ export class Engine {
       }
       const hopo = note.kind === 'hopo' && isFirst && this.streak > 0;
       const tap = note.kind === 'tap' && (isFirst || this.streak === 0);
-      if (this.tapped && (hopo || tap) && note.t <= this.tapFrontEnd && !this.ghosted) {
-        this.hitNote(i, time);
+      if (this.tapped && (hopo || tap)) {
+        this.hitNote(i, time, cause === 'fret' ? time : null);
         return true;
       }
       if (this.strumUntil !== null && (isFirst || this.streak === 0)) {
-        this.hitNote(i, time);
+        this.hitNote(i, time, this.strumAt);
         return true;
       }
     }
@@ -339,18 +368,13 @@ export class Engine {
     const first = this.notes[this.next];
     const near = !!first && this.inWindow(first, time);
     this.strumUntil = time + (near ? STRUM_LENIENCY_MS : STRUM_LENIENCY_SMALL_MS);
-    this.tryHit(time);
+    this.strumAt = time;
+    this.tryHit(time, 'strum');
   }
 
-  private fretChange(before: number, time: number) {
+  private fretChange(time: number) {
     this.tapped = true;
-    this.tapFrontEnd = time + EARLY_MS;
-    const first = this.notes[this.next];
-    const hammered = highest(this.held) > highest(before);
-    if (first && this.next > 0 && hammered && this.inWindow(first, time) && !(this.held & first.lanes & 31)) {
-      this.ghosted = true;
-    }
-    this.tryHit(time);
+    this.tryHit(time, 'fret');
     this.holdSustains(time);
   }
 
@@ -423,11 +447,13 @@ export class Engine {
       best = i;
       break;
     }
-    if (best >= 0) this.hitNote(best, time);
+    if (best >= 0) this.hitNote(best, time, time);
   }
 
-  private hitNote(i: number, time: number) {
+  /** `onset` is when the player struck the note, for `hitErrors`, or null when they did not. */
+  private hitNote(i: number, time: number, onset: number | null = null) {
     const note = this.notes[i];
+    if (onset !== null) this.hitErrors.push(onset - note.t);
     if (!this.drums) {
       for (let k = this.next; k < i; k++) if (this.judged[k] === PENDING) this.miss(k, time);
       if (note.kind === 'hopo' || note.kind === 'tap') {
@@ -435,10 +461,8 @@ export class Engine {
         this.hopoLeniencyUntil = time + HOPO_LENIENCY_MS;
       } else {
         this.tapped = true;
-        this.tapFrontEnd = Infinity;
       }
       this.strumUntil = null;
-      this.ghosted = false;
       this.endSustains(time, note.lanes & OPEN ? OPEN : note.lanes & 31);
     }
     this.judged[i] = HIT;
@@ -471,7 +495,6 @@ export class Engine {
     this.judged[i] = MISSED;
     this.missed++;
     this.tapped = false;
-    this.ghosted = false;
     const lanes = this.notes[i].lanes;
     for (let lane = 0; lane < 5; lane++) if (lanes & (1 << lane)) this.missFlashes[lane] = time;
     if (lanes & OPEN) this.missFlashes.fill(time);

@@ -74,6 +74,7 @@ export const AXIS_HYSTERESIS = 0.15;
 export const MIN_AXIS_THRESHOLD = -0.9;
 export const MAX_AXIS_THRESHOLD = 0.95;
 const POLL_MS = 2;
+const STALE_PAD_MS = 16;
 /** How far an axis must move from rest to be bound. */
 const CAPTURE_MOVE = 0.5;
 /** How long capture keeps watching a moved axis for how far it goes. */
@@ -201,8 +202,10 @@ export class Controls {
   private poll() {
     const connected = pads();
     if (!connected.length && !this.keys.size && ![...this.down.values()].some(Boolean)) return;
-    const at = connected.reduce((latest, p) => Math.max(latest, p.timestamp), 0) || performance.now();
-    this.refresh(Math.min(at, performance.now()), connected);
+    const now = performance.now();
+    const at = connected.reduce((latest, p) => Math.max(latest, p.timestamp), 0);
+    // Some drivers stamp reports on another clock or never update the stamp; a press is never older than a poll or two.
+    this.refresh(at > now - STALE_PAD_MS && at <= now ? at : now, connected);
   }
 
   private pressed(control: Control, slot: number, pad: Gamepad, binding: Binding) {

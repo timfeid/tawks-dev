@@ -159,14 +159,88 @@ export class SongPlayer {
   }
 }
 
-/** The audio-clock time that reaches the speakers at `performanceTime`. */
-export function heardAt(ctx: AudioContext, performanceTime: number) {
+/** The audio-clock time, in seconds, reaching the speakers at `performanceTime`, read straight from the browser. */
+export function rawHeardAt(ctx: AudioContext, performanceTime: number) {
   const stamp = ctx.getOutputTimestamp?.();
   if (stamp && stamp.contextTime && stamp.performanceTime) {
     return stamp.contextTime + (performanceTime - stamp.performanceTime) / 1000;
   }
   const latency = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
   return ctx.currentTime - latency + (performanceTime - performance.now()) / 1000;
+}
+
+/** A jump this large is a new device or a stall, not jitter, so the clock follows it at once. */
+const CLOCK_SNAP_MS = 25;
+const CLOCK_SMOOTHING = 0.05;
+const CLOCK_SAMPLE_EVERY_MS = 4;
+
+/**
+ * Maps page time to the audio being heard. The browser's output timestamps
+ * only move once per audio callback, so each reading jitters by a few
+ * milliseconds; following them slowly keeps notes steady while still
+ * tracking the sound card's clock over a whole song.
+ */
+export class AudioClock {
+  /** Heard audio time minus page time, in milliseconds. */
+  private offset: number | null = null;
+  private sampledAt = -Infinity;
+
+  constructor(private read: (performanceTime: number) => number) {}
+
+  /** Throws away the estimate, for a new output device. */
+  reset() {
+    this.offset = null;
+    this.sampledAt = -Infinity;
+  }
+
+  sample(now: number) {
+    const measured = this.read(now) * 1000 - now;
+    this.sampledAt = now;
+    if (this.offset === null || Math.abs(measured - this.offset) > CLOCK_SNAP_MS) this.offset = measured;
+    else this.offset += (measured - this.offset) * CLOCK_SMOOTHING;
+  }
+
+  /** Seconds of audio-clock time heard at `performanceTime`. */
+  heardAt(performanceTime: number, now = performance.now()) {
+    if (this.offset === null || now - this.sampledAt >= CLOCK_SAMPLE_EVERY_MS) this.sample(now);
+    return (performanceTime + this.offset!) / 1000;
+  }
+}
+
+const clocks = new WeakMap<AudioContext, AudioClock>();
+
+function clockFor(ctx: AudioContext) {
+  let clock = clocks.get(ctx);
+  if (!clock) {
+    clock = new AudioClock((t) => rawHeardAt(ctx, t));
+    clocks.set(ctx, clock);
+    const reset = () => clock!.reset();
+    navigator.mediaDevices?.addEventListener?.('devicechange', reset);
+    (ctx as AudioContext & EventTarget).addEventListener?.('sinkchange', reset);
+  }
+  return clock;
+}
+
+/** The audio-clock time that reaches the speakers at `performanceTime`. */
+export function heardAt(ctx: AudioContext, performanceTime: number) {
+  return clockFor(ctx).heardAt(performanceTime);
+}
+
+/** The output delay the browser reports for this device, in milliseconds, or null when it reports none. */
+export function reportedLatencyMs(ctx: AudioContext = audioContext()) {
+  const total = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
+  return total > 0 ? Math.round(total * 1000) : null;
+}
+
+/** Calls `onChange` when the output device may have changed; returns a stop function. */
+export function watchOutputDevice(onChange: () => void) {
+  const ctx = audioContext();
+  navigator.mediaDevices?.addEventListener?.('devicechange', onChange);
+  (ctx as AudioContext & EventTarget).addEventListener?.('sinkchange', onChange);
+  return () => {
+    navigator.mediaDevices?.removeEventListener?.('devicechange', onChange);
+    (ctx as AudioContext & EventTarget).removeEventListener?.('sinkchange', onChange);
+  };
 }
 
 /** Adds `buffer` into `into`, growing it when the new stem runs longer. */

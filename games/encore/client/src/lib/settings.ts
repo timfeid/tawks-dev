@@ -1,10 +1,12 @@
 import { DEFAULT_BINDINGS, cleanBindings, type Bindings, type Control, type Layout } from './input';
 
 export type Settings = {
-  /** How late this player's presses land, in milliseconds; subtracted when judging. */
+  /** The audio offset: how late this player's presses land after the sound, in milliseconds; subtracted when judging. */
   inputOffset: number;
-  /** Shifts the notes on screen to line up with the audio. */
+  /** The video offset: shifts only the notes on screen; higher makes them reach the line later. */
   videoOffset: number;
+  /** Nudges the audio offset after each song from how the hits landed. */
+  autoAdjust: boolean;
   /** How far ahead the highway shows, in milliseconds. */
   lookahead: number;
   volume: number;
@@ -21,6 +23,7 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = {
   inputOffset: 0,
   videoOffset: 0,
+  autoAdjust: false,
   lookahead: 1100,
   volume: 0.9,
   drumVolume: 0.8,
@@ -48,6 +51,7 @@ export function readSettings(raw: unknown): Settings {
   return {
     inputOffset: clamp(from.inputOffset, -300, 300, 0),
     videoOffset: clamp(from.videoOffset, -300, 300, 0),
+    autoAdjust: typeof from.autoAdjust === 'boolean' ? from.autoAdjust : DEFAULT_SETTINGS.autoAdjust,
     lookahead: clamp(from.lookahead, 500, 2500, DEFAULT_SETTINGS.lookahead),
     volume: clamp(from.volume, 0, 1, DEFAULT_SETTINGS.volume),
     drumVolume: clamp(from.drumVolume, 0, 1, DEFAULT_SETTINGS.drumVolume),

@@ -98,6 +98,10 @@
   /** Places a reading from -1 to 1 along the meter, as a percentage. */
   const meterAt = (value: number) => `${((value + 1) / 2) * 100}%`;
 
+  function nudge(key: 'inputOffset' | 'videoOffset', step: number) {
+    draft[key] = Math.max(-300, Math.min(300, draft[key] + step));
+  }
+
   function remove(control: Control, index: number) {
     draft.bindings[layout][control] = draft.bindings[layout][control].filter((_, i) => i !== index);
   }
@@ -267,19 +271,28 @@
           bind:inputOffset={draft.inputOffset}
           bind:videoOffset={draft.videoOffset}
         />
+        {#each [['inputOffset', 'Audio offset'], ['videoOffset', 'Video offset']] as const as [key, label] (key)}
+          <div class="flex items-center gap-2 text-sm">
+            <span class="w-36 text-neutral-400">{label}</span>
+            <input type="range" min="-300" max="300" step="1" bind:value={draft[key]} class="min-w-0 flex-1" aria-label={label} />
+            {#each [-5, -1, 1, 5] as step (step)}
+              <button
+                class="w-9 rounded-md border border-white/10 py-0.5 font-mono text-xs text-neutral-300 hover:text-white"
+                onclick={() => nudge(key, step)}
+                aria-label="{label} {step > 0 ? 'plus' : 'minus'} {Math.abs(step)} ms">{step > 0 ? '+' : ''}{step}</button
+              >
+            {/each}
+            <span class="w-16 text-right font-mono text-xs">{draft[key]} ms</span>
+          </div>
+        {/each}
         <label class="flex items-center gap-3 text-sm">
-          <span class="w-36 text-neutral-400">Input offset</span>
-          <input type="range" min="-200" max="300" step="1" bind:value={draft.inputOffset} class="flex-1" />
-          <span class="w-16 text-right font-mono text-xs">{draft.inputOffset} ms</span>
-        </label>
-        <label class="flex items-center gap-3 text-sm">
-          <span class="w-36 text-neutral-400">Video offset</span>
-          <input type="range" min="-200" max="200" step="1" bind:value={draft.videoOffset} class="flex-1" />
-          <span class="w-16 text-right font-mono text-xs">{draft.videoOffset} ms</span>
+          <span class="w-36 text-neutral-400">Auto adjust</span>
+          <input type="checkbox" bind:checked={draft.autoAdjust} class="accent-primary" />
+          <span class="text-xs text-neutral-500">After each song, move the audio offset a little toward where your hits landed.</span>
         </label>
         <p class="text-xs text-neutral-500">
-          Input offset corrects when your hits register. Video offset moves the notes: raise it if they cross the line
-          after you hear the click.
+          The audio offset moves when your hits are judged against the music. The video offset only moves the notes: lower it
+          if notes reach the line after you hear them, raise it if they get there first.
         </p>
       </section>
 

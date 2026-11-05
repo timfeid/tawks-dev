@@ -13,6 +13,8 @@ export class RoomConnection {
   userId = $state<string | null>(null);
   settings = $state<unknown>(null);
   bests = $state<Record<string, number>>({});
+  /** How the last song's hits landed, for the results screen: `late` in ms, and the change auto adjust made, if any. */
+  timing = $state<{ late: number; adjusted: number | null } | null>(null);
   error = $state<string | null>(null);
   library = $state(false);
   uploads = $state(false);
