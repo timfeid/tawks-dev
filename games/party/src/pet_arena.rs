@@ -8,7 +8,7 @@ pub const KEYS: [&str; 2] = ["pet_ringout", "pet_teamfight"];
 pub const NAMES: [&str; 2] = ["Skyline Scramble", "Crownfall Clash"];
 pub const RULES: [&str; 2] = [
     "Launch rivals out of the ring. Small pets move quickly; broad pets hit farther and harder, and resist launches. Charge a heavy strike for a knockout.",
-    "Choose a champion and break the enemy Crown to win. Full teams fill four combat roles. Clear minions to push a lane, capture relays for Crown pressure, and claim the dragon for a team buff.",
+    "Choose a champion and break the enemy Crown to win. Full teams send one top, two bottom, and one roamer. Clear minions to push a lane, capture relays for Crown pressure, and claim the dragon for a team buff.",
 ];
 pub const CHAMPIONS: [&str; 10] = [
     "Cinderfox",
@@ -47,6 +47,7 @@ pub const ABILITIES: [[&str; 4]; 10] = [
     ["Spore Dart", "Seed Bomb", "Vine Step", "Wild Bloom"],
 ];
 pub const TEAM_ROLES: [&str; 4] = ["Frontline", "Damage", "Control", "Healer"];
+pub const TEAM_POSITIONS: [&str; 4] = ["Top", "Bottom", "Bottom", "Roamer"];
 pub const CHAMPION_ROLE: [usize; 10] = [1, 1, 2, 0, 3, 1, 2, 0, 3, 2];
 pub const ROLE_DEFAULT: [usize; 4] = [3, 0, 2, 4];
 /// Short descriptions match the server's actual targeting and effects.
@@ -166,6 +167,7 @@ struct Fighter {
     runner: Runner,
     champ: usize,
     role: usize,
+    position: Option<usize>,
     selected: bool,
     reveal: f32,
     hp: f32,
@@ -234,6 +236,21 @@ fn spawn(index: usize, count: usize, team: u8, kind: usize, role: usize, seed: u
         let angle = index as f32 * std::f32::consts::TAU / count.max(1) as f32
             + (seed % 32) as f32 * std::f32::consts::TAU / 32.0;
         (angle.cos() * 4.4, angle.sin() * 4.4)
+    }
+}
+fn lane_spawn(index: usize, count: usize, p: &Fighter, kind: usize, seed: u64) -> (f32, f32) {
+    match p.position {
+        Some(position) if kind == 1 => {
+            let side = if p.team == 0 { -1.0 } else { 1.0 };
+            let z = match position {
+                0 => LANE_Z[0] - 2.0,
+                1 => LANE_Z[1] + 2.0,
+                2 => LANE_Z[1] - 2.0,
+                _ => 0.0,
+            };
+            (side * 32.0, z)
+        }
+        _ => spawn(index, count, p.team, kind, p.role, seed),
     }
 }
 fn bot_champion(role: usize, seed: u64) -> usize {
@@ -307,6 +324,11 @@ impl PetArena {
         if p.level >= MAX_LEVEL {
             return;
         }
+        let amount = if p.position == Some(3) {
+            amount.saturating_add(((u32::from(amount) * 3) / 10) as u16)
+        } else {
+            amount
+        };
         p.xp = p.xp.saturating_add(amount);
         while p.level < MAX_LEVEL {
             let needed = 45 + u16::from(p.level) * 20;
@@ -512,6 +534,13 @@ impl PetArena {
                 } else {
                     0
                 };
+                let position = (kind == 1
+                    && contestants
+                        .iter()
+                        .filter(|other| other.team.min(1) == team)
+                        .count()
+                        == 4)
+                    .then_some(role);
                 let (x, z) = spawn(index, count, team, kind, role, seed);
                 Fighter {
                     seat: c.seat,
@@ -531,6 +560,7 @@ impl PetArena {
                         index % CHAMPIONS.len()
                     },
                     role,
+                    position,
                     selected: c.is_bot || kind == 0,
                     reveal: 0.0,
                     hp: MAX_HP,
@@ -663,6 +693,18 @@ impl PetArena {
             if owner != old {
                 events.push(json!({"kind":"pet_relay_change","site":site,"owner":owner,
                     "x":x,"z":z}));
+                if let Some(team) = owner {
+                    for index in 0..self.players.len() {
+                        let p = &self.players[index];
+                        if p.position == Some(3)
+                            && p.team == team
+                            && p.respawn <= 0.0
+                            && (p.runner.x - x).hypot(p.runner.z - z) < RELAY_RADIUS
+                        {
+                            self.gain_xp(index, 18, events);
+                        }
+                    }
+                }
             }
         }
         self.relay_pulse -= dt;
@@ -1144,7 +1186,7 @@ impl Bout for PetArena {
                 p.cooldown = [0.0; 4];
                 p.lock = 0.0;
                 p.respawn = 0.0;
-                let (x, z) = spawn(index, count, p.team, self.kind, p.role, self.seed);
+                let (x, z) = lane_spawn(index, count, p, self.kind, self.seed);
                 p.runner = Runner::at(x, z).with_width(p.width);
             }
         }
@@ -1226,7 +1268,7 @@ impl Bout for PetArena {
             if p.respawn > 0.0 {
                 p.respawn = (p.respawn - dt).max(0.0);
                 if p.respawn == 0.0 && p.stocks > 0 {
-                    let (x, z) = spawn(index, count, p.team, self.kind, p.role, self.seed);
+                    let (x, z) = lane_spawn(index, count, p, self.kind, self.seed);
                     p.runner = Runner::at(x, z).with_width(p.width);
                     p.hp = Self::max_hp(p.level);
                     p.mana = Self::max_mana(p.level);
@@ -1409,7 +1451,7 @@ impl Bout for PetArena {
             .count();
         if self.kind == 1
             && self.crown_open(p.team as usize)
-            && (team_size == 1 || p.role != 1 || self.players.len() == 4)
+            && (team_size == 1 || p.position != Some(3) || self.players.len() == 4)
         {
             let site = CROWN_POS[1 - p.team as usize];
             let dx = site.0 - p.runner.x;
@@ -1441,11 +1483,23 @@ impl Bout for PetArena {
                     .position(|owner| *owner != Some(p.team))
             }
         } else {
-            Some(p.role % 2)
+            Some(match p.position {
+                Some(0) => 0,
+                Some(1 | 2) => 1,
+                Some(3) => {
+                    let first = self.seed as usize % 2;
+                    if self.relay_owner[first] != Some(p.team) {
+                        first
+                    } else {
+                        1 - first
+                    }
+                }
+                _ => p.role % 2,
+            })
         };
         if self.kind == 1
             && relay_site.is_some_and(|site| self.relay_owner[site] != Some(p.team))
-            && (team_size == 1 || self.time < DRAGON_WAKE || p.role != 1)
+            && (team_size == 1 || self.time < DRAGON_WAKE || p.position != Some(3))
         {
             let site = RELAYS[relay_site.unwrap()];
             let dx = site.0 - p.runner.x;
@@ -1490,7 +1544,7 @@ impl Bout for PetArena {
             };
         }
         if self.kind == 1
-            && (p.role == 1 || team_size == 1)
+            && (p.position == Some(3) || (p.position.is_none() && p.role == 1) || team_size == 1)
             && self.dragon_hp > 0.0
             && self.time >= DRAGON_WAKE
             && self.team_buff[p.team as usize] <= 0.0
@@ -1573,7 +1627,8 @@ impl Bout for PetArena {
                 "shield":p.shield,"damage":p.damage,
                 "stocks":p.stocks,"respawn":p.respawn,"lock":p.lock,
                 "invuln":p.invuln,"charge":p.charge,
-                "champ":p.champ,"role":p.role,"selected":p.selected,"reveal":p.reveal,
+                "champ":p.champ,"role":p.role,"position":p.position,
+                "selected":p.selected,"reveal":p.reveal,
                 "cooldowns":p.cooldown,"action_n":p.action_n,"cast":p.cast
             })).collect::<Vec<_>>();
         let relays = RELAYS
@@ -1881,7 +1936,55 @@ mod tests {
                     .filter(|p| p.team == team)
                     .all(|p| CHAMPION_ROLE[p.champ] == p.role)
             );
+            let mut positions = game
+                .players
+                .iter()
+                .filter(|p| p.team == team)
+                .map(|p| p.position)
+                .collect::<Vec<_>>();
+            positions.sort_unstable();
+            assert_eq!(positions, vec![Some(0), Some(1), Some(2), Some(3)]);
         }
+    }
+    #[test]
+    fn full_team_starts_in_lanes_and_roamer_gains_faster_xp() {
+        let contestants = (0..8)
+            .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
+            .collect::<Vec<_>>();
+        let mut game = PetArena::new(1, &contestants, 3);
+        game.time = DRAFT - 0.01;
+        game.step(&[], 0.02, &mut Vec::new());
+        let team = game
+            .players
+            .iter()
+            .filter(|p| p.team == 0)
+            .collect::<Vec<_>>();
+        assert!(team[0].runner.z > 15.0);
+        assert!(team[1].runner.z < -15.0);
+        assert!(team[2].runner.z < -15.0);
+        assert!(team[3].runner.z.abs() < 1.0);
+        for index in [0, 2, 4, 6] {
+            game.gain_xp(index, 10, &mut Vec::new());
+        }
+        assert_eq!(game.players[0].xp, 10);
+        assert_eq!(game.players[6].xp, 13);
+        let snapshot = game.snapshot();
+        assert_eq!(snapshot["players"][6]["position"], 3);
+    }
+    #[test]
+    fn roamer_earns_xp_for_helping_capture_a_relay() {
+        let contestants = (0..8)
+            .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
+            .collect::<Vec<_>>();
+        let mut game = PetArena::new(1, &contestants, 3);
+        game.time = DRAFT + 1.0;
+        game.relay_progress[0] = 0.98;
+        game.players[6].runner.x = RELAYS[0].0;
+        game.players[6].runner.z = RELAYS[0].1;
+        game.step_relays(0.2, &mut Vec::new());
+        assert_eq!(game.relay_owner[0], Some(0));
+        assert_eq!(game.players[6].xp, 23);
+        assert_eq!(game.players[0].xp, 0);
     }
     #[test]
     fn brush_hides_from_enemies_until_they_approach_or_the_pet_fights() {
