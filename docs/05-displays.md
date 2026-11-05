@@ -64,7 +64,7 @@ WorkflowVisualBuilder::new("lobby")
 | `Panel { tone, content }` | `panel(content)` | A rounded, bordered box. `.tone(Tone::Primary)` highlights it; `Warning` and `Danger` call attention to it. |
 | `Split { media, content, rail }` | `split(media, content)`, `rail(content, side)` | Media beside content when there is room, above it when not. As a `rail`, the side column comes after the content and shows only when there is room for both, like a list of trending stories beside a feed. |
 | `Backdrop { color, image, content }` | `backdrop(color, image, content)` | `content` on a band in `color` (a hex colour), with `image` large and faint in its corner and a dark wash over both. |
-| `Calendar { items_key }` | `calendar(items_key)` | A month, seven days to a row under the weekday names. Each item is a day: `day`, and optionally `outside`, `today`, `href`, `image`, `label`, `detail` and `tone`. |
+| `Calendar { items_key }` | `calendar(items_key)` | A month, seven days to a row under the weekday names. Each item is a day: `day`, and optionally `outside`, `today`, `href`, `image`, `label`, `detail`, `tone` and `highlight` (a tinted background, such as for home games). |
 | `Divider { label }` | `divider()`, `labelled_divider(label)` | A rule, with an optional label in the middle. |
 | `ActionBar { content }` | `action_bar(content)` | Buttons held at the foot of the page. |
 | `Overlay { corner, content }` | `overlay(corner, content)` | Floats over the game canvas just before it, in one `Corner` (`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`, `Top`, `Bottom`), with the canvas still playable around it. Docks to the bottom on a phone. |

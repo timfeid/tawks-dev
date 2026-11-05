@@ -13,6 +13,7 @@
     label?: string;
     detail?: string;
     tone?: string;
+    highlight?: boolean;
   };
 
   const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -26,7 +27,7 @@
 </script>
 
 {#snippet cell(day: Day)}
-  <span class="flex items-center justify-between">
+  <span class="flex items-center justify-center @md:justify-between">
     <span
       class={[
         'flex size-6 items-center justify-center rounded-full text-xs tabular-nums',
@@ -41,7 +42,7 @@
     <img src={mediaUrl(day.image)} alt="" class="mx-auto size-7 object-contain drop-shadow @md:size-10" loading="lazy" />
   {/if}
   {#if day.detail}
-    <span class={['truncate text-center text-[10px] font-semibold tabular-nums @md:text-xs', look.toneText(look.toneOf(day.tone, inputs), 'Muted')]}>{day.detail}</span>
+    <span class={['max-w-full truncate text-center text-[10px] font-semibold tabular-nums @md:text-xs', look.toneText(look.toneOf(day.tone, inputs), 'Muted')]}>{day.detail}</span>
   {/if}
 {/snippet}
 
@@ -53,9 +54,9 @@
       {/each}
       {#each days as day}
         {@const box = [
-          'flex min-h-16 min-w-0 flex-col gap-1 rounded-lg border p-1 @md:min-h-24 @md:p-1.5',
+          'flex min-h-16 min-w-0 flex-col items-center gap-1 rounded-lg border p-1 @md:min-h-24 @md:items-stretch @md:p-1.5',
           day.today ? 'border-primary/60' : 'border-foreground/5',
-          day.image ? 'bg-foreground/[0.06]' : 'bg-foreground/[0.02]',
+          day.highlight ? 'bg-primary/15' : day.image ? 'bg-foreground/[0.06]' : 'bg-foreground/[0.02]',
           day.outside && 'opacity-35',
         ]}
         {#if day.href}
