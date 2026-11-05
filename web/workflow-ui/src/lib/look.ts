@@ -183,6 +183,57 @@ export function accentEdge(color: string): string {
   return `inset 3px 0 0 ${color}`;
 }
 
+type Rgb = [number, number, number];
+
+const rgbOf = (hex: string): Rgb => {
+  const h = hex.slice(1);
+  const full = h.length === 3 ? [...h].map((c) => c + c).join('') : h;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as Rgb;
+};
+
+const hexOf = (rgb: Rgb) => `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`;
+
+const luminance = (rgb: Rgb) => {
+  const [r, g, b] = rgb.map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const contrast = (a: Rgb, b: Rgb) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+const mixToward = (from: Rgb, to: Rgb, against: Rgb): Rgb => {
+  for (let t = 0; t <= 1; t += 0.05) {
+    const mixed = from.map((c, i) => c + (to[i] - c) * t) as Rgb;
+    if (contrast(mixed, against) >= 4.5) return mixed;
+  }
+  return to;
+};
+
+const DARK_PAGE: Rgb = [13, 13, 13];
+const LIGHT_PAGE: Rgb = [242, 242, 242];
+
+/**
+ * An accent as CSS variables for one block: `--accent-ink` is the colour
+ * lightened on the dark theme and darkened on the light one until it reads
+ * as text, and `--accent-on` is black or white, whichever reads on it.
+ * Pair with `accentInk` on the same element.
+ */
+export function accentVars(color: string): string {
+  const rgb = rgbOf(color);
+  const dark = mixToward(rgb, [255, 255, 255], DARK_PAGE);
+  const light = mixToward(rgb, [0, 0, 0], LIGHT_PAGE);
+  const on = (c: Rgb) => (luminance(c) > 0.18 ? '#000000' : '#ffffff');
+  return `--accent-ink-dark: ${hexOf(dark)}; --accent-on-dark: ${on(dark)}; --accent-ink-light: ${hexOf(light)}; --accent-on-light: ${on(light)}`;
+}
+
+export const accentInk =
+  '[--accent-ink:var(--accent-ink-light)] [--accent-on:var(--accent-on-light)] dark:[--accent-ink:var(--accent-ink-dark)] dark:[--accent-on:var(--accent-on-dark)]';
+
 /** A row in a list. */
 export const rowState: Record<State, string> = {
   Default: 'border-foreground/10 bg-foreground/[0.02]',

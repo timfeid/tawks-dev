@@ -510,7 +510,11 @@ pub fn photo_backdrop(
 }
 
 pub fn calendar(items_key: impl Into<String>) -> WorkflowDisplay {
-    display(DisplayType::Calendar { items_key: items_key.into() })
+    display(DisplayType::Calendar {
+        items_key: items_key.into(),
+        accent: None,
+        legend_key: String::new(),
+    })
 }
 
 pub fn items(
@@ -656,8 +660,8 @@ impl WorkflowDisplay {
         self
     }
 
-    /// Washes a row, or each row of a table, in a colour: `#rrggbb` or a
-    /// `{key}` naming one per item, such as `"{r.accent}"`. A value that is
+    /// Washes a row, each row of a table, or a calendar's today in a colour:
+    /// `#rrggbb` or a `{key}` naming one per item, such as `"{r.accent}"`. A value that is
     /// neither is left out.
     pub fn accent_from(mut self, value: impl Into<String>) -> Self {
         let accent = match Accent::parse(value) {
@@ -668,8 +672,18 @@ impl WorkflowDisplay {
             }
         };
         match &mut self.r#type {
-            DisplayType::Row { accent: slot, .. } | DisplayType::Table { row_accent: slot, .. } => *slot = Some(accent),
+            DisplayType::Row { accent: slot, .. }
+            | DisplayType::Table { row_accent: slot, .. }
+            | DisplayType::Calendar { accent: slot, .. } => *slot = Some(accent),
             _ => {}
+        }
+        self
+    }
+
+    /// Draws the items of `key` as a calendar's legend under the month.
+    pub fn legend(mut self, key: impl Into<String>) -> Self {
+        if let DisplayType::Calendar { legend_key, .. } = &mut self.r#type {
+            *legend_key = key.into();
         }
         self
     }

@@ -1116,9 +1116,16 @@ pub enum DisplayType {
     /// A month, seven days to a row under the weekday names. Each item of
     /// `items_key` is one cell: `day`, and optionally `outside` (true for days
     /// of the months either side), `today`, `href`, `image`, `label`,
-    /// `detail` and `tone`.
+    /// `detail` and `tone`. With `accent`, today and the `Accent` tone take
+    /// that colour instead of the theme's. `legend_key` names items drawn as
+    /// a key under the month: each a `name` beside a small sample cell made
+    /// of the same optional fields as a day, without `day`.
     Calendar {
         items_key: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        accent: Option<Accent>,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        legend_key: String,
     },
     /// Repeats `content` for each item of `items_key`, laid out by `layout`.
     Items {
