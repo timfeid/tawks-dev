@@ -244,7 +244,7 @@ async fn post(web: &WebClient, chat_id: &str, text: &str) -> Result<()> {
         &json!({ "chat_id": chat_id, "contents": { "text": text, "attachments": null } }),
     )
     .await
-    .map_err(|_| anyhow!("Longtable can't answer in this chat. It answers in hubs it belongs to."))?;
+    .map_err(|_| anyhow!("Longtable can't answer in this chat."))?;
     Ok(())
 }
 

@@ -28,7 +28,7 @@
   <div class="brand">
     <span class="mark" aria-hidden="true"></span>
     <span class="word">Longtable</span>
-    <span class="compat">{conn.compatibility}</span>
+    <button class="compat" title="Credits and rules content" onclick={onCredits}>{conn.compatibility}</button>
   </div>
 
   <div class="gm" title="Game master">
@@ -47,7 +47,7 @@
         {/each}
       </span>
     </button>
-    <button class="btn quiet icon" aria-label="Credits and rules" onclick={onCredits}><BookOpen size={18} /></button>
+    <button class="btn quiet icon" aria-label="Credits" title="Credits" onclick={onCredits}><BookOpen size={18} /></button>
     {#if fullscreen !== null}
       <button class="btn quiet icon" aria-label={fullscreen ? 'Leave full screen' : 'Full screen'} onclick={onFullscreen}>
         {#if fullscreen}<Minimize2 size={18} />{:else}<Maximize2 size={18} />{/if}
@@ -114,6 +114,7 @@
   }
 
   .compat {
+    background: transparent;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -241,9 +242,6 @@
   }
 
   @media (max-width: 720px) {
-    .gm span {
-      display: none;
-    }
     .compat {
       display: none;
     }
