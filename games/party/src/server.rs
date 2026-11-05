@@ -788,7 +788,161 @@ fn dev_tools() -> bool {
 mod native_handoff_tests {
     use super::*;
     use serde_json::{Value, json};
-    use tokio_tungstenite::{connect_async, tungstenite::Message as ClientMessage};
+    use tokio_tungstenite::{
+        MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message as ClientMessage,
+    };
+
+    async fn until_message(
+        socket: &mut WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
+        label: &str,
+        matches: impl Fn(&Value) -> bool,
+    ) -> Value {
+        tokio::time::timeout(Duration::from_secs(8), async {
+            loop {
+                let frame = socket.next().await.expect("socket closed").expect("socket error");
+                let ClientMessage::Text(text) = frame else { continue };
+                let message: Value = serde_json::from_str(&text).expect("server JSON");
+                if message["type"] == "error" {
+                    panic!("{label}: {message}");
+                }
+                if matches(&message) {
+                    return message;
+                }
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("timed out waiting for {label}"))
+    }
+
+    async fn native_player(
+        server: &PartyServer,
+        url: &str,
+        endpoint: &str,
+        match_id: &str,
+        id: &str,
+        owner: bool,
+    ) -> WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>> {
+        let source = server.issue_token_for(match_id, id, id, "", None, false, owner);
+        let ticket: Value = reqwest::Client::new()
+            .post(endpoint)
+            .json(&json!({"token":source,"user_id":id,"match_id":match_id}))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let (mut socket, _) = connect_async(url).await.unwrap();
+        socket
+            .send(ClientMessage::Text(json!({"type":"hello","token":ticket["token"]}).to_string().into()))
+            .await
+            .unwrap();
+        until_message(&mut socket, "welcome", |message| {
+            message["type"] == "welcome" && message["user_id"] == id
+        })
+        .await;
+        socket
+    }
+
+    #[tokio::test]
+    async fn two_native_players_can_start_the_same_one_vs_one_bout() {
+        let reserve = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = reserve.local_addr().unwrap().port();
+        drop(reserve);
+        let url = format!("ws://127.0.0.1:{port}/party/ws");
+        let server = PartyServer::start(PartyConfig {
+            bind: format!("127.0.0.1:{port}").parse().unwrap(),
+            public_url: url.clone(),
+        })
+        .await
+        .unwrap();
+        let endpoint = format!("http://127.0.0.1:{port}/party/native-pass");
+        let mut first = native_player(&server, &url, &endpoint, "native-1v1", "player-one", true).await;
+        let mut second = native_player(&server, &url, &endpoint, "native-1v1", "player-two", false).await;
+        for socket in [&mut first, &mut second] {
+            let room = until_message(socket, "two seats", |message| {
+                message["type"] == "room"
+                    && message["room"]["members"].as_array().is_some_and(|m| m.len() == 2)
+            })
+            .await;
+            assert_eq!(room["room"]["match_id"], "native-1v1");
+            assert_eq!(room["spectating"], false);
+        }
+        first.send(ClientMessage::Text(json!({"type":"choose_game","key":"bumper"}).to_string().into())).await.unwrap();
+        first.send(ClientMessage::Text(json!({"type":"start"}).to_string().into())).await.unwrap();
+        for socket in [&mut first, &mut second] {
+            let room = until_message(socket, "shared practice", |message| {
+                message["type"] == "room"
+                    && message["room"]["phase"]["name"] == "practice"
+                    && message["room"]["minigame"] == "bumper"
+            })
+            .await;
+            assert_eq!(room["room"]["members"].as_array().unwrap().len(), 2);
+            until_message(socket, "bout snapshot", |message| {
+                message["type"] == "snap" && message["game"]["game"] == "bumper"
+            })
+            .await;
+        }
+        first.send(ClientMessage::Text(json!({"type":"ready"}).to_string().into())).await.unwrap();
+        second.send(ClientMessage::Text(json!({"type":"ready"}).to_string().into())).await.unwrap();
+        for socket in [&mut first, &mut second] {
+            until_message(socket, "shared countdown", |message| {
+                message["type"] == "room"
+                    && message["room"]["phase"]["name"] == "countdown"
+            })
+            .await;
+        }
+        for socket in [&mut first, &mut second] {
+            until_message(socket, "live one-vs-one bout", |message| {
+                message["type"] == "room"
+                    && message["room"]["phase"]["name"] == "playing"
+                    && message["room"]["members"].as_array().is_some_and(|m| m.len() == 2)
+            })
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn two_native_players_get_six_bots_for_crownfall() {
+        let reserve = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = reserve.local_addr().unwrap().port();
+        drop(reserve);
+        let url = format!("ws://127.0.0.1:{port}/party/ws");
+        let server = PartyServer::start(PartyConfig {
+            bind: format!("127.0.0.1:{port}").parse().unwrap(),
+            public_url: url.clone(),
+        })
+        .await
+        .unwrap();
+        let endpoint = format!("http://127.0.0.1:{port}/party/native-pass");
+        let mut first = native_player(&server, &url, &endpoint, "native-crownfall", "player-one", true).await;
+        let mut second = native_player(&server, &url, &endpoint, "native-crownfall", "player-two", false).await;
+        until_message(&mut first, "second player seated", |message| {
+            message["type"] == "room"
+                && message["room"]["members"].as_array().is_some_and(|m| m.len() == 2)
+        })
+        .await;
+        first.send(ClientMessage::Text(json!({"type":"choose_game","key":"pet_teamfight"}).to_string().into())).await.unwrap();
+        first.send(ClientMessage::Text(json!({"type":"start"}).to_string().into())).await.unwrap();
+        for socket in [&mut first, &mut second] {
+            let room = until_message(socket, "Crownfall roster", |message| {
+                message["type"] == "room"
+                    && message["room"]["minigame"] == "pet_teamfight"
+                    && message["room"]["members"].as_array().is_some_and(|m| m.len() == 8)
+            })
+            .await;
+            let members = room["room"]["members"].as_array().unwrap();
+            assert_eq!(members.iter().filter(|member| member["is_bot"] == true).count(), 6);
+            assert_eq!(members.iter().filter(|member| member["is_bot"] == false).count(), 2);
+            assert_eq!(room["spectating"], false);
+            until_message(socket, "Crownfall snapshot", |message| {
+                message["type"] == "snap" && message["game"]["game"] == "pet_teamfight"
+            })
+            .await;
+        }
+    }
 
     #[tokio::test]
     async fn native_ticket_exchange_authenticates_the_same_player_and_consumes_once() {
