@@ -574,7 +574,10 @@ impl Room {
             party_mode: self.party_mode,
             rounds: self.rounds,
             preview_board: self.preview_board(),
-            dev_tools: self.dev_tools,
+            dev_tools: self.dev_tools || (self.native_mode && seat.is_some_and(|seat| {
+                self.members.iter().any(|member| member.seat == seat
+                    && self.host_id.as_deref() == Some(member.user_id.as_str()))
+            })),
             sandbox: self.sandbox,
             mature: self.mature,
             pairs_on: self.pairs_on,
@@ -1804,7 +1807,7 @@ impl Room {
     }
 
     pub fn check_start_sandbox(&self, user_id: &str) -> Result<(), RoomError> {
-        if !self.dev_tools {
+        if !self.dev_tools && !self.native_mode {
             return Err(RoomError::NoDevTools);
         }
         if !self.is_host(user_id) {
@@ -1957,27 +1960,28 @@ impl Room {
         if !self.sandbox {
             return Err(RoomError::NoDevTools);
         }
+        let sandbox_access = self.dev_tools || (self.native_mode && self.is_host(user_id));
         match &action {
             DevAction::City { tool } => {
-                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !sandbox_access { return Err(RoomError::NoDevTools); }
                 let seat = self.seat_of(user_id).ok_or(RoomError::WrongPhase)?;
                 return self.city_sandbox_tool(seat, *tool);
             }
             DevAction::CitySandbox { police } => {
-                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !sandbox_access { return Err(RoomError::NoDevTools); }
                 if !self.is_host(user_id) { return Err(RoomError::NotHost); }
                 let police = *police;
                 self.leave_sandbox_for_lobby();
                 return self.start_city_sandbox(user_id, police);
             }
             DevAction::BoardSandbox => {
-                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !sandbox_access { return Err(RoomError::NoDevTools); }
                 if !self.is_host(user_id) { return Err(RoomError::NotHost); }
                 self.leave_sandbox_for_lobby();
                 return self.start_sandbox(user_id);
             }
             DevAction::Bout { key } => {
-                if !self.dev_tools { return Err(RoomError::NoDevTools); }
+                if !sandbox_access { return Err(RoomError::NoDevTools); }
                 if !self.is_host(user_id) { return Err(RoomError::NotHost); }
                 let key = BOUTS.iter().find(|spec| spec.key == key.as_str()).map(|spec| spec.key).ok_or(RoomError::NativeUnsupported)?;
                 self.leave_sandbox_for_lobby();
@@ -1990,7 +1994,7 @@ impl Room {
             _ => {}
         }
         if action == DevAction::CandyVan {
-            if !self.dev_tools { return Err(RoomError::NoDevTools); }
+            if !sandbox_access { return Err(RoomError::NoDevTools); }
             if !self.is_host(user_id) { return Err(RoomError::NotHost); }
             if self.phase != Phase::Board { return Err(RoomError::WrongPhase); }
             self.board.as_mut().ok_or(RoomError::WrongPhase)?.summon_candy_van().map_err(RoomError::Board)?;
@@ -1998,7 +2002,7 @@ impl Room {
             return Ok(());
         }
         if action==DevAction::Crawler {
-            if !self.dev_tools{return Err(RoomError::NoDevTools);}
+            if !sandbox_access{return Err(RoomError::NoDevTools);}
             if !self.is_host(user_id){return Err(RoomError::NotHost);}
             if self.phase!=Phase::Board{return Err(RoomError::WrongPhase);}
             let seat=self.seat_of(user_id).ok_or(RoomError::WrongPhase)?;
@@ -2008,7 +2012,7 @@ impl Room {
             self.dirty=true;return Ok(());
         }
         if action==DevAction::Finale {
-            if !self.dev_tools {return Err(RoomError::NoDevTools);}
+            if !sandbox_access {return Err(RoomError::NoDevTools);}
             if !self.is_host(user_id) {return Err(RoomError::NotHost);}
             if self.phase!=Phase::Board {return Err(RoomError::WrongPhase);}
             self.open_map_finale(true);

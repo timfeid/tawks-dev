@@ -2504,10 +2504,10 @@ fn every_registered_minigame_has_a_live_bot_simulation_and_result() {
         );
         let mut events = Vec::new();
         // Speedball can play all seven rounds. Crownfall has a draft and a
-        // five-minute Crown objective; other bouts keep the 100-second bound.
+        // ten-minute Crown objective; other bouts keep the 100-second bound.
         let max_ticks = match key {
             "shooter" => 12_000,
-            "pet_teamfight" => 20_000,
+            "pet_teamfight" => 41_000,
             _ => 6_000,
         };
         for _ in 0..max_ticks {

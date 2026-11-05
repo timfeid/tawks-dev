@@ -58,6 +58,19 @@ fn round_settings_sandbox_keeps_its_independent_endless_length() {
     assert_eq!(room.rounds,20);
     assert_eq!(room.board.as_ref().unwrap().rounds,SANDBOX_ROUNDS);
 }
+#[test]
+fn native_lobby_host_can_open_sandbox_without_global_dev_tools() {
+    let mut room = lobby();
+    assert_eq!(room.check_start_sandbox("host"), Err(RoomError::NoDevTools));
+    room.enable_native_mode();
+    assert_eq!(room.check_start_sandbox("friend"), Err(RoomError::NotHost));
+    assert!(room.check_start_sandbox("host").is_ok());
+    assert!(room.view_for(Some(0)).dev_tools);
+    assert!(!room.view_for(Some(1)).dev_tools);
+    room.start_sandbox("host").unwrap();
+    assert!(room.sandbox);
+    assert!(!room.dev_tools);
+}
 
 #[test]
 fn round_restocking_clears_old_modifiers_but_keeps_map_hazards_and_new_pickups() {

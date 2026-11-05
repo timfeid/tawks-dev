@@ -113,17 +113,17 @@ pub const ABILITY_HELP: [[&str; 4]; 10] = [
         "Bloom around you",
     ],
 ];
-pub const DRAFT: f32 = 26.0;
+pub const DRAFT: f32 = 45.0;
 pub const LIMIT: f32 = 360.0;
-const TEAM_LIMIT: f32 = 300.0;
+const TEAM_LIMIT: f32 = 660.0;
 const RING_LIMIT: f32 = 60.0;
 const RING: f32 = 9.2;
 const MAX_HP: f32 = 240.0;
 const DRAGON_HP: f32 = 650.0;
-pub const DRAGON_WAKE: f32 = 75.0;
+pub const DRAGON_WAKE: f32 = 120.0;
 const DRAGON_RESPAWN: f32 = 100.0;
-pub const CROWN_HP: f32 = 220.0;
-pub const CROWN_SHIELD_END: f32 = 60.0;
+pub const CROWN_HP: f32 = 800.0;
+pub const CROWN_SHIELD_END: f32 = 90.0;
 pub const ARENA_RADIUS: f32 = 46.0;
 pub const LANE_Z: [f32; 2] = [20.0, -20.0];
 pub const CROWN_POS: [(f32, f32); 2] = [(-39.0, 0.0), (39.0, 0.0)];
@@ -131,7 +131,7 @@ pub const RELAYS: [(f32, f32); 2] = [(0.0, LANE_Z[0]), (0.0, LANE_Z[1])];
 const RELAY_RADIUS: f32 = 2.7;
 const RELAY_PULSE: f32 = 8.0;
 const RELAY_DAMAGE: f32 = 12.0;
-const CROWN_COLLAPSE_START: f32 = 240.0;
+const CROWN_COLLAPSE_START: f32 = 540.0;
 const DUEL_COLLAPSE_START: f32 = 300.0;
 const CROWN_COLLAPSE_PER_SECOND: f32 = 4.0;
 pub const BRUSH: [(f32, f32); 4] = [(18.0, 11.5), (18.0, -11.5), (-18.0, 11.5), (-18.0, -11.5)];
@@ -182,6 +182,8 @@ struct Fighter {
     stocks: u8,
     score: i32,
     cooldown: [f32; 4],
+    auto_cd: f32,
+    last_hits: u16,
     lock: f32,
     invuln: f32,
     respawn: f32,
@@ -352,7 +354,8 @@ impl PetArena {
         }
         self.minion_wave -= dt;
         if self.minion_wave <= 0.0 {
-            self.minion_wave += MINION_WAVE;
+            let pace = ((self.time - DRAFT) / 360.0).clamp(0.0, 1.0);
+            self.minion_wave += MINION_WAVE - 4.0 * pace;
             for lane in 0..2 {
                 for team in 0..2u8 {
                     for rank in 0..3 {
@@ -403,7 +406,8 @@ impl PetArena {
                     m.attack = 0.8;
                 }
             } else {
-                m.x += if m.team == 0 { 2.9 * dt } else { -2.9 * dt };
+                let speed = 2.4 + 1.5 * ((self.time - DRAFT) / 360.0).clamp(0.0, 1.0);
+                m.x += if m.team == 0 { speed * dt } else { -speed * dt };
                 if m.x.abs() > 38.0 {
                     breaches[m.team as usize] += 1;
                     m.hp = 0.0;
@@ -471,11 +475,80 @@ impl PetArena {
             }
         }
         if kills > 0 {
-            self.gain_xp(index, kills * 14, events);
+            self.players[index].last_hits =
+                self.players[index].last_hits.saturating_add(kills as u16);
+            self.players[index].mana = (self.players[index].mana + kills as f32 * 8.0)
+                .min(Self::max_mana(self.players[index].level));
+            self.gain_xp(index, kills * 22, events);
             events.push(
                 json!({"kind":"pet_minion_farm","seat":self.players[index].seat,
-                "count":kills,"x":x,"z":z}),
+                "count":kills,"xp":kills*22,"mana":kills*8,"x":x,"z":z}),
             );
+        }
+    }
+    fn auto_attack(&mut self, index: usize, events: &mut Vec<Value>) {
+        if self.players[index].auto_cd > 0.0 || self.players[index].lock > 0.0 {
+            return;
+        }
+        let p = &self.players[index];
+        let (x, z, team, seat) = (p.runner.x, p.runner.z, p.team, p.seat);
+        let minion = self
+            .minions
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.team != team && m.hp > 0.0 && (m.x - x).hypot(m.z - z) < 5.8)
+            .min_by(|(_, a), (_, b)| {
+                (a.x - x)
+                    .hypot(a.z - z)
+                    .total_cmp(&(b.x - x).hypot(b.z - z))
+            })
+            .map(|(i, _)| i);
+        if let Some(target) = minion {
+            let (tx, tz) = (self.minions[target].x, self.minions[target].z);
+            self.minions[target].hp -= 24.0;
+            self.players[index].auto_cd =
+                1.1 - 0.35 * ((self.time - DRAFT) / 300.0).clamp(0.0, 1.0);
+            self.players[index].cast = 4;
+            self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+            events.push(json!({"kind":"pet_arena_auto","seat":seat,
+                "x":tx,"z":tz,"target":"minion"}));
+            if self.minions[target].hp <= 0.0 {
+                self.players[index].last_hits = self.players[index].last_hits.saturating_add(1);
+                self.players[index].mana =
+                    (self.players[index].mana + 8.0).min(Self::max_mana(self.players[index].level));
+                self.gain_xp(index, 22, events);
+                events.push(
+                    json!({"kind":"pet_minion_farm","seat":self.players[index].seat,
+                    "count":1,"xp":22,"mana":8,"x":tx,"z":tz}),
+                );
+            }
+            return;
+        }
+        if let Some(target) = self
+            .players
+            .iter()
+            .enumerate()
+            .filter(|(i, other)| {
+                *i != index
+                    && other.team != team
+                    && other.selected
+                    && other.respawn <= 0.0
+                    && !self.hidden_from(index, *i)
+                    && (other.runner.x - x).hypot(other.runner.z - z) < 5.8
+            })
+            .min_by(|(_, a), (_, b)| distance(p, a).total_cmp(&distance(p, b)))
+            .map(|(i, _)| i)
+        {
+            self.players[index].auto_cd =
+                1.1 - 0.35 * ((self.time - DRAFT) / 300.0).clamp(0.0, 1.0);
+            self.players[index].cast = 4;
+            self.players[index].action_n = self.players[index].action_n.wrapping_add(1);
+            events.push(
+                json!({"kind":"pet_arena_auto","seat":self.players[index].seat,
+                "x":self.players[target].runner.x,"z":self.players[target].runner.z,
+                "target":"champion"}),
+            );
+            self.hit_team(index, target, 17.0, 0.0, events);
         }
     }
     fn relay_lead(&self, team: usize) -> bool {
@@ -575,6 +648,8 @@ impl PetArena {
                     stocks: 3,
                     score: 0,
                     cooldown: [0.0; 4],
+                    auto_cd: 0.0,
+                    last_hits: 0,
                     lock: 0.0,
                     invuln: 0.0,
                     respawn: 0.0,
@@ -883,7 +958,8 @@ impl PetArena {
         }
         let attacker = self.players[from].seat;
         let team = self.players[from].team;
-        let rank = self.players[from].ranks[self.players[from].cast as usize];
+        let rank = self.players[from].ranks.get(self.players[from].cast as usize)
+            .copied().unwrap_or(1);
         let amount = amount
             * (1.0 + (rank.saturating_sub(1) as f32) * 0.14)
             * if self.team_buff[team as usize] > 0.0 {
@@ -978,8 +1054,9 @@ impl PetArena {
         }
         let champ = self.players[index].champ;
         let base_cd = [0.55, 5.0, 6.0, 18.0][slot];
-        self.players[index].cooldown[slot] =
-            base_cd * (1.0 - (self.players[index].ranks[slot] - 1) as f32 * 0.08);
+        self.players[index].cooldown[slot] = base_cd
+            * (1.0 - (self.players[index].ranks[slot] - 1) as f32 * 0.08)
+            * (1.0 - 0.15 * ((self.time - DRAFT) / 360.0).clamp(0.0, 1.0));
         self.players[index].mana -= mana_cost;
         self.players[index].cast = slot as u8;
         self.players[index].reveal = 2.0;
@@ -1176,14 +1253,23 @@ impl Bout for PetArena {
         self.turn = self.turn.wrapping_add(1);
         let before = self.time;
         self.time += dt;
+        if self.kind == 1
+            && before >= 8.0
+            && before < DRAFT
+            && self.players.iter().all(|p| p.selected)
+        {
+            self.time = DRAFT;
+        }
         if self.kind == 1 && before < DRAFT && self.time >= DRAFT {
             self.minion_wave = 0.0;
             let count = self.players.len();
             for (index, p) in self.players.iter_mut().enumerate() {
+                p.selected = true;
                 p.hp = MAX_HP;
                 p.mana = MAX_MANA;
                 p.shield = 0.0;
                 p.cooldown = [0.0; 4];
+                p.auto_cd = 0.0;
                 p.lock = 0.0;
                 p.respawn = 0.0;
                 let (x, z) = lane_spawn(index, count, p, self.kind, self.seed);
@@ -1262,6 +1348,7 @@ impl Bout for PetArena {
             for cd in &mut p.cooldown {
                 *cd = (*cd - dt).max(0.0);
             }
+            p.auto_cd = (p.auto_cd - dt).max(0.0);
             p.lock = (p.lock - dt).max(0.0);
             p.invuln = (p.invuln - dt).max(0.0);
             p.reveal = (p.reveal - dt).max(0.0);
@@ -1289,14 +1376,15 @@ impl Bout for PetArena {
                     && input.yaw >= 0.0
                     && input.yaw < 10.0
                     && (open_draft || CHAMPION_ROLE[pick] == p.role)
+                    && input.pitch < 1.25
                 {
                     p.champ = pick;
                     if open_draft {
                         p.role = CHAMPION_ROLE[pick];
                     }
-                    p.selected = true;
+                    p.selected = input.pitch < 1.1;
                 }
-                if !p.selected {
+                if !p.selected && self.time >= DRAFT {
                     continue;
                 }
             }
@@ -1329,7 +1417,11 @@ impl Bout for PetArena {
                     &mut p.runner,
                     input.stick,
                     dt,
-                    if self.kind == 0 { 7.0 } else { 7.6 },
+                    if self.kind == 0 {
+                        7.0
+                    } else {
+                        6.2 + 2.2 * ((self.time - DRAFT) / 300.0).clamp(0.0, 1.0)
+                    },
                 );
             }
             if self.kind == 0 {
@@ -1395,6 +1487,9 @@ impl Bout for PetArena {
                 }
                 if input.press.is_some() {
                     self.cast(index, 3, input.yaw, events);
+                }
+                if self.time >= DRAFT {
+                    self.auto_attack(index, events);
                 }
             }
         }
@@ -1622,6 +1717,7 @@ impl Bout for PetArena {
                 "pet_x":p.runner.x,"pet_z":p.runner.z,"pet_y":if p.respawn > 0.0 { -2.0 } else { p.height },
                 "score":p.score,"hp":p.hp,"max_hp":Self::max_hp(p.level),
                 "mana":p.mana,"max_mana":Self::max_mana(p.level),
+                "last_hits":p.last_hits,
                 "level":p.level,"xp":p.xp,"xp_next":45+u16::from(p.level)*20,
                 "points":p.points,"ranks":p.ranks,
                 "shield":p.shield,"damage":p.damage,
@@ -1678,6 +1774,8 @@ impl Bout for PetArena {
                     player["pet_y"] = Value::Null;
                     player["pet_z"] = Value::Null;
                     player["hp"] = Value::Null;
+                    player["mana"] = Value::Null;
+                    player["shield"] = Value::Null;
                 }
             }
         }
@@ -2196,7 +2294,7 @@ mod tests {
         assert!(game.players[0].xp > 0);
         game.gain_xp(0, 90, &mut Vec::new());
         assert!(game.players[0].level >= 2);
-        assert_eq!(game.players[0].points, 1);
+        assert_eq!(game.players[0].points, game.players[0].level - 1);
         game.minions.clear();
         game.step(
             &[(
@@ -2210,7 +2308,7 @@ mod tests {
             &mut Vec::new(),
         );
         assert_eq!(game.players[0].ranks[1], 2);
-        assert_eq!(game.players[0].points, 0);
+        assert_eq!(game.players[0].points, game.players[0].level - 2);
     }
     #[test]
     fn a_minion_breakthrough_damages_the_crown_without_awarding_farm_xp() {
@@ -2304,7 +2402,7 @@ mod tests {
                 .collect::<Vec<_>>();
             let mut game = PetArena::new(kind, &contestants, 11);
             let mut events = Vec::new();
-            for _ in 0..(LIMIT as usize * 60 + 2) {
+            for _ in 0..(game.limit() as usize * 60 + 2) {
                 let inputs = contestants
                     .iter()
                     .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
@@ -2344,7 +2442,7 @@ mod tests {
                         .collect::<Vec<_>>();
                     let mut game = PetArena::new(kind, &contestants, seed);
                     let mut events = Vec::new();
-                    for _ in 0..(LIMIT as usize * 60 + 120) {
+                    for _ in 0..(game.limit() as usize * 60 + 120) {
                         let inputs = contestants
                             .iter()
                             .map(|c| (c.seat, game.bot_input(c.seat, 1.0 / 60.0)))
@@ -2405,6 +2503,11 @@ mod tests {
         let only = std::env::var("CROWNFALL_PACING_ONLY")
             .ok()
             .and_then(|value| value.parse::<u8>().ok());
+        let samples = std::env::var("CROWNFALL_PACING_SAMPLES")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(128)
+            .max(2);
         for count in [2, 4, 6, 8]
             .into_iter()
             .filter(|&count| only.is_none_or(|wanted| wanted == count))
@@ -2413,7 +2516,7 @@ mod tests {
             let mut endings = [0u32; 2];
             let mut first = [0u32; 2];
             let mut direct_crown_hits = 0u32;
-            for seed in 0..128u64 {
+            for seed in 0..samples as u64 {
                 let contestants = (0..count)
                     .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
                     .collect::<Vec<_>>();
@@ -2450,7 +2553,8 @@ mod tests {
             times.sort_by(|a, b| a.total_cmp(b));
             println!(
                 "Crownfall {count} players: median={:.1}s p90={:.1}s endings(crown,draw)={endings:?} wins={first:?} direct_crown_hits={direct_crown_hits}",
-                times[64], times[115]
+                times[samples / 2],
+                times[(samples * 9 / 10).min(samples - 1)]
             );
         }
         for count in [4, 6, 8]
@@ -2460,7 +2564,7 @@ mod tests {
             for flipped in [false, true] {
                 let mut side = [0u32; 2];
                 let mut seat_parity = [0u32; 2];
-                for seed in 0..64u64 {
+                for seed in 0..(samples / 2) as u64 {
                     let contestants = (0..count)
                         .map(|seat| {
                             Contestant::bot(seat, 0.7).on_team((seat % 2) ^ u8::from(flipped))
@@ -2494,5 +2598,92 @@ mod tests {
             assert!(choices.iter().all(|&champ| CHAMPION_ROLE[champ] == role));
             assert!(choices.iter().any(|&champ| champ != choices[0]));
         }
+    }
+    #[test]
+    fn champion_preview_can_cast_before_confirmation_and_all_ready_starts_match() {
+        let mut game = PetArena::new(
+            1,
+            &[
+                Contestant::person(0).on_team(0),
+                Contestant::bot(1, 0.5).on_team(1),
+            ],
+            13,
+        );
+        let mut events = Vec::new();
+        game.step(
+            &[(
+                0,
+                Input {
+                    yaw: 0.0,
+                    pitch: 1.2,
+                    ..Default::default()
+                },
+            )],
+            1.0 / 60.0,
+            &mut events,
+        );
+        assert_eq!(game.players[0].champ, 0);
+        assert!(!game.players[0].selected);
+        let action = game.players[0].action_n;
+        game.step(
+            &[(
+                0,
+                Input {
+                    yaw: 0.0,
+                    pitch: 1.3,
+                    fire: true,
+                    ..Default::default()
+                },
+            )],
+            1.0 / 60.0,
+            &mut events,
+        );
+        assert!(game.players[0].action_n > action);
+        game.step(
+            &[(
+                0,
+                Input {
+                    yaw: 0.0,
+                    pitch: 1.0,
+                    ..Default::default()
+                },
+            )],
+            1.0 / 60.0,
+            &mut events,
+        );
+        assert!(game.players[0].selected);
+        game.time = 8.0;
+        game.step(&[], 1.0 / 60.0, &mut events);
+        assert_eq!(game.time, DRAFT);
+        assert!(!game.snapshot()["draft"].as_bool().unwrap());
+    }
+    #[test]
+    fn auto_attack_last_hit_grants_extra_xp_mana_and_counter() {
+        let mut game = PetArena::new(
+            1,
+            &[
+                Contestant::person(0).on_team(0),
+                Contestant::bot(1, 0.5).on_team(1),
+            ],
+            14,
+        );
+        game.time = DRAFT + 1.0;
+        game.players[0].selected = true;
+        game.players[0].runner = Runner::at(0.0, 0.0);
+        game.players[0].mana = 30.0;
+        game.minions.push(Minion {
+            team: 1,
+            lane: 0,
+            x: 2.0,
+            z: 0.0,
+            hp: 20.0,
+            attack: 0.0,
+        });
+        let mut events = Vec::new();
+        game.auto_attack(0, &mut events);
+        assert_eq!(game.players[0].last_hits, 1);
+        assert_eq!(game.players[0].xp, 22);
+        assert_eq!(game.players[0].mana, 38.0);
+        assert!(events.iter().any(|e| e["kind"] == "pet_minion_farm"));
     }
 }
