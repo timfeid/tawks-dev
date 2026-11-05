@@ -8,6 +8,14 @@ export const MAX_INPUT_BYTES = 16 * 1024;
 /** Moves a game may send per second, with bursts up to twice that. */
 export const SENDS_PER_SECOND = 20;
 
+/**
+ * While a player sings, the game says so this often; tawks unmutes their
+ * lobby mic once it has not heard for SINGING_TIMEOUT_MS, so a frame that
+ * dies never leaves anyone muted.
+ */
+export const SINGING_HEARTBEAT_MS = 2_000;
+export const SINGING_TIMEOUT_MS = 5_000;
+
 /** Longest status line a game may show, in characters. */
 export const PRESENCE_TEXT_MAX = 128;
 
@@ -66,7 +74,9 @@ export type GameMessage =
   | { type: 'fullscreen'; on: boolean }
   | { type: 'call'; id: number; action: string; inputs: { [key: string]: Json } }
   /** What the player is doing, for their status; null clears it. */
-  | { type: 'presence'; presence: Presence | null };
+  | { type: 'presence'; presence: Presence | null }
+  /** The player is singing (repeated as a heartbeat), or has stopped; tawks may mute their lobby mic meanwhile. */
+  | { type: 'singing'; on: boolean };
 
 /** Action ids a game may call: one of its own workflow's actions. */
 export const ACTION_ID = /^[A-Za-z0-9_.:-]{1,128}$/;

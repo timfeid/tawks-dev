@@ -9,7 +9,7 @@
   import { drawHighway } from '../lib/render';
   import { drawVocals, pitchRange } from '../lib/render-vocals';
   import { VocalEngine, hzToMidi, type VoiceSample } from '../lib/vocals';
-  import { listen, type HeardSample } from '../lib/voice';
+  import { host, listen, type HeardSample } from '../lib/voice';
   import type { MicrophoneState } from '@tawks/activity-sdk';
   import type { RoomConnection } from '../lib/room.svelte';
   import type { Settings } from '../lib/settings';
@@ -162,6 +162,7 @@
     controls?.stop();
     voice?.stop();
     stopCues?.();
+    if (lobbyMuted) host.activity?.singing(false);
     kit?.dispose();
     player?.dispose();
     if (calloutTimer) clearTimeout(calloutTimer);
@@ -244,6 +245,14 @@
   }
 
   let lastSung = 0;
+  let lobbyMuted = false;
+
+  /** Holds the lobby mic muted from the count-in to the end of the song. */
+  function holdLobbyMic(want: boolean) {
+    if (want === lobbyMuted) return;
+    lobbyMuted = want;
+    host.activity?.singing(want);
+  }
 
   function frameVocals(now: number) {
     if (!vocal || !player || !canvas) return;
@@ -261,6 +270,7 @@
       vocal.update(heard);
       applyMissing(heard);
       const done = heard > songEnd;
+      holdLobbyMic(settings.muteLobbyWhileSinging && !done);
       if ((now - lastSent > PROGRESS_EVERY_MS && !sentDone) || (done && !sentDone)) {
         lastSent = now;
         sentDone = done;

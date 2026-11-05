@@ -13,6 +13,8 @@ export type Settings = {
   autoKick: boolean;
   /** A vocalist hears the real vocals follow their singing. */
   vocalGuide: boolean;
+  /** Mutes this player's lobby voice while they sing, so the room hears the song rather than them. */
+  muteLobbyWhileSinging: boolean;
   bindings: Record<Layout, Bindings>;
 };
 
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   drumVolume: 0.8,
   autoKick: false,
   vocalGuide: true,
+  muteLobbyWhileSinging: true,
   bindings: DEFAULT_BINDINGS,
 };
 
@@ -49,6 +52,8 @@ export function readSettings(raw: unknown): Settings {
     drumVolume: clamp(from.drumVolume, 0, 1, DEFAULT_SETTINGS.drumVolume),
     autoKick: typeof from.autoKick === 'boolean' ? from.autoKick : DEFAULT_SETTINGS.autoKick,
     vocalGuide: typeof from.vocalGuide === 'boolean' ? from.vocalGuide : DEFAULT_SETTINGS.vocalGuide,
+    muteLobbyWhileSinging:
+      typeof from.muteLobbyWhileSinging === 'boolean' ? from.muteLobbyWhileSinging : DEFAULT_SETTINGS.muteLobbyWhileSinging,
     bindings,
   };
 }

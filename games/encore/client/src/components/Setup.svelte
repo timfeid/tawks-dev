@@ -243,6 +243,11 @@
           <input type="checkbox" bind:checked={draft.vocalGuide} class="accent-primary" />
           <span class="text-xs text-neutral-500">When you sing, hear the real vocals while you are on the note.</span>
         </label>
+        <label class="flex items-center gap-3 text-sm">
+          <span class="w-36 text-neutral-400">Mute my lobby mic</span>
+          <input type="checkbox" bind:checked={draft.muteLobbyWhileSinging} class="accent-primary" />
+          <span class="text-xs text-neutral-500">While you sing, the lobby hears the song instead of your voice.</span>
+        </label>
       </section>
     </div>
 

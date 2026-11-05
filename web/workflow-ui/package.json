@@ -11,7 +11,7 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
-    "test": "node --test --experimental-strip-types src/lib/editor/*.test.ts"
+    "test": "node --test --experimental-strip-types src/lib/editor/*.test.ts src/lib/components/displays/*.test.ts"
   },
   "dependencies": {
     "@tawks/activity-sdk": "workspace:^",

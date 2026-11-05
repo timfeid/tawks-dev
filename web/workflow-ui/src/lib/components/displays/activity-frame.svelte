@@ -5,6 +5,7 @@
     MAX_INPUT_BYTES,
     PROTOCOL,
     SENDS_PER_SECOND,
+    SINGING_TIMEOUT_MS,
     VERSION,
     isHello,
     readPresence,
@@ -15,6 +16,7 @@
   } from '@tawks/activity-sdk/protocol';
   import { PitchTracker } from '@tawks/activity-sdk/pitch';
   import { getNestedValue } from '../../utils';
+  import { SINGING_EVENT, SingingHold } from './singing-hold';
   import type { Props } from '../workflow-display.svelte';
   import { submitServerAction } from '../workflow';
   import type { ActivityInfo, WorkflowStateProvider } from '../../workflow';
@@ -186,6 +188,14 @@
     askingMic = true;
   }
 
+  // The voice client mutes the lobby mic while this holds; the frame going
+  // quiet or away lets go, so the hold never outlives the game.
+  let singingHeld = $state(false);
+  const singingHold = new SingingHold((on) => {
+    singingHeld = on;
+    window.dispatchEvent(new CustomEvent(SINGING_EVENT, { detail: { on } }));
+  }, SINGING_TIMEOUT_MS);
+
   // A game's status line goes to the host at most this often; the last one in a burst wins.
   const PRESENCE_EVERY_MS = 2_000;
   let presenceSentAt = 0;
@@ -237,6 +247,10 @@
     }
     if (message.type === 'presence') {
       onPresence(message.presence);
+      return;
+    }
+    if (message.type === 'singing') {
+      singingHold.beat(message.on === true);
       return;
     }
     if (message.type !== 'send' && message.type !== 'call') return;
@@ -335,6 +349,7 @@
       port?.close();
       port = null;
       clearPresence();
+      singingHold.release();
       setTalking(false);
       micRequest += 1;
       micStarting = false;
@@ -386,13 +401,25 @@
         </div>
       </div>
     {/if}
-    {#if micOn}
-      <div
-        class="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1 text-xs text-zinc-300"
-      >
-        <span class="bg-primary size-1.5 rounded-full"></span>
-        Mic on for pitch
-        <button class="text-zinc-400 hover:text-white" onclick={() => stopMic()}>Stop</button>
+    {#if micOn || singingHeld}
+      <div class="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+        {#if micOn}
+          <div
+            class="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1 text-xs whitespace-nowrap text-zinc-300"
+          >
+            <span class="bg-primary size-1.5 rounded-full"></span>
+            Mic on for pitch
+            <button class="text-zinc-400 hover:text-white" onclick={() => stopMic()}>Stop</button>
+          </div>
+        {/if}
+        {#if singingHeld}
+          <div
+            class="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1 text-xs whitespace-nowrap text-zinc-300"
+          >
+            <span class="size-1.5 rounded-full bg-red-400"></span>
+            Lobby mic muted while you sing
+          </div>
+        {/if}
       </div>
     {/if}
   {:else if problem}

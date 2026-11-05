@@ -1,5 +1,6 @@
 import {
   PROTOCOL,
+  SINGING_HEARTBEAT_MS,
   VERSION,
   isWelcome,
   mouseBinding,
@@ -54,6 +55,12 @@ export type Activity<State = Json> = {
    * what they play with, and clears it when the game closes. Pass null to clear it.
    */
   setPresence(presence: Partial<Presence> | null): void;
+  /**
+   * Says the player is singing, so tawks mutes their lobby mic and nobody
+   * hears them over the song. tawks unmutes it when this goes false, when the
+   * frame closes, or when the game stops saying so.
+   */
+  singing(on: boolean): void;
 };
 
 export type ConnectOptions = {
@@ -102,6 +109,13 @@ function attach<State>(port: MessagePort, resolve: (activity: Activity<State>) =
   let microphoneWaiters: ((state: MicrophoneState) => void)[] = [];
   let fullscreenWaiters: ((on: boolean) => void)[] = [];
   const pending = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
+  let singingBeat: ReturnType<typeof setInterval> | null = null;
+  const singing = (on: boolean) => {
+    if (singingBeat) clearInterval(singingBeat);
+    singingBeat = null;
+    port.postMessage({ type: 'singing', on } satisfies GameMessage);
+    if (on) singingBeat = setInterval(() => port.postMessage({ type: 'singing', on: true } satisfies GameMessage), SINGING_HEARTBEAT_MS);
+  };
 
   const askFullscreen = (on: boolean) =>
     new Promise<boolean>((resolve) => {
@@ -160,6 +174,7 @@ function attach<State>(port: MessagePort, resolve: (activity: Activity<State>) =
             return () => pitchListeners.delete(listener);
           },
           fullscreen: askFullscreen,
+          singing,
           setPresence(presence) {
             const full = presence && { details: presence.details ?? null, state: presence.state ?? null, started_at: presence.started_at ?? null };
             port.postMessage({ type: 'presence', presence: full } satisfies GameMessage);
