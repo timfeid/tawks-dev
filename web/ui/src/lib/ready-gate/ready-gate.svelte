@@ -17,7 +17,8 @@
     class: className,
     children,
   }: {
-    /** Changing it hides the page again until its parts are ready, as when switching conversations. */
+    /** Changing it hides the page again until its parts are ready, as when switching conversations.
+     * Parts marked `data-gate-keep`, such as the page's header row, stay on screen while it does. */
     key?: unknown;
     /** False while the page itself is still fetching what decides its parts. */
     ready?: boolean;
@@ -78,8 +79,10 @@
   });
 
   const visible = $derived(gate.ready && !lingering);
+  let opened = $state(false);
   $effect.pre(() => {
     shown = visible;
+    if (visible) opened = true;
   });
 </script>
 
@@ -87,13 +90,14 @@
   <div
     class={cn(
       'flex h-full min-h-0 w-full min-w-0 flex-1 flex-col',
-      !visible && 'pointer-events-none opacity-0',
+      !visible &&
+        (opened ? 'invisible [&_[data-gate-keep]]:visible' : 'pointer-events-none opacity-0'),
     )}
   >
     {@render children()}
   </div>
   {#if loaderShown && !visible}
-    <div class="absolute inset-0 flex items-center justify-center">
+    <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
       <PageLoader {label} />
     </div>
   {/if}
