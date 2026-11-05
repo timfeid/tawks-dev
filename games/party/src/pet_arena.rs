@@ -8,7 +8,7 @@ pub const KEYS: [&str; 2] = ["pet_ringout", "pet_teamfight"];
 pub const NAMES: [&str; 2] = ["Skyline Scramble", "Crownfall Clash"];
 pub const RULES: [&str; 2] = [
     "Launch rivals out of the ring. Small pets move quickly; broad pets hit farther and harder, and resist launches. Charge a heavy strike for a knockout.",
-    "Draft four combat roles and break the enemy Crown to win. Relays and KOs open pushes; the dragon grants a temporary team advantage.",
+    "Draft four combat roles and break the enemy Crown to win. Clear minions to push a lane, capture relays for Crown pressure, and claim the dragon for a team buff.",
 ];
 pub const CHAMPIONS: [&str; 10] = [
     "Cinderfox",
@@ -202,6 +202,7 @@ pub struct PetArena {
     seed: u64,
     players: Vec<Fighter>,
     time: f32,
+    turn: u64,
     team_score: [u8; 2],
     dragon_hp: f32,
     dragon_respawn: f32,
@@ -357,6 +358,7 @@ impl PetArena {
             .map(|m| (m.team, m.lane, m.x, m.z, m.hp))
             .collect::<Vec<_>>();
         let mut damage = vec![0.0; self.minions.len()];
+        let mut breaches = [0u8; 2];
         for (index, m) in self.minions.iter_mut().enumerate() {
             if m.hp <= 0.0 {
                 continue;
@@ -381,6 +383,7 @@ impl PetArena {
             } else {
                 m.x += if m.team == 0 { 2.9 * dt } else { -2.9 * dt };
                 if m.x.abs() > 38.0 {
+                    breaches[m.team as usize] += 1;
                     m.hp = 0.0;
                 }
             }
@@ -391,7 +394,7 @@ impl PetArena {
         let dead = self
             .minions
             .iter()
-            .filter(|m| m.hp <= 0.0)
+            .filter(|m| m.hp <= 0.0 && m.x.abs() <= 38.0)
             .map(|m| (m.team, m.x, m.z))
             .collect::<Vec<_>>();
         for (team, x, z) in dead {
@@ -403,6 +406,20 @@ impl PetArena {
             }
         }
         self.minions.retain(|m| m.hp > 0.0);
+        if self.time >= CROWN_SHIELD_END {
+            for (team, count) in breaches.into_iter().enumerate() {
+                if count == 0 {
+                    continue;
+                }
+                self.team_push[team] = self.team_push[team].max(8.0);
+                let target = 1 - team;
+                let damage = 4.0 * f32::from(count);
+                self.crown_hp[target] = (self.crown_hp[target] - damage).max(0.0);
+                events.push(json!({"kind":"pet_crown_hit","team":team,
+                    "target":target,"hp":self.crown_hp[target],"damage":damage,
+                    "x":CROWN_POS[target].0,"z":CROWN_POS[target].1}));
+            }
+        }
     }
     fn damage_minions(
         &mut self,
@@ -551,6 +568,7 @@ impl PetArena {
             seed,
             players,
             time: 0.0,
+            turn: 0,
             team_score: [0, 0],
             dragon_hp: DRAGON_HP,
             dragon_respawn: 0.0,
@@ -1062,12 +1080,10 @@ impl PetArena {
     }
     fn finish(&mut self) {
         if self.kind == 1 {
-            let winner = if self.crown_hp[0] <= 0.0 && self.crown_hp[1] > 0.0 {
-                Some(1)
-            } else if self.crown_hp[1] <= 0.0 && self.crown_hp[0] > 0.0 {
-                Some(0)
-            } else {
-                None
+            let winner = match self.crown_hp[0].total_cmp(&self.crown_hp[1]) {
+                std::cmp::Ordering::Greater => Some(0),
+                std::cmp::Ordering::Less => Some(1),
+                std::cmp::Ordering::Equal => None,
             };
             let first = self
                 .players
@@ -1115,6 +1131,7 @@ impl Bout for PetArena {
             return;
         }
         let dt = dt.clamp(0.0, 0.1);
+        self.turn = self.turn.wrapping_add(1);
         let before = self.time;
         self.time += dt;
         if self.kind == 1 && before < DRAFT && self.time >= DRAFT {
@@ -1171,9 +1188,22 @@ impl Bout for PetArena {
             }
         }
         let count = self.players.len();
-        let first = ((self.time * 60.0) as usize).wrapping_add(self.seed as usize) % count.max(1);
-        for turn in 0..count {
-            let index = (first + turn) % count;
+        let mut order = (0..count).collect::<Vec<_>>();
+        if self.kind == 1 && count == 4 {
+            let first_team = (self.turn.wrapping_add(self.seed) % 2) as usize;
+            let first_role = (self.turn / 2 % 4) as usize;
+            order.sort_by_key(|&index| {
+                let p = &self.players[index];
+                (
+                    (p.role + 4 - first_role) % 4,
+                    (p.team as usize + 2 - first_team) % 2,
+                )
+            });
+        } else if count > 0 {
+            let first = ((self.time * 60.0) as usize).wrapping_add(self.seed as usize) % count;
+            order.rotate_left(first);
+        }
+        for index in order {
             let input = inputs
                 .iter()
                 .find(|(seat, _)| *seat == self.players[index].seat)
@@ -1493,10 +1523,8 @@ impl Bout for PetArena {
         let dz = target.runner.z - p.runner.z;
         let dist = dx.hypot(dz).max(0.01);
         let yaw = dx.atan2(dz);
-        let bot_phase = if self.kind == 1 && self.players.len() >= 8 {
+        let bot_phase = if self.kind == 1 && self.players.len() >= 4 {
             p.role as u32
-        } else if self.kind == 1 && self.players.len() >= 4 {
-            u32::from(seat ^ (self.seed as u8 & 1))
         } else {
             u32::from(seat)
         };
@@ -1877,7 +1905,7 @@ mod tests {
         assert!(game.placements().is_none());
     }
     #[test]
-    fn time_limit_without_a_destroyed_crown_is_a_draw() {
+    fn time_limit_awards_the_team_with_more_crown_health() {
         let contestants = (0..2)
             .map(|seat| Contestant::bot(seat, 0.7).on_team(seat % 2))
             .collect::<Vec<_>>();
@@ -1886,7 +1914,7 @@ mod tests {
         game.crown_hp = [50.0, 20.0];
         game.relay_pulse = RELAY_PULSE;
         game.step(&[], 0.02, &mut Vec::new());
-        assert_eq!(game.placements(), Some(vec![vec![0, 1]]));
+        assert_eq!(game.placements(), Some(vec![vec![0], vec![1]]));
     }
     #[test]
     fn dragon_buff_strengthens_team_relay_pressure() {
@@ -2018,6 +2046,48 @@ mod tests {
         );
         assert_eq!(game.players[0].ranks[1], 2);
         assert_eq!(game.players[0].points, 0);
+    }
+    #[test]
+    fn a_minion_breakthrough_damages_the_crown_without_awarding_farm_xp() {
+        let contestants = [
+            Contestant::person(0).on_team(0),
+            Contestant::person(1).on_team(1),
+        ];
+        let mut game = PetArena::new(1, &contestants, 4);
+        game.time = CROWN_SHIELD_END;
+        game.players[1].selected = true;
+        game.players[1].runner.x = 38.0;
+        game.players[1].runner.z = LANE_Z[0];
+        game.minions.push(Minion {
+            team: 0,
+            lane: 0,
+            x: 37.99,
+            z: LANE_Z[0],
+            hp: 80.0,
+            attack: 0.0,
+        });
+        let mut events = Vec::new();
+        game.step_minions(0.1, &mut events);
+        assert_eq!(game.crown_hp[1], CROWN_HP - 4.0);
+        assert_eq!(game.team_push[0], 8.0);
+        assert_eq!(game.players[1].xp, 0);
+        assert!(game.minions.is_empty());
+        assert!(events.iter().any(|event| event["kind"] == "pet_crown_hit"));
+    }
+    #[test]
+    fn crown_health_decides_a_timed_match() {
+        let contestants = [
+            Contestant::person(0).on_team(0),
+            Contestant::person(1).on_team(1),
+        ];
+        let mut game = PetArena::new(1, &contestants, 4);
+        game.crown_hp = [120.0, 80.0];
+        game.finish();
+        assert_eq!(game.placements(), Some(vec![vec![0], vec![1]]));
+        game.result = None;
+        game.crown_hp = [120.0, 120.0];
+        game.finish();
+        assert_eq!(game.placements(), Some(vec![vec![0, 1]]));
     }
     #[test]
     fn mana_blocks_cast_until_it_regenerates_and_sparring_resets() {
@@ -2167,7 +2237,13 @@ mod tests {
     #[test]
     #[ignore]
     fn quick_match_pacing_report() {
-        for count in [2, 4, 8] {
+        let only = std::env::var("CROWNFALL_PACING_ONLY")
+            .ok()
+            .and_then(|value| value.parse::<u8>().ok());
+        for count in [2, 4, 6, 8]
+            .into_iter()
+            .filter(|&count| only.is_none_or(|wanted| wanted == count))
+        {
             let mut times = Vec::new();
             let mut endings = [0u32; 2];
             let mut first = [0u32; 2];
@@ -2212,7 +2288,10 @@ mod tests {
                 times[64], times[115]
             );
         }
-        for count in [4, 8] {
+        for count in [4, 6, 8]
+            .into_iter()
+            .filter(|&count| only.is_none_or(|wanted| wanted == count))
+        {
             for flipped in [false, true] {
                 let mut side = [0u32; 2];
                 let mut seat_parity = [0u32; 2];
