@@ -602,7 +602,7 @@ Users have a tawks score that shows on their profile. Score is awarded by first-
 
 ## The top bar
 
-Your bot can put things in the bar across the top of the app, for everyone in a hub it belongs to. People can switch any bot's ticker or flashes off from the bar; both start on.
+Your bot can put things in the bar across the top of the app, for everyone in a hub it belongs to. People can switch any bot's ticker or flashes off from the bar; both start on. A bot that tags its items with a league is a scores source, and its flashes start off: they reach people who set game alerts to all games, or to the teams they follow when the flash's `channel_id` is a team page they follow.
 
 A ticker item is a short line that stays until you change or remove it, such as a game's score. Set it again with the same key to update it, and wrap text in `**` to make it bold:
 
