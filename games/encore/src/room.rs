@@ -34,6 +34,9 @@ pub struct Progress {
     pub star_active: bool,
     /// The player's stem is silent because they are missing notes.
     pub muted: bool,
+    /// Kick notes played themselves, so the run keeps no best.
+    #[serde(default)]
+    pub auto_kick: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -340,6 +343,11 @@ impl Room {
             player.done = done;
             self.dirty = true;
         }
+    }
+
+    /// Whether `conn` is playing the current song, so may send cues to the band.
+    pub fn in_song(&self, conn: u64) -> bool {
+        self.phase == Phase::Playing && self.players.get(&conn).is_some_and(|p| p.playing && !p.away)
     }
 
     /// The host ends the song early; nothing from it counts.
@@ -655,6 +663,24 @@ mod tests {
         room.leave(7, 4_000.0);
         room.tick(4_000.0 + AWAY_GRACE_MS + 1.0);
         assert!(room.players.is_empty());
+    }
+
+    #[test]
+    fn only_players_in_the_song_send_cues() {
+        let mut room = Room::default();
+        room.join(1, "u1", "Ann", "", true);
+        room.join(2, "u2", "Bo", "", true);
+        room.pick(1, song(), 60_000.0).unwrap();
+        room.set_part(1, Some(GUITAR)).unwrap();
+        room.set_ready(1, true).unwrap();
+        room.tick(0.0);
+        assert!(!room.in_song(1));
+        room.loaded(1);
+        room.tick(1.0);
+        assert!(room.in_song(1));
+        assert!(!room.in_song(2));
+        room.leave(1, 2.0);
+        assert!(!room.in_song(1));
     }
 
     #[test]

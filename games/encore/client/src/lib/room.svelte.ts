@@ -26,6 +26,7 @@ export class RoomConnection {
   private retry = 0;
   private closed = false;
   private errorTimer: ReturnType<typeof setTimeout> | null = null;
+  private cueListeners = new Set<(conn: number, t: number, out: boolean) => void>();
 
   constructor(
     private pass: Pass,
@@ -58,6 +59,12 @@ export class RoomConnection {
 
   send(message: ClientMsg) {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+  }
+
+  /** Hears other players drop out of and come back into the song. */
+  onCue(listener: (conn: number, t: number, out: boolean) => void) {
+    this.cueListeners.add(listener);
+    return () => this.cueListeners.delete(listener);
   }
 
   saveSettings(settings: unknown) {
@@ -124,6 +131,9 @@ export class RoomConnection {
         this.rtt = Math.round(best.rtt);
         break;
       }
+      case 'cue':
+        for (const listener of this.cueListeners) listener(message.conn, message.t, message.out);
+        break;
       case 'error':
         if (message.message === 'pass_expired') {
           this.renewPass()

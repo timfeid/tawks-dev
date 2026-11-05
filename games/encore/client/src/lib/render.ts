@@ -7,7 +7,9 @@ const OPEN_COLOR = '#a855f7';
 const STAR_COLOR = '#67e8f9';
 const DEPTH = 3;
 const FLASH_MS = 140;
-const MISS_MS = 280;
+const PRESS_MS = 130;
+const BURST_MS = 260;
+const MISS_MS = 360;
 const MISS_COLOR = '239, 68, 68';
 
 type Geometry = {
@@ -36,6 +38,57 @@ export type Frame = {
   time: number;
   lookahead: number;
 };
+
+/** How far through a fade that started at `at` is, from 1 down to 0. */
+function fade(time: number, at: number, ms: number) {
+  const left = 1 - (time - at) / ms;
+  return left > 0 && left <= 1 ? left : 0;
+}
+
+function burst(c: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, left: number) {
+  const grown = 1 - left;
+  c.save();
+  c.globalAlpha = left;
+  c.strokeStyle = color;
+  c.lineWidth = 3 + 3 * left;
+  c.beginPath();
+  c.ellipse(x, y, size * (0.4 + grown * 0.5), size * (0.18 + grown * 0.24), 0, 0, Math.PI * 2);
+  c.stroke();
+  c.strokeStyle = '#fff';
+  c.lineWidth = 2;
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle) * 0.55;
+    const from = size * (0.25 + grown * 0.35);
+    const to = size * (0.45 + grown * 0.6);
+    c.beginPath();
+    c.moveTo(x + dx * from, y + dy * from);
+    c.lineTo(x + dx * to, y + dy * to);
+    c.stroke();
+  }
+  c.globalAlpha = left * 0.8;
+  c.fillStyle = '#fff';
+  c.beginPath();
+  c.ellipse(x, y - size * 0.2 * grown, size * 0.3 * left, size * 0.42 * left, 0, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+function cross(c: CanvasRenderingContext2D, x: number, y: number, size: number, left: number) {
+  c.save();
+  c.strokeStyle = `rgba(${MISS_COLOR}, ${left})`;
+  c.lineWidth = 5;
+  c.lineCap = 'round';
+  const r = size * 0.22;
+  c.beginPath();
+  c.moveTo(x - r, y - r);
+  c.lineTo(x + r, y + r);
+  c.moveTo(x + r, y - r);
+  c.lineTo(x - r, y + r);
+  c.stroke();
+  c.restore();
+}
 
 function firstFrom<T extends { t: number }>(list: T[], time: number) {
   let lo = 0;
@@ -133,47 +186,82 @@ export function drawHighway(c: CanvasRenderingContext2D, w: number, h: number, f
   }
 
   const laneWidth = g.width / g.lanes;
+  if (drums) {
+    const kickY = g.strike + laneWidth * 0.22;
+    const pressed = fade(time, engine.presses[0], PRESS_MS);
+    const hit = fade(time, engine.flashes[0], FLASH_MS);
+    if (engine.autoKick) {
+      c.save();
+      c.setLineDash([10, 8]);
+      c.lineWidth = 4;
+      c.strokeStyle = hit > 0 ? `rgba(255,200,140,${0.5 + hit * 0.5})` : 'rgba(249,115,22,0.45)';
+      c.beginPath();
+      c.moveTo(edge(-1, 0), kickY + 2);
+      c.lineTo(edge(1, 0), kickY + 2);
+      c.stroke();
+      c.restore();
+      c.font = '600 11px system-ui, sans-serif';
+      c.textAlign = 'left';
+      c.textBaseline = 'top';
+      c.fillStyle = 'rgba(253,186,116,0.9)';
+      c.fillText('AUTO KICK', edge(-1, 0), kickY + 10);
+    } else {
+      const lit = Math.max(pressed * 0.7, hit);
+      c.fillStyle = lit > 0 ? `rgba(255,200,140,${0.4 + lit * 0.6})` : 'rgba(249,115,22,0.35)';
+      c.fillRect(edge(-1, 0), kickY, g.width, 4 + 6 * lit);
+    }
+    const kickBurst = fade(time, engine.flashes[0], BURST_MS);
+    if (kickBurst > 0) {
+      c.fillStyle = `rgba(255,200,140,${kickBurst * 0.35})`;
+      c.fillRect(edge(-1, 0), g.strike - laneWidth * 0.5 * kickBurst, g.width, laneWidth * 0.7 * kickBurst + 4);
+    }
+    const kickMiss = fade(time, engine.missFlashes[0], MISS_MS);
+    if (kickMiss > 0) {
+      c.fillStyle = `rgba(${MISS_COLOR}, ${kickMiss * 0.8})`;
+      c.fillRect(edge(-1, 0), kickY, g.width, 5);
+      cross(c, g.cx, kickY + 2, laneWidth, kickMiss);
+    }
+  }
   for (let lane = 0; lane < g.lanes; lane++) {
     const realLane = drums ? lane + 1 : lane;
     const x = laneX(g, lane, 0);
     const held = !drums && engine.held & (1 << realLane);
-    const flash = Math.max(0, 1 - (time - engine.flashes[realLane]) / FLASH_MS);
+    const pressed = fade(time, engine.presses[realLane], PRESS_MS);
     c.beginPath();
     c.ellipse(x, g.strike, laneWidth * 0.36, laneWidth * 0.16, 0, 0, Math.PI * 2);
-    c.lineWidth = 4;
+    c.lineWidth = 4 + 3 * pressed;
     c.strokeStyle = colors[realLane];
     c.stroke();
-    c.fillStyle = held ? colors[realLane] : 'rgba(0,0,0,0.6)';
+    c.fillStyle = 'rgba(0,0,0,0.6)';
     c.fill();
-    const missed = Math.max(0, 1 - (time - engine.missFlashes[realLane]) / MISS_MS);
+    if (held || pressed > 0) {
+      c.globalAlpha = held ? 1 : 0.35 + 0.65 * pressed;
+      c.fillStyle = colors[realLane];
+      c.fill();
+      c.globalAlpha = 1;
+    }
+    const missed = fade(time, engine.missFlashes[realLane], MISS_MS);
     if (missed > 0) {
       c.beginPath();
       c.ellipse(x, g.strike, laneWidth * 0.46, laneWidth * 0.22, 0, 0, Math.PI * 2);
       c.lineWidth = 6;
       c.strokeStyle = `rgba(${MISS_COLOR}, ${missed})`;
       c.stroke();
+      cross(c, x, g.strike, laneWidth, missed);
     }
-    if (flash > 0) {
-      c.globalAlpha = flash;
-      c.fillStyle = '#fff';
-      c.beginPath();
-      c.ellipse(x, g.strike - laneWidth * 0.25 * (1 - flash), laneWidth * 0.3, laneWidth * 0.5 * flash, 0, 0, Math.PI * 2);
-      c.fill();
-      c.globalAlpha = 1;
-    }
+    const hit = fade(time, engine.flashes[realLane], BURST_MS);
+    if (hit > 0) burst(c, x, g.strike, laneWidth, colors[realLane], hit);
   }
-  const overstrum = Math.max(0, 1 - (time - engine.overstrumAt) / MISS_MS);
+  const overstrum = fade(time, engine.overstrumAt, MISS_MS);
   if (overstrum > 0) {
     const glow = c.createLinearGradient(0, g.strike - laneWidth * 0.6, 0, g.strike + laneWidth * 0.3);
     glow.addColorStop(0, `rgba(${MISS_COLOR}, 0)`);
     glow.addColorStop(1, `rgba(${MISS_COLOR}, ${0.45 * overstrum})`);
     c.fillStyle = glow;
     c.fillRect(edge(-1, 0), g.strike - laneWidth * 0.6, g.width, laneWidth * 0.9);
-  }
-  if (drums) {
-    const flash = Math.max(0, 1 - (time - engine.flashes[0]) / FLASH_MS);
-    c.fillStyle = flash > 0 ? `rgba(255,200,140,${0.4 + flash * 0.6})` : 'rgba(249,115,22,0.35)';
-    c.fillRect(edge(-1, 0), g.strike + laneWidth * 0.2, g.width, 4);
+    const frets = [0, 1, 2, 3, 4].filter((l) => engine.held & (1 << l));
+    if (frets.length) for (const lane of frets) cross(c, laneX(g, lane, 0), g.strike, laneWidth, overstrum);
+    else cross(c, g.cx, g.strike, laneWidth, overstrum);
   }
 
   for (let i = end - 1; i >= start; i--) {
@@ -186,13 +274,24 @@ export function drawHighway(c: CanvasRenderingContext2D, w: number, h: number, f
     const py = y(g, depth);
     const star = engine.inStarPhrase(i);
     const missed = state === MISSED;
+    c.globalAlpha = missed ? 0.35 : 1;
     if (note.lanes & OPEN || (drums && note.lanes & 1)) {
       const color = missed ? '#555' : star ? STAR_COLOR : drums ? DRUM_COLORS[0] : OPEN_COLOR;
-      c.fillStyle = color;
       const half = g.width * s * 0.48;
-      c.fillRect(g.cx - half, py - 5 * s, half * 2, 10 * s);
-      if (drums && note.lanes === 1) continue;
-      if (!drums) continue;
+      if (engine.isAutoKick(i)) {
+        c.strokeStyle = color;
+        c.lineWidth = 2;
+        c.setLineDash([8 * s, 6 * s]);
+        c.strokeRect(g.cx - half, py - 3 * s, half * 2, 6 * s);
+        c.setLineDash([]);
+      } else {
+        c.fillStyle = color;
+        c.fillRect(g.cx - half, py - 5 * s, half * 2, 10 * s);
+      }
+      if (!drums || note.lanes === 1) {
+        c.globalAlpha = 1;
+        continue;
+      }
     }
     for (let lane = drums ? 1 : 0; lane < 5; lane++) {
       if (!(note.lanes & (1 << lane))) continue;
@@ -217,5 +316,6 @@ export function drawHighway(c: CanvasRenderingContext2D, w: number, h: number, f
       c.fillStyle = note.kind === 'hopo' ? '#fff' : 'rgba(0,0,0,0.35)';
       c.fill();
     }
+    c.globalAlpha = 1;
   }
 }

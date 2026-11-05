@@ -8,6 +8,7 @@
   import { RoomConnection } from './lib/room.svelte';
   import { host } from './lib/voice';
   import { readSettings, type Settings } from './lib/settings';
+  import { presenceFor } from './lib/presence';
   import type { Pass, SongInfo } from './lib/types';
 
   const JOIN_ACTION = 'games.encore.join';
@@ -105,6 +106,11 @@
     }
     if (!catalogLoaded) catalogFailed = true;
   }
+
+  const presence = $derived(JSON.stringify(presenceFor(conn?.room ?? null, conn?.conn ?? null)));
+  $effect(() => {
+    host.activity?.setPresence(JSON.parse(presence));
+  });
 
   const phase = $derived(conn?.room?.phase ?? null);
   const inBand = $derived(!!conn?.me?.playing);

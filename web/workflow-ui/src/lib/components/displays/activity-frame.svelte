@@ -7,6 +7,7 @@
     SENDS_PER_SECOND,
     VERSION,
     isHello,
+    readPresence,
     type GameMessage,
     type HostMessage,
     type Json,
@@ -185,6 +186,35 @@
     askingMic = true;
   }
 
+  // A game's status line goes to the host at most this often; the last one in a burst wins.
+  const PRESENCE_EVERY_MS = 2_000;
+  let presenceSentAt = 0;
+  let presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  let presenceShown = false;
+
+  function onPresence(raw: unknown) {
+    const presence = readPresence(raw);
+    if (presence === undefined || !workflowId || !provider?.setActivityPresence) return;
+    const id = workflowId;
+    if (presenceTimer) clearTimeout(presenceTimer);
+    const send = () => {
+      presenceTimer = null;
+      presenceSentAt = performance.now();
+      presenceShown = presence !== null;
+      provider.setActivityPresence?.(id, presence);
+    };
+    const wait = PRESENCE_EVERY_MS - (performance.now() - presenceSentAt);
+    if (wait <= 0) send();
+    else presenceTimer = setTimeout(send, wait);
+  }
+
+  function clearPresence() {
+    if (presenceTimer) clearTimeout(presenceTimer);
+    presenceTimer = null;
+    if (presenceShown && workflowId) provider?.setActivityPresence?.(workflowId, null);
+    presenceShown = false;
+  }
+
   function fail(id: number, error: string) {
     post({ type: 'result', id, ok: false, error });
   }
@@ -203,6 +233,10 @@
     }
     if (message.type === 'fullscreen') {
       void onFullscreen(message.on === true);
+      return;
+    }
+    if (message.type === 'presence') {
+      onPresence(message.presence);
       return;
     }
     if (message.type !== 'send' && message.type !== 'call') return;
@@ -300,6 +334,7 @@
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       port?.close();
       port = null;
+      clearPresence();
       setTalking(false);
       micRequest += 1;
       micStarting = false;

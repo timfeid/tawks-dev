@@ -9,6 +9,9 @@
     "./pitch": "./src/pitch.ts"
   },
   "license": "MIT",
+  "scripts": {
+    "test": "node --test --experimental-strip-types src/*.test.ts"
+  },
   "devDependencies": {
     "typescript": "^5.0.0"
   }

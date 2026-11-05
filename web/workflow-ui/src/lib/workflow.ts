@@ -19,7 +19,11 @@ export interface WorkflowStateProvider {
   shortenLink?(path: string): Promise<string>;
   /** The activity registered for a workflow, when the host knows of one. */
   findActivity?(workflowId: string): Promise<ActivityInfo | null>;
+  /** What the player is doing in a lobby activity, for their status; null clears it. */
+  setActivityPresence?(workflowId: string, presence: ActivityPresence | null): void;
 }
+
+export type ActivityPresence = { details: string | null; state: string | null; started_at: number | null };
 
 export type ActivityInfo = {
   workflow_id: string;

@@ -8,6 +8,11 @@ export type Settings = {
   /** How far ahead the highway shows, in milliseconds. */
   lookahead: number;
   volume: number;
+  /** Loudness of the drum sounds each pad hit makes; 0 turns them off. */
+  drumVolume: number;
+  autoKick: boolean;
+  /** A vocalist hears the real vocals follow their singing. */
+  vocalGuide: boolean;
   bindings: Record<Layout, Bindings>;
 };
 
@@ -16,6 +21,9 @@ export const DEFAULT_SETTINGS: Settings = {
   videoOffset: 0,
   lookahead: 1100,
   volume: 0.9,
+  drumVolume: 0.8,
+  autoKick: false,
+  vocalGuide: true,
   bindings: DEFAULT_BINDINGS,
 };
 
@@ -38,6 +46,9 @@ export function readSettings(raw: unknown): Settings {
     videoOffset: clamp(from.videoOffset, -300, 300, 0),
     lookahead: clamp(from.lookahead, 500, 2500, DEFAULT_SETTINGS.lookahead),
     volume: clamp(from.volume, 0, 1, DEFAULT_SETTINGS.volume),
+    drumVolume: clamp(from.drumVolume, 0, 1, DEFAULT_SETTINGS.drumVolume),
+    autoKick: typeof from.autoKick === 'boolean' ? from.autoKick : DEFAULT_SETTINGS.autoKick,
+    vocalGuide: typeof from.vocalGuide === 'boolean' ? from.vocalGuide : DEFAULT_SETTINGS.vocalGuide,
     bindings,
   };
 }

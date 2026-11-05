@@ -46,8 +46,12 @@ export class Engine {
   readonly flashes = [-1e9, -1e9, -1e9, -1e9, -1e9];
   /** Last time a note slipped past in each lane, for a red flash. */
   readonly missFlashes = [-1e9, -1e9, -1e9, -1e9, -1e9];
-  /** Last strum or pad hit with nothing to play. */
+  /** Last time each lane was pressed, note or not, so every press lights its target. */
+  readonly presses = [-1e9, -1e9, -1e9, -1e9, -1e9];
+  /** Last strum with nothing to play. */
   overstrumAt = -1e9;
+  /** Kick notes play themselves; kick presses are ignored. */
+  readonly autoKick: boolean;
   readonly end: number;
   held = 0;
   score = 0;
@@ -58,6 +62,8 @@ export class Engine {
   starMeter = 0;
   starActive = false;
   muted = false;
+  /** Song time `muted` last changed, for the band to drop or restore this part's stem at. */
+  mutedAt = -1e9;
   /** The sustain being held, by note index, with how far it has been scored. */
   sustain: { index: number; end: number; lanes: number; scoredTo: number } | null = null;
   lastMissAt = -1e9;
@@ -71,8 +77,10 @@ export class Engine {
   constructor(
     track: Track,
     private beats: { t: number }[],
+    options: { autoKick?: boolean } = {},
   ) {
     this.drums = track.instrument === 'drums';
+    this.autoKick = this.drums && !!options.autoKick;
     this.notes = this.drums ? splitGems(track.notes) : track.notes.slice();
     this.judged = new Uint8Array(this.notes.length);
     const last = this.notes[this.notes.length - 1];
@@ -109,14 +117,20 @@ export class Engine {
       return;
     }
     if (this.drums) {
-      if (down && action !== 'strum') this.pad(Number(action.slice(4)), time);
+      if (!down || action === 'strum') return;
+      const lane = Number(action.slice(4));
+      if (lane === 0 && this.autoKick) return;
+      this.presses[lane] = time;
+      this.pad(lane, time);
       return;
     }
     if (action === 'strum') {
       if (down) this.strum(time);
       return;
     }
-    const bit = 1 << Number(action.slice(4));
+    const lane = Number(action.slice(4));
+    const bit = 1 << lane;
+    if (down) this.presses[lane] = time;
     const before = this.held;
     this.held = down ? this.held | bit : this.held & ~bit;
     if (this.held !== before) this.fretChange(time);
@@ -128,6 +142,7 @@ export class Engine {
     const dt = time - this.lastTime;
     this.lastTime = time;
 
+    if (this.autoKick) this.kickUntil(time);
     while (this.next < this.notes.length && this.judged[this.next] !== PENDING) this.next++;
     for (let i = this.next; i < this.notes.length && this.notes[i].t + LATE_MS < time; i++) {
       if (this.judged[i] === PENDING) this.miss(i, time);
@@ -175,7 +190,22 @@ export class Engine {
       star_meter: Math.round(this.starMeter * 100) / 100,
       star_active: this.starActive,
       muted: this.muted,
+      auto_kick: this.autoKick,
     };
+  }
+
+  /** The kick notes that play themselves, for drawing and scheduling their sound. */
+  isAutoKick(index: number) {
+    return this.autoKick && this.notes[index].lanes === 1;
+  }
+
+  private kickUntil(time: number) {
+    for (let i = this.next; i < this.notes.length && this.notes[i].t <= time; i++) {
+      if (this.judged[i] === PENDING && this.notes[i].lanes === 1) {
+        this.presses[0] = this.notes[i].t;
+        this.hitNote(i, this.notes[i].t);
+      }
+    }
   }
 
   private beatLength(time: number) {
@@ -246,7 +276,7 @@ export class Engine {
     this.score += NOTE_POINTS * Math.max(1, bits(note.lanes)) * this.multiplier;
     this.streak++;
     this.bestStreak = Math.max(this.bestStreak, this.streak);
-    this.muted = false;
+    this.setMuted(false, time);
     for (let lane = 0; lane < 5; lane++) if (note.lanes & (1 << lane)) this.flashes[lane] = time;
     if (note.lanes & OPEN) this.flashes.fill(time);
     if (!this.drums && note.len > 0) {
@@ -272,8 +302,14 @@ export class Engine {
 
   private breakStreak(time: number) {
     this.streak = 0;
-    this.muted = true;
+    this.setMuted(true, time);
     this.lastMissAt = time;
+  }
+
+  private setMuted(muted: boolean, time: number) {
+    if (this.muted === muted) return;
+    this.muted = muted;
+    this.mutedAt = time;
   }
 }
 

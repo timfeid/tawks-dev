@@ -2,6 +2,8 @@ import type { Instrument, SongInfo } from './types';
 
 /** A part's stem drops this low while its player is missing, like the band losing them. */
 const MISSING_GAIN = 0.06;
+/** A stem fades out or back in over about 100 ms, so it never clicks. */
+const FADE_TAU = 0.033;
 // Each decoded stem is raw audio, tens of megabytes a minute, so only two at once.
 const FETCH_AT_ONCE = 2;
 
@@ -46,6 +48,7 @@ export class SongPlayer {
   /** Audio-clock seconds at which song time zero is heard. */
   private zero = 0;
   private playing = false;
+  private silenced = new Set<Instrument>();
 
   constructor(volume = 0.9) {
     this.master = this.ctx.createGain();
@@ -118,10 +121,31 @@ export class SongPlayer {
     this.groups.clear();
   }
 
-  setMissing(part: Instrument, missing: boolean) {
+  /** Drops a part's stem, or brings it back, when song time `atSongMs` is heard; right away without one. */
+  setMissing(part: Instrument, missing: boolean, atSongMs?: number) {
     const group = this.groups.get(part);
-    if (!group) return;
-    group.gain.gain.setTargetAtTime(missing ? MISSING_GAIN : 1, this.ctx.currentTime, 0.015);
+    if (!group || this.silenced.has(part)) return;
+    const now = this.ctx.currentTime;
+    const at = atSongMs === undefined || !this.playing ? now : Math.max(now, this.contextTime(atSongMs));
+    group.gain.gain.cancelScheduledValues(at);
+    group.gain.gain.setTargetAtTime(missing ? MISSING_GAIN : 1, at, FADE_TAU);
+  }
+
+  /** Keeps a part's stem silent for this player, whatever the band does. */
+  silence(part: Instrument) {
+    this.silenced.add(part);
+    const group = this.groups.get(part);
+    group?.gain.gain.setTargetAtTime(0, this.ctx.currentTime, FADE_TAU);
+  }
+
+  /** A part's stem gain right now, for tests. */
+  gainOf(part: Instrument | 'backing') {
+    return this.groups.get(part)?.gain.gain.value ?? null;
+  }
+
+  /** The audio-clock time, in seconds, at which song time `songMs` plays. */
+  contextTime(songMs: number) {
+    return this.zero + songMs / 1000;
   }
 
   setVolume(volume: number) {

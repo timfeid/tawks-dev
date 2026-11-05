@@ -78,7 +78,7 @@ impl Store {
         }
         {
             let mut players = self.players.lock().unwrap();
-            for part in finished {
+            for part in finished.iter().filter(|part| !part.progress.auto_kick) {
                 let key = best_key(
                     &part.song_id,
                     part.part.instrument.key(),
@@ -148,5 +148,31 @@ mod tests {
                 .is_err()
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_auto_kick_run_keeps_no_best() {
+        let store = Store::open(None);
+        let drums = PartChoice {
+            instrument: Instrument::Drums,
+            difficulty: Difficulty::Expert,
+        };
+        let run = |score, auto_kick| Finished {
+            user_id: "u1".into(),
+            song_id: "s".into(),
+            part: drums,
+            score,
+            progress: crate::room::Progress {
+                score,
+                auto_kick,
+                ..Default::default()
+            },
+            band_size: 1,
+            official: false,
+        };
+        store.record(&[run(900, true)]);
+        assert!(store.get("u1").bests.is_empty());
+        store.record(&[run(400, false), run(800, true)]);
+        assert_eq!(store.get("u1").bests["s:drums:expert"], 400);
     }
 }

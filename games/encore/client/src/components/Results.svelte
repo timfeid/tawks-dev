@@ -16,7 +16,7 @@
   const mine = conn.me;
   const key = mine?.part && conn.room?.song ? bestKey(conn.room.song.id, mine.part) : null;
   const previousBest = key ? (conn.bests[key] ?? 0) : 0;
-  const newBest = !!key && !!mine && mine.progress.score > previousBest;
+  const newBest = !!key && !!mine && !mine.progress.auto_kick && mine.progress.score > previousBest;
   if (key && mine && newBest) conn.bests = { ...conn.bests, [key]: mine.progress.score };
 </script>
 
@@ -37,6 +37,7 @@
           <div class="truncate font-semibold">{player.name}</div>
           <div class="text-xs text-neutral-400">
             {player.part ? INSTRUMENT_LABELS[player.part.instrument] : ''}, <span class="capitalize">{player.part?.difficulty}</span>
+            {#if player.progress.auto_kick}<span class="ml-1 rounded bg-orange-400/15 px-1.5 py-0.5 text-[11px] text-orange-300">Auto kick</span>{/if}
           </div>
         </div>
         <div class="text-right font-mono text-xs text-neutral-400">

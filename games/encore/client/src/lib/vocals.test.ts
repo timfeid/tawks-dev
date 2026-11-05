@@ -42,6 +42,27 @@ describe('VocalEngine', () => {
     short.feed(sing(2000, 2150, 64));
     short.update(4000);
     expect(short.judged[1]).toBe(MISSED);
-    expect(short.muted).toBe(true);
+  });
+
+  it('drops the real vocals live while the singer is off the note and brings them back on it', () => {
+    const engine = new VocalEngine(notes, 'hard');
+    engine.feed(sing(1000, 1500, 60));
+    expect(engine.muted).toBe(false);
+    engine.feed(sing(2000, 2400, 70));
+    expect(engine.muted).toBe(true);
+    expect(engine.mutedAt).toBeGreaterThanOrEqual(2150);
+    expect(engine.mutedAt).toBeLessThan(2200);
+    engine.feed(sing(2400, 2500, 64));
+    expect(engine.muted).toBe(false);
+    expect(engine.mutedAt).toBeLessThan(2460);
+  });
+
+  it('drops the vocals when the singer goes quiet during a note, not between notes', () => {
+    const engine = new VocalEngine(notes, 'hard');
+    engine.feed(sing(1000, 1500, 60));
+    engine.feed(sing(1600, 1990, null, 0));
+    expect(engine.muted).toBe(false);
+    engine.feed(sing(2000, 2300, null, 0));
+    expect(engine.muted).toBe(true);
   });
 });

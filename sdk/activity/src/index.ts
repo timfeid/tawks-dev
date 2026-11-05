@@ -10,9 +10,10 @@ import {
   type Me,
   type MicrophoneState,
   type PitchSample,
+  type Presence,
 } from './protocol';
 
-export type { Json, Lobby, Me, MicrophoneState, PitchSample } from './protocol';
+export type { Json, Lobby, Me, MicrophoneState, PitchSample, Presence } from './protocol';
 
 export type Activity<State = Json> = {
   /** The player this frame belongs to. */
@@ -47,6 +48,12 @@ export type Activity<State = Json> = {
   fullscreen(on: boolean): Promise<boolean>;
   /** Calls `listener` whenever full screen goes on or off; returns a function that stops it. */
   onFullscreen(listener: (on: boolean) => void): () => void;
+  /**
+   * Says what the player is doing, such as the song and part, for their
+   * status and profile card. tawks shows it only to the people they share
+   * what they play with, and clears it when the game closes. Pass null to clear it.
+   */
+  setPresence(presence: Partial<Presence> | null): void;
 };
 
 export type ConnectOptions = {
@@ -153,6 +160,10 @@ function attach<State>(port: MessagePort, resolve: (activity: Activity<State>) =
             return () => pitchListeners.delete(listener);
           },
           fullscreen: askFullscreen,
+          setPresence(presence) {
+            const full = presence && { details: presence.details ?? null, state: presence.state ?? null, started_at: presence.started_at ?? null };
+            port.postMessage({ type: 'presence', presence: full } satisfies GameMessage);
+          },
           onFullscreen(listener) {
             fullscreenListeners.add(listener);
             return () => fullscreenListeners.delete(listener);

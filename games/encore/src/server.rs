@@ -70,6 +70,11 @@ enum ClientMsg {
     Settings {
         settings: Value,
     },
+    /// The sender's part dropped out (`out`) or came back at song time `t`.
+    Cue {
+        t: f64,
+        out: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -92,6 +97,11 @@ enum ServerMsg<'a> {
     },
     Error {
         message: &'a str,
+    },
+    Cue {
+        conn: u64,
+        t: f64,
+        out: bool,
     },
 }
 
@@ -300,7 +310,8 @@ impl EncoreServer {
                     "instrument": part.part.instrument.key(),
                     "difficulty": part.part.difficulty.key(),
                     "accuracy": accuracy,
-                    "full_combo": progress.total > 0 && progress.best_streak >= progress.total,
+                    "full_combo": !progress.auto_kick && progress.total > 0 && progress.best_streak >= progress.total,
+                    "auto_kick": progress.auto_kick,
                     "band_size": part.band_size,
                     "score": part.score,
                     "song_id": part.song_id,
@@ -915,6 +926,17 @@ fn handle(
                     Ok(())
                 }
                 ClientMsg::Stop => room.stop(conn),
+                ClientMsg::Cue { t, out } => {
+                    if room.in_song(conn) && t.is_finite() {
+                        let cue = text(&ServerMsg::Cue { conn, t, out });
+                        for (other, sender) in outs.iter() {
+                            if *other != conn {
+                                let _ = sender.send(cue.clone());
+                            }
+                        }
+                    }
+                    Ok(())
+                }
                 ClientMsg::Hello { .. }
                 | ClientMsg::Ping { .. }
                 | ClientMsg::Settings { .. }

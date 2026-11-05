@@ -2,6 +2,8 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { X } from '@lucide/svelte';
   import { SongPlayer, playScratch } from '../lib/audio';
+  import { DrumKit } from '../lib/drums';
+  import { CUE_HOLD_MS, StemGate } from '../lib/gate';
   import { Engine, type Action } from '../lib/engine';
   import { Controls, type Control, type Layout } from '../lib/input';
   import { drawHighway } from '../lib/render';
@@ -18,9 +20,20 @@
   let { conn, settings }: { conn: RoomConnection; settings: Settings } = $props();
 
   const PROGRESS_EVERY_MS = 200;
-  /** For testing: `?autoplay` plays every note perfectly. */
-  const autoplay = new URLSearchParams(location.search).has('autoplay');
+  const PRE_SONG_MS = 1e9;
+  const params = new URLSearchParams(location.search);
+  /**
+   * For testing: `?autoplay` plays every note perfectly. `?autoplay=sloppy`
+   * skips every other four seconds of notes. On vocals, `?autoplay=offkey`
+   * sings a tritone off and `?autoplay=alternate` swaps between the two every
+   * four seconds. `?nocues` ignores the band's cues, leaving stems to follow
+   * progress messages alone.
+   */
+  const autoplay = params.has('autoplay');
+  const autoMode = params.get('autoplay') ?? '';
   let autoIndex = 0;
+  const AUTO_KICK_AHEAD_MS = 120;
+  const MILESTONE_EVERY = 50;
 
   const song = untrack(() => conn.room!.song!);
   const part = untrack(() => conn.me!.part!);
@@ -33,7 +46,22 @@
   let failure = $state<string | null>(null);
   let canvas = $state<HTMLCanvasElement>();
   let lyricTime = $state(-1e9);
-  let hud = $state({ score: 0, multiplier: 1, streak: 0, star: 0, starActive: false, countdown: 0, section: '', done: false, missing: false });
+  let hud = $state({
+    score: 0,
+    multiplier: 1,
+    streak: 0,
+    star: 0,
+    starActive: false,
+    countdown: 0,
+    section: '',
+    done: false,
+    missing: false,
+    autoKick: false,
+  });
+  /** Bumped to replay the multiplier pop, and the callout under the score. */
+  let multiplierPops = $state(0);
+  let callout = $state<{ id: number; text: string; bad: boolean } | null>(null);
+  let calloutTimer: ReturnType<typeof setTimeout> | null = null;
 
   let engine: Engine | null = null;
   let vocal: VocalEngine | null = null;
@@ -42,6 +70,11 @@
   let micState = $state<MicrophoneState | null>(null);
   const heardQueue: HeardSample[] = [];
   let player: SongPlayer | null = null;
+  let kit: DrumKit | null = null;
+  let gate: StemGate | null = null;
+  let stopCues: (() => void) | null = null;
+  let lastCueAt = -1e9;
+  let kickSoundIndex = 0;
   let controls: Controls | null = null;
   let chart = $state.raw<Chart | null>(null);
   let started = false;
@@ -75,7 +108,7 @@
       } else {
         const track = pickTrack(chart, part);
         if (!track) throw new Error(`This chart has no ${INSTRUMENT_LABELS[part.instrument].toLowerCase()} part`);
-        engine = new Engine(track, chart.beats);
+        engine = new Engine(track, chart.beats, { autoKick: layout === 'drums' && settings.autoKick });
       }
       songEnd = Math.max((engine ?? vocal)!.end, song.length_ms, chart.length) + 500;
       player = new SongPlayer(settings.volume);
@@ -86,10 +119,25 @@
         [...new Set(band)],
         (done, total) => (loaded = total ? done / total : 1),
       );
+      gate = new StemGate((instrument, out, at) => player?.setMissing(instrument, out, at));
+      if (!params.has('nocues')) stopCues = conn.onCue((from, t, out) => gate?.cue(from, t, out, CUE_HOLD_MS));
+      if (singing && !settings.vocalGuide) player.silence('vocals');
+      if (autoplay || params.has('debug')) {
+        const p = player;
+        (window as unknown as { encore: unknown }).encore = {
+          gain: (part: Instrument) => p.gainOf(part),
+          songTime: () => p.songTime(),
+          engine: () => engine ?? vocal,
+        };
+      }
       status = 'ready';
       if (singing) void startMic();
       else {
-        controls = new Controls(settings.bindings[layout], (control, down, at) => queue.push({ control, down, at }));
+        if (layout === 'drums') kit = new DrumKit(player.ctx, settings.drumVolume);
+        controls = new Controls(settings.bindings[layout], (control, down, at) => {
+          if (kit && down && control.startsWith('lane') && !(control === 'lane0' && engine?.autoKick)) kit.play(Number(control.slice(4)));
+          queue.push({ control, down, at });
+        });
         controls.start();
       }
       raf = requestAnimationFrame(frame);
@@ -113,7 +161,10 @@
     cancelAnimationFrame(raf);
     controls?.stop();
     voice?.stop();
+    stopCues?.();
+    kit?.dispose();
     player?.dispose();
+    if (calloutTimer) clearTimeout(calloutTimer);
   });
 
   $effect(() => {
@@ -132,29 +183,43 @@
   });
 
   function emptyProgress() {
-    return { score: 0, streak: 0, best_streak: 0, multiplier: 1, hit: 0, missed: 0, total: 0, star_meter: 0, star_active: false, muted: false };
+    return { score: 0, streak: 0, best_streak: 0, multiplier: 1, hit: 0, missed: 0, total: 0, star_meter: 0, star_active: false, muted: false, auto_kick: false };
   }
 
-  function applyMissing() {
+  /**
+   * Keeps every part's stem following its players. This player's own drops
+   * apply on the spot and go to the band as cues stamped with song time.
+   */
+  function applyMissing(heard: number) {
     const scorer = engine ?? vocal;
-    if (!player || !scorer) return;
-    const now = new Map<Instrument, boolean>();
-    for (const p of room.players) {
-      if (!p.playing || !p.part) continue;
-      const out = p.conn === conn.conn ? scorer.muted : p.progress.muted;
-      now.set(p.part.instrument, (now.get(p.part.instrument) ?? true) && out);
+    if (!player || !scorer || !gate || conn.conn === null) return;
+    const players = room.players
+      .filter((p) => p.playing && p.part)
+      .map((p) => ({ conn: p.conn, instrument: p.part!.instrument, out: p.conn === conn.conn ? scorer.muted : p.progress.muted }));
+    gate.roster(players, heard);
+    if (scorer.mutedAt !== lastCueAt) {
+      lastCueAt = scorer.mutedAt;
+      gate.cue(conn.conn, scorer.mutedAt, scorer.muted, 0);
+      conn.send({ type: 'cue', t: scorer.mutedAt, out: scorer.muted });
     }
-    for (const [instrument, out] of now) {
-      if (missing.get(instrument) === out) continue;
-      missing.set(instrument, out);
-      player.setMissing(instrument, out);
+  }
+
+  /** Schedules the kick sound for each auto kick just ahead, on the song's own audio clock. */
+  function scheduleAutoKicks(engine: Engine, heard: number) {
+    if (!kit || !player || !engine.autoKick) return;
+    const notes = engine.notes;
+    while (kickSoundIndex < notes.length && notes[kickSoundIndex].t < heard) kickSoundIndex++;
+    for (; kickSoundIndex < notes.length && notes[kickSoundIndex].t <= heard + AUTO_KICK_AHEAD_MS; kickSoundIndex++) {
+      if (engine.isAutoKick(kickSoundIndex)) kit.play(0, player.contextTime(notes[kickSoundIndex].t));
     }
   }
 
   function playAhead(engine: Engine, until: number) {
     for (; autoIndex < engine.notes.length && engine.notes[autoIndex].t <= until; autoIndex++) {
       const note = engine.notes[autoIndex];
+      if (autoMode === 'sloppy' && Math.floor(note.t / 4000) % 2 === 1) continue;
       if (engine.drums) {
+        if (engine.isAutoKick(autoIndex)) continue;
         const lane = 31 - Math.clz32(note.lanes);
         engine.input({ action: `lane${lane}` as Action, down: true, time: note.t });
         continue;
@@ -172,7 +237,8 @@
     const samples: VoiceSample[] = [];
     for (let t = Math.max(from, 0); t < to; t += 16) {
       const i = vocal.noteAt(t);
-      samples.push({ time: t, midi: i >= 0 ? vocal.notes[i].pitch : null, level: i >= 0 ? 0.1 : 0 });
+      const offKey = autoMode === 'offkey' || (autoMode === 'alternate' && Math.floor(t / 4000) % 2 === 1);
+      samples.push({ time: t, midi: i >= 0 ? vocal.notes[i].pitch + (offKey ? 6 : 0) : null, level: i >= 0 ? 0.1 : 0 });
     }
     vocal.feed(samples);
   }
@@ -193,7 +259,7 @@
       }));
       vocal.feed(samples);
       vocal.update(heard);
-      applyMissing();
+      applyMissing(heard);
       const done = heard > songEnd;
       if ((now - lastSent > PROGRESS_EVERY_MS && !sentDone) || (done && !sentDone)) {
         lastSent = now;
@@ -219,10 +285,23 @@
     return c;
   }
 
+  function say(text: string, bad = false) {
+    callout = { id: (callout?.id ?? 0) + 1, text, bad };
+    if (calloutTimer) clearTimeout(calloutTimer);
+    calloutTimer = setTimeout(() => (callout = null), 1200);
+  }
+
   function updateHud(scorer: Engine | VocalEngine, heard: number) {
     lyricTime = heard;
     const section = chart!.sections.findLast((s) => s.t <= heard)?.name ?? '';
+    if (scorer.multiplier > hud.multiplier) {
+      multiplierPops++;
+      if (!scorer.starActive || hud.starActive) say(`${scorer.multiplier}x multiplier`);
+    }
+    if (scorer.streak > 0 && scorer.streak % MILESTONE_EVERY === 0 && scorer.streak !== hud.streak) say(`${scorer.streak} note streak`);
+    if (hud.streak >= 10 && scorer.streak === 0) say('Streak lost', true);
     hud = {
+      autoKick: engine?.autoKick ?? false,
       score: scorer.score,
       multiplier: scorer.multiplier,
       streak: scorer.streak,
@@ -251,11 +330,12 @@
       const judged = heard - settings.inputOffset;
       if (autoplay) playAhead(engine, judged);
       engine.update(judged);
+      scheduleAutoKicks(engine, heard);
       if (engine.overstrumAt !== lastOverstrum) {
         lastOverstrum = engine.overstrumAt;
         if (judged > 0) playScratch(settings.volume * 0.6);
       }
-      applyMissing();
+      applyMissing(judged);
       const done = heard > songEnd;
       if ((now - lastSent > PROGRESS_EVERY_MS && !sentDone) || (done && !sentDone)) {
         lastSent = now;
@@ -263,9 +343,11 @@
         conn.send({ type: 'progress', progress: engine.progress(), done });
       }
     } else {
+      // Before the song starts, presses still light their targets on a stand-in clock far before the first note.
+      heard = now - PRE_SONG_MS;
       for (const event of queue.splice(0)) {
         const action: Action = event.control === 'strum_up' || event.control === 'strum_down' ? 'strum' : event.control;
-        if (action !== 'strum') engine.input({ action, down: event.down, time: -1 });
+        if (action !== 'strum') engine.input({ action, down: event.down, time: event.at - PRE_SONG_MS - settings.inputOffset });
       }
     }
 
@@ -320,15 +402,30 @@
   <div class="pointer-events-none absolute top-4 right-5 text-right">
     <div class="font-mono text-3xl font-bold tabular-nums">{hud.score.toLocaleString()}</div>
     <div class="mt-1 flex items-center justify-end gap-2">
-      <span
-        class="rounded-md px-2 py-0.5 font-mono text-lg font-black {hud.starActive
-          ? 'bg-cyan-300 text-black'
-          : hud.multiplier >= 4
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-white/10 text-white'}">{hud.multiplier}x</span
-      >
+      {#key multiplierPops}
+        <span
+          class="pop rounded-md px-2 py-0.5 font-mono text-lg font-black {hud.starActive
+            ? 'bg-cyan-300 text-black'
+            : hud.multiplier >= 4
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-white/10 text-white'}">{hud.multiplier}x</span
+        >
+      {/key}
       <span class="font-mono text-sm transition-colors {hud.missing ? 'text-red-400' : 'text-neutral-300'}">{hud.streak} streak</span>
     </div>
+    {#if !singing}
+      <div class="mt-1.5 ml-auto flex w-40 gap-0.5" aria-hidden="true">
+        {#each Array.from({ length: 10 }, (_, i) => i) as pip (pip)}
+          <span
+            class="h-1 flex-1 rounded-full {hud.multiplier >= 4 || hud.streak % 10 > pip
+              ? hud.missing
+                ? 'bg-red-400'
+                : 'bg-primary'
+              : 'bg-white/10'}"
+          ></span>
+        {/each}
+      </div>
+    {/if}
     <div class="mt-2 ml-auto h-2 w-40 overflow-hidden rounded-full bg-white/10">
       <div class="h-full bg-cyan-300 transition-[width] duration-100" style="width: {Math.round(hud.star * 100)}%"></div>
     </div>
@@ -342,6 +439,7 @@
       <div class="text-sm font-semibold">{song.name}</div>
       <div class="text-xs text-neutral-400">{song.artist}</div>
       {#if hud.section}<div class="mt-1 text-xs tracking-wider text-primary uppercase">{hud.section}</div>{/if}
+      {#if hud.autoKick}<div class="mt-1 text-xs text-orange-300">Auto kick on, no best saved</div>{/if}
     </div>
     {#if room.host === conn.conn}
       <button
@@ -357,9 +455,56 @@
     <BandList {conn} live compact />
   </div>
 
+  {#if callout}
+    {#key callout.id}
+      <div
+        class="callout pointer-events-none absolute top-[38%] left-1/2 -translate-x-1/2 font-black tracking-wide whitespace-nowrap {callout.bad
+          ? 'text-2xl text-red-400'
+          : 'text-3xl text-white'}"
+      >
+        {callout.text}
+      </div>
+    {/key}
+  {/if}
+
   {#if hud.done}
     <div class="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-neutral-300">
       Waiting for the rest of the band to finish
     </div>
   {/if}
 </div>
+
+<style>
+  .pop {
+    animation: pop 260ms ease-out;
+  }
+  .callout {
+    animation: rise 1200ms ease-out forwards;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  }
+  @keyframes pop {
+    0% {
+      transform: scale(1.6);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes rise {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 8px) scale(0.9);
+    }
+    15% {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+    75% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -12px);
+    }
+  }
+</style>

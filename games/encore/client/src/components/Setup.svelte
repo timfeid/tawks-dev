@@ -2,6 +2,7 @@
   import { Plus, RotateCcw, X } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import Calibrate from './Calibrate.svelte';
+  import { DrumKit } from '../lib/drums';
   import {
     CONTROLS,
     CONTROL_LABELS,
@@ -27,12 +28,18 @@
 
   let abort: AbortController | null = null;
   let tester: Controls | null = null;
+  let kit: DrumKit | null = null;
   let stepAbort: AbortController | null = null;
   let skipping = false;
 
   function listen() {
     tester?.stop();
-    tester = new Controls($state.snapshot(draft.bindings[layout]), (control, down, at) => {
+    tester = new Controls($state.snapshot(draft.bindings[layout]), (control, down) => {
+      if (layout === 'drums' && down && control.startsWith('lane')) {
+        kit ??= new DrumKit();
+        kit.setVolume(draft.drumVolume);
+        kit.play(Number(control.slice(4)));
+      }
       const next = new Set(held);
       if (down) next.add(control);
       else next.delete(control);
@@ -51,6 +58,7 @@
   onDestroy(() => {
     clearInterval(padTimer);
     tester?.stop();
+    kit?.dispose();
     abort?.abort();
     stepAbort?.abort();
   });
@@ -150,6 +158,13 @@
             <button class="text-xs text-neutral-300 hover:text-white" onclick={() => stepAbort?.abort()}>Stop</button>
           </div>
         {/if}
+        {#if layout === 'drums'}
+          <label class="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-2 text-sm">
+            <input type="checkbox" bind:checked={draft.autoKick} class="accent-primary" />
+            <span>Auto kick</span>
+            <span class="text-xs text-neutral-500">Kick notes play themselves. Songs played this way keep no best score.</span>
+          </label>
+        {/if}
         <p class="text-xs text-neutral-500">
           {pads.length ? `Connected: ${pads.join(', ')}` : 'No controller found. Press a button on it to wake it up.'}
         </p>
@@ -217,6 +232,16 @@
           <span class="w-36 text-neutral-400">Volume</span>
           <input type="range" min="0" max="1" step="0.05" bind:value={draft.volume} class="flex-1" />
           <span class="w-16 text-right font-mono text-xs">{Math.round(draft.volume * 100)}%</span>
+        </label>
+        <label class="flex items-center gap-3 text-sm">
+          <span class="w-36 text-neutral-400">Drum hit sounds</span>
+          <input type="range" min="0" max="1" step="0.05" bind:value={draft.drumVolume} class="flex-1" />
+          <span class="w-16 text-right font-mono text-xs">{draft.drumVolume ? `${Math.round(draft.drumVolume * 100)}%` : 'Off'}</span>
+        </label>
+        <label class="flex items-center gap-3 text-sm">
+          <span class="w-36 text-neutral-400">Vocal guide</span>
+          <input type="checkbox" bind:checked={draft.vocalGuide} class="accent-primary" />
+          <span class="text-xs text-neutral-500">When you sing, hear the real vocals while you are on the note.</span>
         </label>
       </section>
     </div>

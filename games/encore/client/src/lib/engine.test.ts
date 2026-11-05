@@ -110,4 +110,48 @@ describe('Engine', () => {
     expect([...engine.judged]).toEqual([HIT, HIT, MISSED]);
     expect(engine.progress().total).toBe(3);
   });
+
+  it('lights every press, note or not, on frets and pads', () => {
+    const guitar = new Engine(track([note(1000, 1)]), beats);
+    press(guitar, 'lane3', 400);
+    expect(guitar.presses[3]).toBe(400);
+    expect(guitar.flashes[3]).toBeLessThan(0);
+    const drums = new Engine(track([note(1000, 0b10)], 'drums'), beats);
+    press(drums, 'lane4', 500);
+    press(drums, 'lane0', 600);
+    expect(drums.presses[4]).toBe(500);
+    expect(drums.presses[0]).toBe(600);
+    expect(drums.streak).toBe(0);
+    press(drums, 'lane1', 1005);
+    expect(drums.flashes[1]).toBe(1005);
+    expect(drums.judged[0]).toBe(HIT);
+  });
+
+  it('marks when the part drops out and comes back', () => {
+    const engine = new Engine(track([note(1000, 1), note(2000, 1)]), beats);
+    engine.update(1200);
+    expect(engine.muted).toBe(true);
+    expect(engine.mutedAt).toBe(1200);
+    press(engine, 'lane0', 1900);
+    press(engine, 'strum', 2010);
+    expect(engine.muted).toBe(false);
+    expect(engine.mutedAt).toBe(2010);
+  });
+
+  it('plays kick notes itself with auto kick and ignores the pedal', () => {
+    const notes = [note(1000, 0b11), note(1500, 0b1), note(2000, 0b100)];
+    const engine = new Engine(track(notes, 'drums'), beats, { autoKick: true });
+    press(engine, 'lane0', 400);
+    expect(engine.presses[0]).toBeLessThan(0);
+    engine.update(1000);
+    expect(engine.judged[0]).toBe(HIT);
+    expect(engine.flashes[0]).toBe(1000);
+    press(engine, 'lane1', 1030);
+    engine.update(2200);
+    expect([...engine.judged]).toEqual([HIT, HIT, HIT, MISSED]);
+    expect(engine.isAutoKick(2)).toBe(true);
+    expect(engine.isAutoKick(1)).toBe(false);
+    expect(engine.progress().auto_kick).toBe(true);
+    expect(new Engine(track(notes, 'guitar'), beats, { autoKick: true }).autoKick).toBe(false);
+  });
 });

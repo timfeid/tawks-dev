@@ -93,6 +93,8 @@ export type Progress = {
   star_meter: number;
   star_active: boolean;
   muted: boolean;
+  /** Kicks played themselves, so the run keeps no best. */
+  auto_kick?: boolean;
 };
 
 export type Player = {
@@ -133,6 +135,7 @@ export type ServerMsg =
     }
   | { type: 'room'; room: RoomView }
   | { type: 'pong'; t: number; now: number }
+  | { type: 'cue'; conn: number; t: number; out: boolean }
   | { type: 'error'; message: string };
 
 export type ClientMsg =
@@ -143,6 +146,7 @@ export type ClientMsg =
   | { type: 'ready'; ready: boolean }
   | { type: 'loaded' }
   | { type: 'progress'; progress: Progress; done: boolean }
+  | { type: 'cue'; t: number; out: boolean }
   | { type: 'again' }
   | { type: 'stop' }
   | { type: 'settings'; settings: unknown };

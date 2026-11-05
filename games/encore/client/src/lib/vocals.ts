@@ -1,4 +1,5 @@
 import { HIT, MISSED, PENDING } from './engine';
+import { SingingGate } from './gate';
 import type { Difficulty, Progress, VocalNote } from './types';
 
 /** How far off, in semitones, still counts as on pitch. */
@@ -40,7 +41,10 @@ export class VocalEngine {
   bestStreak = 0;
   hit = 0;
   missed = 0;
+  /** Out while the singer is off the note or silent, live, so the real vocals can follow them. */
   muted = false;
+  mutedAt = -1e9;
+  private gate = new SingingGate();
   lastMissAt = -1e9;
   readonly starMeter = 0;
   readonly starActive = false;
@@ -86,12 +90,17 @@ export class VocalEngine {
       const shown =
         sample.midi === null || around === null ? null : sample.midi + 12 * Math.round((around - sample.midi) / 12);
       this.trail.push({ ...sample, shown });
-      if (i < 0 || this.judged[i] !== PENDING) continue;
-      const note = this.notes[i];
-      const sung = note.talky
-        ? sample.level >= SPOKEN_LEVEL
-        : sample.midi !== null && pitchDistance(sample.midi, note.pitch) <= this.tolerance;
-      if (sung) this.credit[i] += dt;
+      const note = i >= 0 ? this.notes[i] : null;
+      const sung =
+        !!note &&
+        (note.talky
+          ? sample.level >= SPOKEN_LEVEL
+          : sample.midi !== null && pitchDistance(sample.midi, note.pitch) <= this.tolerance);
+      if (this.gate.sample(sample.time, note ? sung : null)) {
+        this.muted = this.gate.out;
+        this.mutedAt = this.gate.changedAt;
+      }
+      if (sung && this.judged[i] === PENDING) this.credit[i] += dt;
     }
     while (this.trail.length && this.trail[0].time < this.lastSample - TRAIL_MS) this.trail.shift();
   }
@@ -109,12 +118,10 @@ export class VocalEngine {
         this.score += Math.round(NOTE_POINTS * Math.min(1, share) * this.multiplier);
         this.streak++;
         this.bestStreak = Math.max(this.bestStreak, this.streak);
-        this.muted = false;
       } else {
         this.judged[this.next] = MISSED;
         this.missed++;
         this.streak = 0;
-        this.muted = true;
         this.lastMissAt = time;
       }
       this.next++;

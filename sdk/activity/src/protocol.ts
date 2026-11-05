@@ -8,6 +8,16 @@ export const MAX_INPUT_BYTES = 16 * 1024;
 /** Moves a game may send per second, with bursts up to twice that. */
 export const SENDS_PER_SECOND = 20;
 
+/** Longest status line a game may show, in characters. */
+export const PRESENCE_TEXT_MAX = 128;
+
+/**
+ * What the player is doing in the game, shown in their status and on their
+ * profile card: `details` and `state` are short lines, `started_at` is Unix
+ * time in milliseconds for an elapsed timer.
+ */
+export type Presence = { details: string | null; state: string | null; started_at: number | null };
+
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
 export type Me = { id: string };
@@ -54,10 +64,34 @@ export type GameMessage =
    * this for itself, so tawks takes the panel around it full screen instead.
    */
   | { type: 'fullscreen'; on: boolean }
-  | { type: 'call'; id: number; action: string; inputs: { [key: string]: Json } };
+  | { type: 'call'; id: number; action: string; inputs: { [key: string]: Json } }
+  /** What the player is doing, for their status; null clears it. */
+  | { type: 'presence'; presence: Presence | null };
 
 /** Action ids a game may call: one of its own workflow's actions. */
 export const ACTION_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+
+/** A game's presence, checked; undefined when it is malformed. */
+export function readPresence(raw: unknown): Presence | null | undefined {
+  if (raw === null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const value = raw as Record<string, unknown>;
+  const text = (field: unknown) => {
+    if (field === undefined || field === null) return null;
+    if (typeof field !== 'string') return undefined;
+    const trimmed = field.trim().slice(0, PRESENCE_TEXT_MAX);
+    return trimmed || null;
+  };
+  const details = text(value.details);
+  const state = text(value.state);
+  const started = value.started_at;
+  if (details === undefined || state === undefined) return undefined;
+  if (started !== undefined && started !== null && !(typeof started === 'number' && Number.isFinite(started) && started > 0)) {
+    return undefined;
+  }
+  if (!details && !state) return null;
+  return { details, state, started_at: typeof started === 'number' ? Math.round(started) : null };
+}
 
 export function isHello(data: unknown): data is Hello {
   return (
