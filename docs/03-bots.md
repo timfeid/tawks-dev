@@ -372,7 +372,7 @@ A channel shows the workflow named in its settings. For a bot workflow, that is 
 wf-<definition id>-<bot user id>
 ```
 
-The owner part is the bot's **user id**, not its username or display name.
+The owner part is the bot's **user id**, not its screen name (`username`) or display name.
 
 There are two ways to set it:
 

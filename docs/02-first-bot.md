@@ -8,7 +8,7 @@ Read [What you can build on tawks](01-overview.md) first if words like hub, work
 
 Making bots is by invitation. A hub's admins can give your role the **Create Bots** permission; once you have it, open **Settings**, then **Bots**:
 
-1. Pick the hub the bot will live in, choose a username and a display name, and create it. The username becomes the bot's **user id**, and every workflow your bot registers is named after it, as `wf-<workflow name>-<bot user id>`.
+1. Pick the hub the bot will live in, choose a screen name and a display name, and create it. The screen name (`username` in the API) becomes the bot's **user id**, and every workflow your bot registers is named after it, as `wf-<workflow name>-<bot user id>`.
 2. Press **New token** and copy the token. It starts with `tbot_` and is shown only once; tawks keeps just a fingerprint of it. Treat it like a password and keep it out of your repository and out of chat. You can revoke a token there at any time, and it stops working at once.
 
 Each person can own one bot at a time unless the tawks team raises the limit. If no hub has given you the permission yet, ask in the `dev-chat` channel of the Tawks Dev hub. You can also build and play your game locally with no account at all; see [Game activities](07-tables.md).
