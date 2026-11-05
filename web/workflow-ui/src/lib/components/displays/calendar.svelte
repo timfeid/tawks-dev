@@ -13,13 +13,17 @@
     label?: string;
     detail?: string;
     tone?: string;
-    highlight?: boolean;
+    highlight?: boolean | string;
   };
 
   const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   let { display, inputs }: Props = $props();
   let calendar = $derived(typeof display.type !== 'string' && 'Calendar' in display.type ? display.type.Calendar : null);
+  const tint = (day: Day) =>
+    typeof day.highlight === 'string' && /^#[0-9a-f]{3,8}$/i.test(day.highlight)
+      ? `color-mix(in srgb, ${day.highlight} 28%, transparent)`
+      : undefined;
   let days = $derived.by(() => {
     const value = calendar ? getNestedValue(inputs, calendar.items_key) : null;
     return (Array.isArray(value) ? value : []) as Day[];
@@ -53,16 +57,17 @@
         <span class="pb-1 text-center text-[10px] font-semibold tracking-wider text-muted-foreground/70 uppercase">{weekday}</span>
       {/each}
       {#each days as day}
+        {@const custom = tint(day)}
         {@const box = [
           'flex min-h-16 min-w-0 flex-col items-center gap-1 rounded-lg border p-1 @md:min-h-24 @md:items-stretch @md:p-1.5',
           day.today ? 'border-primary/60' : 'border-foreground/5',
-          day.highlight ? 'bg-primary/15' : day.image ? 'bg-foreground/[0.06]' : 'bg-foreground/[0.02]',
+          custom ? '' : day.highlight ? 'bg-primary/15' : day.image ? 'bg-foreground/[0.06]' : 'bg-foreground/[0.02]',
           day.outside && 'opacity-35',
         ]}
         {#if day.href}
-          <a href={day.href} class={[box, 'transition-colors hover:border-foreground/20 hover:bg-foreground/10']}>{@render cell(day)}</a>
+          <a href={day.href} class={[box, 'transition-colors hover:border-foreground/20', !custom && 'hover:bg-foreground/10']} style:background-color={custom}>{@render cell(day)}</a>
         {:else}
-          <div class={box}>{@render cell(day)}</div>
+          <div class={box} style:background-color={custom}>{@render cell(day)}</div>
         {/if}
       {/each}
     </div>
