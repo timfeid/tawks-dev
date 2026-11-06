@@ -1,8 +1,9 @@
 <script lang="ts">
   import { connect, onFullscreenChange, type Activity } from '@tawks/activity-sdk';
   import { onDestroy } from 'svelte';
-  import { Camera, MapPin, Maximize, Minimize, Navigation, RotateCcw, Settings, Users, Volume2, VolumeX, X } from '@lucide/svelte';
+  import { Camera, Siren, MapPin, Maximize, Minimize, Navigation, RotateCcw, Settings, Users, Volume2, VolumeX, X } from '@lucide/svelte';
   import Hud from './components/Hud.svelte';
+  import HeistMode from './components/heist/Mode.svelte';
   import Minimap from './components/Minimap.svelte';
   import PlacePicker from './components/PlacePicker.svelte';
   import TouchControls from './components/TouchControls.svelte';
@@ -10,6 +11,7 @@
   import { DriveConnection } from './lib/net.svelte';
   import type { Pass } from './lib/types';
   import { QUALITY } from './lib/world';
+  import { TERRAIN_CREDITS } from './lib/credits';
 
   const JOIN_ACTION = 'games.outroads.join';
 
@@ -30,6 +32,9 @@
   let muted = $state(false);
   let assist = $state(true);
   let satellite = $state(false);
+  let terrain = $state(true);
+  let fillers = $state(true);
+  let creditsOpen = $state(false);
   let lights = $state<'auto' | 'on' | 'off'>('auto');
   let quality = $state<'high' | 'low'>(matchMedia('(pointer: coarse)').matches ? 'low' : 'high');
   const query = new URLSearchParams(location.search);
@@ -95,7 +100,7 @@
   }
 
   $effect(() => {
-    if (!conn || !canvas || !labels || game) return;
+    if (!conn || !canvas || !labels || game || conn.heist) return;
     const g = new Game(canvas, labels, conn);
     g.onHud = (h) => (hud = h);
     g.onPress = (press) => {
@@ -136,6 +141,10 @@
   });
 
   $effect(() => {
+    if (game) game.world.configure(terrain, fillers);
+  });
+
+  $effect(() => {
     if (game && showStats) game.world.measureGpu();
   });
 
@@ -145,6 +154,15 @@
 
   const room = $derived(conn?.room ?? null);
   const needsPlace = $derived(!!room && !room.place);
+  const heistOn = $derived(!!conn?.heist);
+
+  $effect(() => {
+    if (heistOn && game) {
+      game.dispose();
+      game = null;
+      hud = null;
+    }
+  });
   const hostName = $derived(room?.drivers.find((d) => d.user_id === room.host)?.name ?? null);
   const narrow = $derived(width < 640);
   const hour = $derived(hourDraft ?? room?.hour ?? 15.5);
@@ -199,6 +217,9 @@
 <svelte:window bind:innerWidth={width} />
 
 <main>
+  {#if heistOn && conn}
+    <HeistMode {conn} {units} {touch} />
+  {:else}
   <canvas bind:this={canvas} class="view"></canvas>
   <div class="labels" bind:this={labels}></div>
 
@@ -224,6 +245,9 @@
         <Settings size={18} />
       </button>
       <button class="chip icon" onclick={togglePhoto} aria-label="Photo mode (P)"><Camera size={18} /></button>
+      {#if conn?.host}
+        <button class="chip" onclick={() => conn?.heistOpen(true)} title="Turn the drive into a night heist for the lobby"><Siren size={16} /> Port Run</button>
+      {/if}
       <button class="chip icon" onclick={() => game?.respawn()} aria-label="Back on the road (R)"><RotateCcw size={18} /></button>
       {#if fullscreen !== null}
         <button class="chip icon" onclick={toggleFullscreen} aria-label="Full screen">
@@ -271,6 +295,8 @@
         </div>
         <label class="toggle"><input type="checkbox" bind:checked={assist} /> Snap to road assist</label>
         <label class="toggle"><input type="checkbox" bind:checked={satellite} /> Satellite ground (2016, about 10 m detail)</label>
+        <label class="toggle"><input type="checkbox" bind:checked={terrain} /> Hills (turn off on slow devices)</label>
+        <label class="toggle"><input type="checkbox" bind:checked={fillers} /> Fill in houses where the map has none</label>
         <div class="field">
           <span>Speed in</span>
           <div class="seg">
@@ -286,6 +312,17 @@
           </div>
         </div>
         <label class="toggle"><input type="checkbox" bind:checked={showStats} /> Show frame stats</label>
+        <button class="ghost small" onclick={() => (creditsOpen = !creditsOpen)}>{creditsOpen ? 'Hide credits' : 'Map and terrain credits'}</button>
+        {#if creditsOpen}
+          <div class="credits-list">
+            <p>Map data © OpenStreetMap contributors, under the ODbL. Tiles by OpenFreeMap, schema © OpenMapTiles. Place search by Photon from komoot.</p>
+            <p>Terrain from the Terrain Tiles on AWS Open Data, made by Mapzen:</p>
+            <ul>
+              {#each TERRAIN_CREDITS as line (line)}<li>{line}</li>{/each}
+            </ul>
+            <p>Satellite ground: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016).</p>
+          </div>
+        {/if}
         <p class="keys">WASD or arrows drive, Space drifts, H honks, L lights, R back on the road, C camera, P photo, M places. Gamepads work too.</p>
       </section>
     {/if}
@@ -342,8 +379,12 @@
   {/if}
 
   <footer class="credits" class:raised={touch}>
-    © OpenStreetMap contributors, OpenFreeMap, © OpenMapTiles{satellite ? ', Sentinel-2 cloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016)' : ''}, search by Photon
+    © OpenStreetMap contributors, OpenFreeMap, © OpenMapTiles{terrain ? ', terrain: Mapzen, USGS 3DEP, SRTM, GMTED2010 and others' : ''}{satellite ? ', Sentinel-2 cloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016)' : ''}, search by Photon
   </footer>
+  {/if}
+  {#if conn?.error && heistOn}
+    <div class="toast panel">{conn.error}</div>
+  {/if}
 </main>
 
 <style>
@@ -526,6 +567,20 @@
     accent-color: var(--signal);
     width: 18px;
     height: 18px;
+  }
+  .credits-list {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.45;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .credits-list p {
+    margin: 0 0 6px;
+  }
+  .credits-list ul {
+    margin: 0 0 6px;
+    padding-left: 16px;
   }
   .keys {
     margin: 0;

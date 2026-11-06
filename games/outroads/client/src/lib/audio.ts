@@ -5,6 +5,10 @@ export class Sound {
   private ctx: AudioContext | null = null;
   private engine: { osc: OscillatorNode; sub: OscillatorNode; gain: GainNode } | null = null;
 
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+
   /** Browsers start audio only after a gesture; call this from one. */
   wake() {
     if (this.ctx) {

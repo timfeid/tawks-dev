@@ -10,6 +10,7 @@ function env(over: Partial<Env> = {}, half = 6): Env {
   return {
     road: (x, z): RoadHit => ({ dist: Math.abs(x), px: 0, pz: z, dx: 0, dz: -1, half }),
     walls: () => {},
+    ground: () => 0,
     cars: [],
     assist: false,
     ...over,
@@ -91,5 +92,49 @@ describe('car physics', () => {
     drive(car, { ...gas, throttle: 0.4 }, 3, env({ assist: true }, 4));
     expect(Math.abs(car.h)).toBeLessThan(0.05);
     expect(Math.abs(car.x)).toBeLessThan(4);
+  });
+
+  it('stays on flat ground', () => {
+    const car = drive(undefined, gas, 5);
+    expect(car.y).toBe(0);
+    expect(car.airborne).toBe(false);
+  });
+
+  it('rolls down a hill on its own and climbs one more slowly', () => {
+    // The ground rises to the north, one meter in ten.
+    const hill = env({ ground: (_x, z) => -z * 0.1 });
+    const rolling = drive(newCar(0, 0, Math.PI), none, 4, hill);
+    expect(forwardSpeed(rolling)).toBeGreaterThan(2);
+    const up = drive(newCar(0, 0, 0), gas, 4, hill);
+    const down = drive(newCar(0, 0, Math.PI), gas, 4, hill);
+    expect(forwardSpeed(down)).toBeGreaterThan(forwardSpeed(up) + 2);
+    expect(up.y).toBeCloseTo(-up.z * 0.1, 1);
+  });
+
+  it('leaves the ground off a fast crest and lands again', () => {
+    // A ramp up to z = -60, then a sheer drop to flat ground.
+    const crest = env({ ground: (_x, z) => (z > -60 ? Math.max(0, -z) * 0.15 : 0) });
+    const car = newCar(0, 0, 0);
+    car.vz = -36;
+    let flew = false;
+    let landed = 0;
+    for (let t = 0; t < 4; t += 1 / 60) {
+      const result = step(car, gas, 1 / 60, crest);
+      flew ||= car.airborne;
+      landed = Math.max(landed, result.landed);
+    }
+    expect(flew).toBe(true);
+    expect(landed).toBeGreaterThan(1);
+    expect(car.airborne).toBe(false);
+    expect(car.y).toBe(0);
+  });
+
+  it('drives slower and pulls with a flat, and not at all once disabled', () => {
+    const flat = env({ mods: { grip: 0.88, pull: 0.12, top: 30 } });
+    const car = drive(undefined, gas, 20, flat);
+    expect(forwardSpeed(car)).toBeLessThanOrEqual(30.5);
+    expect(car.x).toBeGreaterThan(5);
+    const dead = drive(undefined, gas, 5, env({ mods: { grip: 0.5, pull: 0, top: 0 } }));
+    expect(Math.abs(forwardSpeed(dead))).toBeLessThan(0.5);
   });
 });

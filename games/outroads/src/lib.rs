@@ -4,9 +4,11 @@
 //! for places on the players' behalf.
 
 pub mod geocode;
+pub mod heist;
 pub mod pass;
 pub mod room;
 pub mod runtime;
 pub mod server;
+pub mod terrain;
 
 pub use server::OutroadsServer;

@@ -1,3 +1,4 @@
+import type { HeistEvent, HeistMsg, HeistPoses, HeistView, HeistWorld } from '../heist/protocol';
 import type { Action, ClientMsg, Found, Pass, Place, Pose, RoomView, ServerMsg } from './types';
 
 const PLACE_MEMORY = 'outroads.place';
@@ -12,6 +13,12 @@ export class DriveConnection {
   results = $state<Found[]>([]);
   searching = $state(false);
   ping = $state(0);
+
+  /** The lobby's Port Run, or null in free roam. */
+  heist = $state<HeistView | null>(null);
+  heistWorld = $state<HeistWorld | null>(null);
+  onHeistPoses: (poses: HeistPoses) => void = () => {};
+  onHeistEvent: (event: HeistEvent) => void = () => {};
 
   onPoses: (cars: (Pose & { id: string })[]) => void = () => {};
   onHonk: (id: string) => void = () => {};
@@ -30,6 +37,11 @@ export class DriveConnection {
     this.open();
   }
 
+  /** Elevation tiles come through the game server, which adds the headers a frame without an origin needs. */
+  get terrainUrl(): string {
+    return this.pass.ws_url.replace(/^ws/, 'http').replace(/\/ws$/, '/terrain');
+  }
+
   get host() {
     return !!this.room && this.room.host === this.me;
   }
@@ -46,6 +58,14 @@ export class DriveConnection {
 
   pose(pose: Pose) {
     this.send({ type: 'pose', pose });
+  }
+
+  heistOpen(open: boolean) {
+    if (!this.send(open ? { type: 'heist_open' } : { type: 'heist_close' })) this.flash('Reconnecting...');
+  }
+
+  heistSend(msg: HeistMsg) {
+    this.send({ type: 'heist', msg });
   }
 
   honk() {
@@ -131,6 +151,19 @@ export class DriveConnection {
           this.results = message.places;
           this.searching = false;
         }
+        break;
+      case 'heist':
+        this.heist = message.view;
+        if (!message.view) this.heistWorld = null;
+        break;
+      case 'heist_world':
+        this.heistWorld = message.world;
+        break;
+      case 'heist_poses':
+        this.onHeistPoses(message.poses);
+        break;
+      case 'heist_event':
+        this.onHeistEvent(message.event);
         break;
       case 'pong':
         this.ping = Math.round(performance.now() - message.t);

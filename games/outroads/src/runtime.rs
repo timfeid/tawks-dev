@@ -51,7 +51,57 @@ pub fn definition(join_action_id: &str) -> CreateWorkflowDefinition {
 }
 
 /// Registers the drive when `OUTROADS_ACTIVITY_URL` says where its client is.
+/// Pays finished runs and tells lobby predictions how they went.
+struct BotReports {
+    web: Arc<WebClient>,
+}
+
+impl crate::server::Reports for BotReports {
+    fn started(&self, lobby_id: &str, players: Vec<String>) {
+        let web = self.web.clone();
+        let report = json!({ "lobby_id": lobby_id, "game_key": GAME_KEY, "event": "started", "players": players });
+        tokio::spawn(async move {
+            if let Err(error) = web.mutate::<_, ()>("game_stake_report", &report).await {
+                tracing::warn!(%error, "a Port Run start did not reach predictions");
+            }
+        });
+    }
+
+    fn finished(&self, lobby_id: &str, reference: &str, results: &crate::heist::game::Results) {
+        let web = self.web.clone();
+        let winners = results.winners().to_vec();
+        let losers = results.losers().to_vec();
+        let places: Vec<serde_json::Value> = winners
+            .iter()
+            .map(|u| json!({ "user_id": u, "place": 1 }))
+            .chain(losers.iter().map(|u| json!({ "user_id": u, "place": 2 })))
+            .collect();
+        let stake = json!({ "lobby_id": lobby_id, "game_key": GAME_KEY, "event": "finished", "places": places });
+        let award = json!({
+            "game": GAME_KEY,
+            "reference_id": reference,
+            "lobby_id": lobby_id,
+            "placements": [winners, losers],
+            "meta": { "outcome": results.outcome, "payout": results.payout },
+        });
+        tokio::spawn(async move {
+            if let Err(error) = web.mutate::<_, ()>("game_stake_report", &stake).await {
+                tracing::warn!(%error, "a Port Run result did not reach predictions");
+            }
+            match web.mutate::<_, serde_json::Value>("game_award", &award).await {
+                Ok(outcome) => tracing::info!(%outcome, "Port Run award reported"),
+                Err(error) => tracing::warn!(%error, "a Port Run award did not send"),
+            }
+        });
+    }
+}
+
+const GAME_KEY: &str = "outroads-heist";
+
 pub async fn register(bot: &TawksBot, server: &OutroadsServer) -> Result<()> {
+    server.set_reports(Arc::new(BotReports {
+        web: bot.sdk.web_client.clone(),
+    }));
     let Ok(client_url) = std::env::var("OUTROADS_ACTIVITY_URL") else {
         tracing::info!("OUTROADS_ACTIVITY_URL is not set; Outroads is not in the lobby menu");
         return Ok(());

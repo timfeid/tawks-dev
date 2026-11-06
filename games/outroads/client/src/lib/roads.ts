@@ -1,5 +1,7 @@
 /** Road, name and wall lookups over the tiles that are loaded, on a coarse grid. */
 
+import { heightAt, type Heights } from './terrain';
+
 /** Each tile's segments are bucketed on a GRID by GRID grid, built in the worker. */
 export const GRID = 32;
 
@@ -12,12 +14,16 @@ export type TileData = {
   nameSegs: Float32Array;
   nameOf: Uint16Array;
   walls: Float32Array;
+  fillerWalls: Float32Array;
+  /** Deck heights at both ends of bridge segments, NaN elsewhere. */
+  segDeck: Float32Array;
+  heights: Heights;
   /** West and north edges of the tile, and its size, in meters. */
   bounds: [number, number, number];
-  grids: [Grid, Grid, Grid];
+  grids: [Grid, Grid, Grid, Grid];
 };
 
-type Kind = 0 | 1 | 2;
+type Kind = 0 | 1 | 2 | 3;
 
 /** Buckets segments (x1, z1, x2, z2) by the grid cells their bounding boxes touch. */
 export function buildGrid(segs: Float32Array, minX: number, minZ: number, size: number): Grid {
@@ -45,7 +51,7 @@ export function buildGrid(segs: Float32Array, minX: number, minZ: number, size: 
   return { start: count, items };
 }
 
-type Loaded = { data: TileData; stamps: [Uint32Array, Uint32Array, Uint32Array] };
+type Loaded = { data: TileData; stamps: [Uint32Array, Uint32Array, Uint32Array, Uint32Array] };
 
 export type RoadHit = {
   dist: number;
@@ -70,6 +76,8 @@ export function closestOnSegment(x: number, z: number, x1: number, z1: number, x
 export class RoadIndex {
   private tiles = new Map<string, Loaded>();
   private stamp = 0;
+  /** Whether made up houses are solid. */
+  fillers = false;
 
   get tileCount() {
     return this.tiles.size;
@@ -78,7 +86,12 @@ export class RoadIndex {
   add(key: string, data: TileData) {
     this.tiles.set(key, {
       data,
-      stamps: [new Uint32Array(data.segHalf.length), new Uint32Array(data.nameOf.length), new Uint32Array(data.walls.length / 4)],
+      stamps: [
+        new Uint32Array(data.segHalf.length),
+        new Uint32Array(data.nameOf.length),
+        new Uint32Array(data.walls.length / 4),
+        new Uint32Array(data.fillerWalls.length / 4),
+      ],
     });
   }
 
@@ -191,6 +204,45 @@ export class RoadIndex {
       const o = i * 4;
       visit(w[o], w[o + 1], w[o + 2], w[o + 3]);
     });
+    if (this.fillers)
+      this.near(3, x, z, r, (tile, i) => {
+        const w = tile.fillerWalls;
+        const o = i * 4;
+        visit(w[o], w[o + 1], w[o + 2], w[o + 3]);
+      });
+  }
+
+  private tileAt(x: number, z: number): TileData | null {
+    for (const { data } of this.tiles.values()) {
+      const [minX, minZ, size] = data.bounds;
+      if (x >= minX && z >= minZ && x <= minX + size && z <= minZ + size) return data;
+    }
+    return null;
+  }
+
+  /** Ground height, or 0 where no tile has loaded. */
+  terrain(x: number, z: number): number {
+    const tile = this.tileAt(x, z);
+    return tile ? heightAt(tile.heights, x, z) : 0;
+  }
+
+  /**
+   * What a car at height `y` stands on: a bridge deck it is on or just above,
+   * else the ground.
+   */
+  groundAt(x: number, z: number, y = Infinity): number {
+    let best = this.terrain(x, z);
+    this.near(0, x, z, 16, (tile, i) => {
+      const d1 = tile.segDeck[i * 2];
+      if (Number.isNaN(d1)) return;
+      const s = tile.segs;
+      const o = i * 4;
+      const [px, pz, t] = closestOnSegment(x, z, s[o], s[o + 1], s[o + 2], s[o + 3]);
+      if (Math.hypot(px - x, pz - z) > tile.segHalf[i] + 1) return;
+      const deck = d1 + (tile.segDeck[i * 2 + 1] - d1) * t;
+      if (deck > best && y >= deck - 2) best = deck;
+    });
+    return best;
   }
 
   /** Each road and named segment within a square, for the minimap. */

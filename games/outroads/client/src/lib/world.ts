@@ -22,11 +22,13 @@ export type Quality = {
   pixelRatio: number;
   antialias: boolean;
   trees: boolean;
+  /** Pixels across each tile's painted ground. */
+  groundPx: number;
 };
 
 export const QUALITY: Record<'high' | 'low', Quality> = {
-  high: { loadRadius: 1300, viewDistance: 1400, detailDistance: 520, pixelRatio: 1.5, antialias: true, trees: true },
-  low: { loadRadius: 800, viewDistance: 800, detailDistance: 300, pixelRatio: 1, antialias: false, trees: true },
+  high: { loadRadius: 1300, viewDistance: 1400, detailDistance: 950, pixelRatio: 1.5, antialias: true, trees: true, groundPx: 512 },
+  low: { loadRadius: 800, viewDistance: 800, detailDistance: 560, pixelRatio: 1, antialias: false, trees: true, groundPx: 256 },
 };
 
 type Chunk = { mesh: THREE.Mesh; tall: number; all: number; cx: number; cz: number; radius: number };
@@ -35,10 +37,15 @@ type LoadedTile = {
   key: string;
   group: THREE.Group;
   chunks: Chunk[];
+  fillers: Chunk[];
+  ground: THREE.Mesh<THREE.BufferGeometry, THREE.MeshLambertMaterial>;
+  paint: THREE.Texture | null;
   lamps: THREE.InstancedMesh | null;
   heads: THREE.InstancedMesh | null;
   trees: THREE.InstancedMesh | null;
-  imagery: THREE.Mesh | null;
+  pools: THREE.InstancedMesh | null;
+  lampSpots: Float32Array;
+  imagery: THREE.Texture | null;
   minX: number;
   minZ: number;
   maxX: number;
@@ -158,12 +165,19 @@ export class World {
   private epoch = 0;
   private tiles = new Map<string, LoadedTile>();
   private pending = new Set<string>();
-  private arrived: TileMesh[] = [];
+  private arrived: { mesh: TileMesh; paint: Uint8ClampedArray | null; px: number }[] = [];
+  /** Where elevation tiles are served from, or null when there are none. */
+  terrainUrl: string | null = null;
+  terrain = true;
+  fillers = false;
+  /** Pools of light under street lamps, for the night game. */
+  lampPools = false;
+  /** Draws through bloom when set. */
+  glow: { render(): void; resize(w: number, h: number): void } | null = null;
   private hemi = new THREE.HemisphereLight(0xdfefff, 0x6b6450, 1);
   private sun = new THREE.DirectionalLight(0xffffff, 1.2);
   private base: THREE.Mesh;
   private materials: {
-    ground: THREE.MeshLambertMaterial;
     roads: THREE.MeshLambertMaterial;
     buildings: THREE.MeshLambertMaterial;
     lamps: THREE.MeshLambertMaterial;
@@ -171,9 +185,13 @@ export class World {
     trees: THREE.MeshLambertMaterial;
   };
   private lampGeo = lampGeometry();
+  private poolGeo = new THREE.PlaneGeometry(17, 17).rotateX(-Math.PI / 2);
+  private poolMat = new THREE.MeshBasicMaterial({ color: 0xffcf8a, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending });
   private headGeo = new THREE.BoxGeometry(0.5, 0.18, 0.9).translate(0, 6.0, 1.5);
   private treeGeo = treeGeometry();
   private lodClock = 0;
+  /** The lowest ground loaded, where the plane beyond the tiles sits. */
+  private lowest = 0;
   private satellite = false;
   private textureLoader = new THREE.TextureLoader();
   private onStorage: ((persistent: boolean) => void) | null = null;
@@ -181,6 +199,12 @@ export class World {
   /** Mean GPU time per frame over the last few frames, when the browser can measure it. */
   gpuMs: number | null = null;
   private gpuSamples: number[] = [];
+
+  /** The texture pools are lit with, set by whoever turns pools on. */
+  setPoolTexture(t: THREE.Texture) {
+    this.poolMat.map = t;
+    this.poolMat.needsUpdate = true;
+  }
 
   constructor(canvas: HTMLCanvasElement, quality: Quality) {
     this.quality = quality;
@@ -192,14 +216,16 @@ export class World {
     this.scene.background = SKY.day.clone();
     this.scene.add(this.hemi, this.sun, this.sun.target);
     const windows = windowTextures();
-    const layer = (order: number) => {
-      const m = new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false, side: THREE.DoubleSide });
-      m.userData.order = order;
-      return m;
-    };
     this.materials = {
-      ground: layer(-3),
-      roads: layer(-2),
+      roads: new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        // A slope-scaled offset would pull distant roads in front of the hill hiding them.
+        polygonOffset: true,
+        polygonOffsetFactor: 0,
+        polygonOffsetUnits: -3,
+      }),
       buildings: new THREE.MeshLambertMaterial({ vertexColors: true, map: windows.day, emissiveMap: windows.night, emissive: 0xffffff, emissiveIntensity: 0 }),
       lamps: new THREE.MeshLambertMaterial({ color: 0x4a4e55 }),
       heads: new THREE.MeshBasicMaterial({ color: 0x55585e }),
@@ -263,11 +289,12 @@ export class World {
       console.warn('[outroads] tile failed', msg.key, msg.error);
       return;
     }
-    this.arrived.push(msg.mesh);
+    this.arrived.push({ mesh: msg.mesh, paint: msg.paint, px: msg.paintPx });
   }
 
   resize(width: number, height: number) {
     this.renderer.setSize(width, height, false);
+    this.glow?.resize(width, height);
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
   }
@@ -292,7 +319,40 @@ export class World {
     this.failed = 0;
     const plain = { lat: origin.lat, lon: origin.lon };
     this.frame = new Frame(plain);
-    this.send({ type: 'origin', origin: plain, epoch: this.epoch });
+    this.send({
+      type: 'origin',
+      origin: plain,
+      epoch: this.epoch,
+      options: { terrain: this.terrain ? this.terrainUrl : null, groundPx: this.quality.groundPx, fillers: this.fillers },
+    });
+  }
+
+  /** Terrain and filler houses are built into tiles, so changing either reloads them. */
+  configure(terrain: boolean, fillers: boolean) {
+    this.index.fillers = fillers;
+    if (terrain === this.terrain && fillers === this.fillers) return;
+    this.terrain = terrain;
+    this.fillers = fillers;
+    if (this.frame) this.setOrigin(this.frame.origin);
+  }
+
+  /** Meters to the nearest street lamp, up to `max`. */
+  lampDistance(x: number, z: number, max = 60) {
+    let best = max;
+    for (const tile of this.tiles.values()) {
+      if (x < tile.minX - max || x > tile.maxX + max || z < tile.minZ - max || z > tile.maxZ + max) continue;
+      const l = tile.lampSpots;
+      for (let i = 0; i < l.length; i += 4) {
+        const d = Math.hypot(l[i] - x, l[i + 2] - z);
+        if (d < best) best = d;
+      }
+    }
+    return best;
+  }
+
+  /** What a car at height `y` stands on there. */
+  groundAt(x: number, z: number, y?: number) {
+    return this.index.groundAt(x, z, y);
   }
 
   setSatellite(on: boolean) {
@@ -316,18 +376,15 @@ export class World {
     if (!tile) return;
     this.scene.remove(tile.group);
     tile.group.traverse((o) => {
-      if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) {
-        o.geometry.dispose();
-        if (o === tile.imagery) {
-          const m = o.material as THREE.MeshBasicMaterial;
-          m.map?.dispose();
-          m.dispose();
-        }
-      }
+      if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) o.geometry.dispose();
     });
+    tile.ground.material.dispose();
+    tile.paint?.dispose();
+    tile.imagery?.dispose();
     tile.lamps?.dispose();
     tile.heads?.dispose();
     tile.trees?.dispose();
+    tile.pools?.dispose();
     this.tiles.delete(key);
     this.index.remove(key);
   }
@@ -373,7 +430,7 @@ export class World {
     }
   }
 
-  private flatMesh(m: TileMesh['ground'], material: THREE.Material, order: number) {
+  private flatMesh(m: TileMesh['roads'], material: THREE.Material, order: number) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
     g.setAttribute('color', new THREE.BufferAttribute(m.col, 3, true));
@@ -386,13 +443,14 @@ export class World {
     return mesh;
   }
 
-  private instanced(geometry: THREE.BufferGeometry, material: THREE.Material, spots: Float32Array, place: (m: THREE.Object3D, a: number, b: number, c: number) => void) {
-    const count = spots.length / 3;
+  /** One instance per spot of four numbers: x, y, z and a fourth that `place` reads. */
+  private instanced(geometry: THREE.BufferGeometry, material: THREE.Material, spots: Float32Array, place: (m: THREE.Object3D, x: number, y: number, z: number, w: number) => void) {
+    const count = spots.length / 4;
     if (!count) return null;
     const mesh = new THREE.InstancedMesh(geometry, material, count);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < count; i++) {
-      place(dummy, spots[i * 3], spots[i * 3 + 1], spots[i * 3 + 2]);
+      place(dummy, spots[i * 4], spots[i * 4 + 1], spots[i * 4 + 2], spots[i * 4 + 3]);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }
@@ -402,15 +460,33 @@ export class World {
     return mesh;
   }
 
-  private add(t: TileMesh) {
+  private add({ mesh: t, paint, px }: { mesh: TileMesh; paint: Uint8ClampedArray | null; px: number }) {
     const key = tileKey(t.x, t.y);
     if (this.tiles.has(key)) return;
     const group = new THREE.Group();
     group.matrixAutoUpdate = false;
-    if (t.ground.idx.length) group.add(this.flatMesh(t.ground, this.materials.ground, -3));
+    const gg = new THREE.BufferGeometry();
+    gg.setAttribute('position', new THREE.BufferAttribute(t.ground.pos, 3));
+    gg.setAttribute('normal', new THREE.BufferAttribute(t.ground.nor, 3));
+    gg.setAttribute('uv', new THREE.BufferAttribute(t.ground.uv, 2));
+    gg.setIndex(new THREE.BufferAttribute(t.ground.idx, 1));
+    gg.computeBoundingSphere();
+    let texture: THREE.Texture | null = null;
+    if (paint) {
+      texture = new THREE.DataTexture(paint, px, px);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.generateMipmaps = true;
+      texture.anisotropy = 4;
+      texture.needsUpdate = true;
+    }
+    const ground = new THREE.Mesh(gg, new THREE.MeshLambertMaterial(texture ? { map: texture } : { color: this.base.material instanceof THREE.MeshLambertMaterial ? this.base.material.color : 0x999999 }));
+    ground.renderOrder = -3;
+    ground.matrixAutoUpdate = false;
+    group.add(ground);
     if (t.roads.idx.length) group.add(this.flatMesh(t.roads, this.materials.roads, -2));
-    const chunks: Chunk[] = [];
-    for (const c of t.buildings) {
+    const chunkMeshes = (list: TileMesh['buildings']) => list.map((c) => {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(c.pos, 3));
       g.setAttribute('normal', new THREE.BufferAttribute(c.nor, 3));
@@ -421,25 +497,35 @@ export class World {
       const mesh = new THREE.Mesh(g, this.materials.buildings);
       mesh.matrixAutoUpdate = false;
       group.add(mesh);
-      chunks.push({ mesh, tall: c.tallCount, all: c.idx.length, cx: c.cx, cz: c.cz, radius: c.radius });
-    }
-    const lamps = this.instanced(this.lampGeo, this.materials.lamps, t.lamps, (d, x, z, h) => {
-      d.position.set(x, 0, z);
+      return { mesh, tall: c.tallCount, all: c.idx.length, cx: c.cx, cz: c.cz, radius: c.radius } satisfies Chunk;
+    });
+    const chunks = chunkMeshes(t.buildings);
+    const fillers = chunkMeshes(t.fillers);
+    const lamps = this.instanced(this.lampGeo, this.materials.lamps, t.lamps, (d, x, y, z, h) => {
+      d.position.set(x, y, z);
       d.rotation.set(0, h, 0);
       d.scale.setScalar(1);
     });
-    const heads = lamps ? this.instanced(this.headGeo, this.materials.heads, t.lamps, (d, x, z, h) => {
-      d.position.set(x, 0, z);
+    const heads = lamps ? this.instanced(this.headGeo, this.materials.heads, t.lamps, (d, x, y, z, h) => {
+      d.position.set(x, y, z);
       d.rotation.set(0, h, 0);
     }) : null;
     const trees = this.quality.trees
-      ? this.instanced(this.treeGeo, this.materials.trees, t.trees, (d, x, z, s) => {
-          d.position.set(x, 0, z);
+      ? this.instanced(this.treeGeo, this.materials.trees, t.trees, (d, x, y, z, s) => {
+          d.position.set(x, y, z);
           d.rotation.set(0, (x * 13.7 + z) % 6.28, 0);
           d.scale.setScalar(s);
         })
       : null;
-    for (const m of [lamps, heads, trees]) if (m) group.add(m);
+    const pools = this.lampPools && t.lamps.length
+      ? this.instanced(this.poolGeo, this.poolMat, t.lamps, (d, x, y, z, h) => {
+          d.position.set(x + Math.sin(h) * 1.4, y + 0.3, z + Math.cos(h) * 1.4);
+          d.rotation.set(0, 0, 0);
+          d.scale.setScalar(1);
+        })
+      : null;
+    if (pools) pools.renderOrder = -1;
+    for (const m of [lamps, heads, trees, pools]) if (m) group.add(m);
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     const frame = this.frame!;
     for (const [px, py] of [[t.x, t.y], [t.x + 1, t.y + 1]]) {
@@ -449,44 +535,39 @@ export class World {
       minZ = Math.min(minZ, wz);
       maxZ = Math.max(maxZ, wz);
     }
-    const tile: LoadedTile = { key, group, chunks, lamps, heads, trees, imagery: null, minX, minZ, maxX, maxZ, stats: t.stats };
+    const tile: LoadedTile = { key, group, chunks, fillers, ground, paint: texture, lamps, heads, trees, pools, lampSpots: t.lamps, imagery: null, minX, minZ, maxX, maxZ, stats: t.stats };
     this.tiles.set(key, tile);
     this.index.add(key, t);
+    let low = Infinity;
+    for (const v of t.heights.h) if (v < low) low = v;
+    this.lowest = this.tiles.size === 1 ? low - 1 : Math.min(this.lowest, low - 1);
     this.applySatellite(tile);
     this.scene.add(group);
   }
 
-  /** Sentinel-2 cloudless 2016 by EOX under the tile, in place of the drawn land use. */
+  /** Sentinel-2 cloudless 2016 by EOX on the tile's ground, in place of the painted land use. */
   private applySatellite(tile: LoadedTile) {
-    const ground = tile.group.children.find((c) => (c as THREE.Mesh).material === this.materials.ground);
-    if (ground) ground.visible = !this.satellite;
-    if (!this.satellite) {
-      if (tile.imagery) tile.imagery.visible = false;
-      return;
+    const material = tile.ground.material;
+    if (this.satellite && !tile.imagery) {
+      const [, x, y] = tile.key.split('/');
+      const url = `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/${TILE_ZOOM}/${y}/${x}.jpg`;
+      tile.imagery = this.textureLoader.load(url);
+      tile.imagery.colorSpace = THREE.SRGBColorSpace;
+      tile.imagery.flipY = false;
     }
-    if (tile.imagery) {
-      tile.imagery.visible = true;
-      return;
+    const map = this.satellite ? tile.imagery : tile.paint;
+    if (material.map !== map) {
+      material.map = map;
+      material.color.set(map ? 0xffffff : 0x999999);
+      material.needsUpdate = true;
     }
-    const [, x, y] = tile.key.split('/');
-    const url = `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/${TILE_ZOOM}/${y}/${x}.jpg`;
-    const texture = this.textureLoader.load(url);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    const w = tile.maxX - tile.minX;
-    const d = tile.maxZ - tile.minZ;
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: texture, depthWrite: false }));
-    plane.position.set(tile.minX + w / 2, 0.01, tile.minZ + d / 2);
-    plane.updateMatrix();
-    plane.matrixAutoUpdate = false;
-    plane.renderOrder = -3;
-    tile.imagery = plane;
-    tile.group.add(plane);
   }
 
   /** Culls and thins building chunks by distance from the focus. */
   private lod(x: number, z: number) {
     const { viewDistance, detailDistance } = this.quality;
     for (const tile of this.tiles.values()) {
+      for (const c of tile.fillers) c.mesh.visible = this.fillers && Math.hypot(c.cx - x, c.cz - z) - c.radius <= detailDistance;
       for (const c of tile.chunks) {
         const d = Math.hypot(c.cx - x, c.cz - z) - c.radius;
         if (d > viewDistance) c.mesh.visible = false;
@@ -499,7 +580,7 @@ export class World {
         }
       }
       const near = Math.max(0, Math.hypot(Math.max(tile.minX - x, 0, x - tile.maxX), Math.max(tile.minZ - z, 0, z - tile.maxZ)));
-      for (const m of [tile.lamps, tile.heads, tile.trees]) if (m) m.visible = near < detailDistance;
+      for (const m of [tile.lamps, tile.heads, tile.trees, tile.pools]) if (m) m.visible = near < detailDistance;
     }
   }
 
@@ -532,12 +613,13 @@ export class World {
       this.lodClock = 0.25;
       this.lod(focusX, focusZ);
     }
-    this.base.position.set(Math.round(focusX / 50) * 50, 0, Math.round(focusZ / 50) * 50);
+    this.base.position.set(Math.round(focusX / 50) * 50, this.lowest, Math.round(focusZ / 50) * 50);
     this.renderer.info.reset();
     const timer = this.timer;
     const query = timer && timer.queries.length < 4 ? timer.gl.createQuery() : null;
     if (timer && query) timer.gl.beginQuery(timer.ext.TIME_ELAPSED_EXT, query);
-    this.renderer.render(this.scene, this.camera);
+    if (this.glow) this.glow.render();
+    else this.renderer.render(this.scene, this.camera);
     if (timer && query) {
       timer.gl.endQuery(timer.ext.TIME_ELAPSED_EXT);
       timer.queries.push(query);

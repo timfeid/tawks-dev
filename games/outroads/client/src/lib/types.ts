@@ -31,7 +31,10 @@ export type ClientMsg =
   | { type: 'pose'; pose: Pose }
   | { type: 'honk' }
   | { type: 'act'; action: Action }
-  | { type: 'search'; q: string; near?: [number, number] | null };
+  | { type: 'search'; q: string; near?: [number, number] | null }
+  | { type: 'heist_open' }
+  | { type: 'heist_close' }
+  | { type: 'heist'; msg: import('../heist/protocol').HeistMsg };
 
 export type ServerMsg =
   | { type: 'welcome'; user_id: string; attribution: string }
@@ -40,4 +43,8 @@ export type ServerMsg =
   | { type: 'honk'; id: string }
   | { type: 'results'; q: string; places: Found[] }
   | { type: 'pong'; t: number }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'heist'; view: import('../heist/protocol').HeistView | null }
+  | { type: 'heist_world'; world: import('../heist/protocol').HeistWorld }
+  | { type: 'heist_poses'; poses: import('../heist/protocol').HeistPoses }
+  | { type: 'heist_event'; event: import('../heist/protocol').HeistEvent };

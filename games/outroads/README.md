@@ -3,7 +3,8 @@
 Drive real streets anywhere in the world with your lobby. Pick a city, a small town or a spot near you, everyone spawns there, and you cruise around together on OpenStreetMap roads drawn in 3D.
 
 - `client/` is the activity frame. It streams OpenStreetMap vector tiles from OpenFreeMap around the camera, turns them into meshes in a worker, and draws them with three.js.
-  - `src/lib/mvt.ts` reads vector tiles. `src/lib/tilemesh.ts` turns one tile into roads with centre lines, extruded buildings at their mapped heights (nine meters where nobody mapped one), water, parks, land use, street lamps and trees, plus the road, name and wall segments that driving needs.
+  - `src/lib/terrain.ts` turns elevation pixels into a height grid per tile, read pixel for pixel so neighbouring tiles share their edges. Roads are draped over it, bridges run straight between their ends, buildings stand on the lowest ground under them, and cars follow the slope and take air off crests. Hills can be turned off in settings.
+  - `src/lib/mvt.ts` reads vector tiles. `src/lib/tilemesh.ts` turns one tile into roads with centre lines, extruded buildings at their mapped heights. Small buildings with no mapped height become houses with gable roofs, and ones standing wall to wall become flat roofed rowhouses. Where OSM maps no houses along a street, plain generic filler houses can stand in (a setting), water, parks, land use, street lamps and trees, plus the road, name and wall segments that driving needs.
   - `src/lib/world.ts` loads tiles within a radius and draws buildings in sixteen chunks per tile. Past a detail distance only buildings taller than 18 m stay drawn, and past the view distance nothing does. Lamps and trees drop out with the detail.
   - `src/lib/physics.ts` is the arcade handling. Speed is capped lower off road, the handbrake lets the tail out, and cars bump off buildings and each other. Snap to road assist eases the car along the road it is on.
   - `src/lib/game.ts` is one player's drive: the camera modes (chase, far, hood, photo), remote cars drawn 120 ms in the past between poses, headlights, honks and the minimap.
@@ -17,6 +18,7 @@ Drive real streets anywhere in the world with your lobby. Pick a city, a small t
 | --- | --- | --- |
 | Roads, buildings, water, land use | OpenFreeMap vector tiles (OpenMapTiles schema), fetched by the client | Free, no key. Data is © OpenStreetMap contributors under the ODbL. The schema is © OpenMapTiles. |
 | Place search | Photon by komoot, through the server | Free, fair use. The server sends one request a second at most, caches answers for a day, and sends its own User-Agent. |
+| Hills | Terrain Tiles on AWS Open Data (Terrarium PNG, zoom 13), passed through the game server | Free, no key. The credits list the sources' required attribution (USGS 3DEP, SRTM, GMTED2010, ETOPO1, EU-DEM and others). |
 | Satellite ground (off by default) | Sentinel-2 cloudless 2016 by EOX, layer `s2cloudless_3857` | CC BY 4.0 for the 2016 layer only. Later years are not free for commercial use. |
 
 The credits stay on screen while you drive.
@@ -35,6 +37,7 @@ It runs inside the tawks games service, which mounts `OutroadsServer::router()` 
 | --- | --- |
 | `OUTROADS_ACTIVITY_URL` | Where the built client is served. Without it the game stays out of the lobby menu. |
 | `OUTROADS_SECRET` | Signs seat passes. Defaults to one derived from `PARTY_SECRET`. |
+| `OUTROADS_TERRAIN_URL` | A Terrarium tile source. Defaults to the AWS Open Data bucket. The server serves it at `/party/outroads/terrain/{z}/{x}/{y}.png` with CORS, because the bucket sends none and game frames have no origin. |
 | `OUTROADS_GEOCODER_URL` | A Photon compatible search endpoint. Defaults to `https://photon.komoot.io/api/`. |
 
 To work on the client without tawks:

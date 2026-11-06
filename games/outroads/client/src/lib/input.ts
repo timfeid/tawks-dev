@@ -2,7 +2,7 @@
 
 import type { Controls } from './physics';
 
-export type Press = 'honk' | 'lights' | 'respawn' | 'camera' | 'photo' | 'map' | 'units';
+export type Press = 'honk' | 'lights' | 'respawn' | 'camera' | 'photo' | 'map' | 'units' | 'interact' | 'torch' | 'siren' | 'spike';
 
 export type TouchState = { left: boolean; right: boolean; gas: boolean; brake: boolean; drift: boolean };
 
@@ -14,6 +14,10 @@ const KEYS: Record<string, Press> = {
   KeyP: 'photo',
   KeyM: 'map',
   KeyU: 'units',
+  KeyE: 'interact',
+  KeyF: 'torch',
+  KeyG: 'siren',
+  KeyB: 'spike',
 };
 
 const PAD_BUTTONS: [number, Press][] = [
@@ -47,7 +51,7 @@ export class Input {
 
   private keydown = (event: KeyboardEvent) => {
     if (this.typing(event) || !this.enabled) return;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ControlLeft'].includes(event.code)) event.preventDefault();
     if (!event.repeat && KEYS[event.code]) this.presses.push(KEYS[event.code]);
     this.down.add(event.code);
   };
@@ -58,6 +62,14 @@ export class Input {
 
   private blur = () => this.down.clear();
 
+  /** Whether any of these keys is down now. */
+  held(...codes: string[]) {
+    return this.enabled && codes.some((c) => this.down.has(c));
+  }
+
+  /** Space belongs to a minigame while one is up. */
+  spaceTaken = false;
+
   private has(...codes: string[]) {
     return codes.some((c) => this.down.has(c));
   }
@@ -66,7 +78,7 @@ export class Input {
   read(dt: number): Controls {
     let throttle = this.has('KeyW', 'ArrowUp') || this.touch.gas ? 1 : 0;
     let brake = this.has('KeyS', 'ArrowDown') || this.touch.brake ? 1 : 0;
-    let handbrake = this.has('Space') || this.touch.drift;
+    let handbrake = (!this.spaceTaken && this.has('Space')) || this.touch.drift;
     const keySteer = (this.has('KeyD', 'ArrowRight') || this.touch.right ? 1 : 0) - (this.has('KeyA', 'ArrowLeft') || this.touch.left ? 1 : 0);
     this.steerKeys = keySteer === 0 ? 0 : Math.max(-1, Math.min(1, this.steerKeys + keySteer * dt * 6));
     if (keySteer !== 0 && Math.sign(this.steerKeys) !== keySteer) this.steerKeys = keySteer * 0.3;

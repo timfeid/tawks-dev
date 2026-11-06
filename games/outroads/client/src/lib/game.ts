@@ -14,7 +14,7 @@ const SEND_EVERY = 0.1;
 const INTERPOLATE_BEHIND = 0.12;
 
 type Sample = { t: number; pose: Pose };
-type Remote = { id: string; model: CarModel; samples: Sample[]; label: HTMLDivElement; x: number; z: number; h: number; color: string };
+type Remote = { id: string; model: CarModel; samples: Sample[]; label: HTMLDivElement; x: number; y: number; z: number; h: number; color: string };
 
 export type CameraMode = 'chase' | 'far' | 'hood';
 export type Hud = {
@@ -77,6 +77,7 @@ export class Game {
     quality: Quality = matchMedia('(pointer: coarse)').matches ? QUALITY.low : QUALITY.high,
   ) {
     this.world = new World(canvas, quality);
+    this.world.terrainUrl = conn.terrainUrl;
     this.input = new Input(window);
     this.mine = makeCar(this.myColor);
     this.mine.group.add(this.spot, this.spot.target);
@@ -168,10 +169,10 @@ export class Game {
     const place = at.h === undefined ? Math.max(0, this.conn.room?.drivers.findIndex((d) => d.user_id === this.conn.me) ?? 0) : 0;
     const x = (pick?.x ?? at.x) - Math.sin(h) * place * 9;
     const z = (pick?.z ?? at.z) + Math.cos(h) * place * 9;
-    this.car = newCar(x, z, h);
+    this.car = newCar(x, z, h, this.world.groundAt(x, z));
     this.spawnAt = null;
     this.mine.group.visible = true;
-    this.camPos.set(x - Math.sin(h) * 10, 5, z + Math.cos(h) * 10);
+    this.camPos.set(x - Math.sin(h) * 10, this.car.y + 5, z + Math.cos(h) * 10);
     this.sendClock = 0;
   }
 
@@ -180,7 +181,7 @@ export class Game {
     this.input.enabled = !on;
     if (on && this.car) {
       this.orbit = new OrbitControls(this.world.camera, this.canvas);
-      this.orbit.target.set(this.car.x, 1.2, this.car.z);
+      this.orbit.target.set(this.car.x, this.car.y + 1.2, this.car.z);
       this.orbit.maxPolarAngle = Math.PI * 0.49;
       this.orbit.minDistance = 3;
       this.orbit.maxDistance = 400;
@@ -230,7 +231,7 @@ export class Game {
         label.textContent = info.name;
         label.style.setProperty('--car', info.color);
         this.labels.appendChild(label);
-        r = { id: car.id, model, samples: [], label, x: car.x, z: car.z, h: car.h, color: info.color };
+        r = { id: car.id, model, samples: [], label, x: car.x, y: this.world.groundAt(car.x, car.z), z: car.z, h: car.h, color: info.color };
         this.remotes.set(car.id, r);
       }
       r.samples.push({ t: now, pose: car });
@@ -293,15 +294,37 @@ export class Game {
       r.x = x;
       r.z = z;
       r.h = h;
-      r.model.group.position.set(x, 0, z);
-      r.model.group.rotation.y = -h;
+      const floor = this.world.groundAt(x, z, r.y + 1);
+      r.y += (floor - r.y) * 0.5;
+      this.orient(r.model.group, x, r.y, z, h, false);
       const lit = (b.pose.f & 1) === 1;
       r.model.lamps.color.set(lit ? 0xffffff : (b.pose.f & 2) === 2 ? 0xd0d0d0 : 0x8a8a8a);
-      v.set(x, 2.6, z).project(cam);
+      v.set(x, r.y + 2.6, z).project(cam);
       const visible = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
       r.label.style.display = visible && !this.photo ? '' : 'none';
       if (visible) r.label.style.transform = `translate(${((v.x + 1) / 2) * width}px, ${((1 - v.y) / 2) * height}px) translate(-50%, -100%)`;
     }
+  }
+
+  /** Sits a car model on the ground, tipped to its slope, or level-ish in the air. */
+  private orient(group: THREE.Object3D, x: number, y: number, z: number, h: number, airborne: boolean, vy = 0, speed = 0) {
+    group.position.set(x, y, z);
+    group.rotation.order = 'YXZ';
+    group.rotation.y = -h;
+    if (airborne) {
+      group.rotation.x = THREE.MathUtils.clamp(Math.atan2(vy, Math.max(4, Math.abs(speed))), -0.5, 0.5);
+      group.rotation.z *= 0.9;
+      return;
+    }
+    const fx = Math.sin(h);
+    const fz = -Math.cos(h);
+    const front = this.world.groundAt(x + fx * 1.5, z + fz * 1.5, y + 1);
+    const back = this.world.groundAt(x - fx * 1.5, z - fz * 1.5, y + 1);
+    const right = this.world.groundAt(x - fz * 0.9, z + fx * 0.9, y + 1);
+    const left = this.world.groundAt(x + fz * 0.9, z - fx * 0.9, y + 1);
+    group.rotation.x = Math.atan2(front - back, 3);
+    // Roads are cut level across a slope, so the car leans only a little with the hillside.
+    group.rotation.z = THREE.MathUtils.clamp(Math.atan2(right - left, 1.8) * 0.4, -0.15, 0.15);
   }
 
   private placeCamera(dt: number) {
@@ -312,24 +335,29 @@ export class Game {
       return;
     }
     if (!car) {
-      cam.position.set(this.spawnAt?.x ?? 0, 60, (this.spawnAt?.z ?? 0) + 80);
-      cam.lookAt(this.spawnAt?.x ?? 0, 0, this.spawnAt?.z ?? 0);
+      const sx = this.spawnAt?.x ?? 0;
+      const sz = this.spawnAt?.z ?? 0;
+      const sy = this.world.groundAt(sx, sz);
+      cam.position.set(sx, sy + 60, sz + 80);
+      cam.lookAt(sx, sy, sz);
       return;
     }
     const fx = Math.sin(car.h);
     const fz = -Math.cos(car.h);
     const speed = forwardSpeed(car);
     if (this.camera === 'hood') {
-      cam.position.set(car.x + fx * 0.4, 1.45, car.z + fz * 0.4);
-      cam.lookAt(car.x + fx * 20, 1.2, car.z + fz * 20);
+      cam.position.set(car.x + fx * 0.4, car.y + 1.45, car.z + fz * 0.4);
+      cam.lookAt(car.x + fx * 20, this.world.groundAt(car.x + fx * 20, car.z + fz * 20, car.y + 3) + 1.2, car.z + fz * 20);
       this.camPos.copy(cam.position);
       return;
     }
     const back = this.camera === 'far' ? 17 : 8.5 + Math.min(3, Math.abs(speed) * 0.05);
     const up = this.camera === 'far' ? 8 : 3.4;
-    const want = new THREE.Vector3(car.x - fx * back, up, car.z - fz * back);
+    const want = new THREE.Vector3(car.x - fx * back, car.y + up, car.z - fz * back);
     const k = 1 - Math.exp(-dt * 6);
     this.camPos.lerp(want, k);
+    // Never under a hill behind the car.
+    this.camPos.y = Math.max(this.camPos.y, this.world.groundAt(this.camPos.x, this.camPos.z) + 1.5);
     const min = back * 0.6;
     const dx = this.camPos.x - car.x;
     const dz = this.camPos.z - car.z;
@@ -338,7 +366,7 @@ export class Game {
       this.camPos.x = car.x + (dx / d) * min;
       this.camPos.z = car.z + (dz / d) * min;
     }
-    this.camLook.set(car.x + fx * 6, 1.2, car.z + fz * 6);
+    this.camLook.set(car.x + fx * 6, car.y + 1.2, car.z + fz * 6);
     cam.position.copy(this.camPos);
     cam.lookAt(this.camLook);
     const fov = 62 + Math.min(10, Math.abs(speed) * 0.25);
@@ -386,12 +414,12 @@ export class Game {
       const result = step(car, controls, dt, {
         road: (x, z) => index.nearestRoad(x, z, 120),
         walls: (x, z, r, visit) => index.walls(x, z, r, visit),
+        ground: (x, z, y) => index.groundAt(x, z, y),
         cars: others,
         assist: this.assist,
       });
       offRoad = result.offRoad;
-      this.mine.group.position.set(car.x, 0, car.z);
-      this.mine.group.rotation.y = -car.h;
+      this.orient(this.mine.group, car.x, car.y, car.z, car.h, car.airborne, car.vy, forwardSpeed(car));
       const braking = controls.brake > 0 && forwardSpeed(car) > 0.5;
       this.mine.lamps.color.set(this.lightsOn ? 0xffffff : braking ? 0xd0d0d0 : 0x8a8a8a);
       this.spot.intensity = this.lightsOn ? 60 : 0;

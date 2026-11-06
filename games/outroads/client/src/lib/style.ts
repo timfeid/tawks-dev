@@ -72,5 +72,39 @@ export function facadeColor(seed: number, colour?: string | number | boolean): [
 }
 
 export const DEFAULT_HEIGHT = 9;
+/** OpenMapTiles gives every building without a mapped height this one. */
+export const UNKNOWN_HEIGHT = 5;
+/** Footprints smaller than this with no mapped height are drawn as houses. */
+export const HOUSE_AREA = 360;
+
+const sidings: [number, number, number][] = [
+  [232, 228, 216],
+  [214, 206, 190],
+  [196, 206, 214],
+  [222, 212, 176],
+  [190, 176, 160],
+  [206, 214, 196],
+  [236, 222, 206],
+  [178, 168, 160],
+];
+const shingles: [number, number, number][] = [
+  [86, 80, 78],
+  [104, 84, 72],
+  [70, 74, 82],
+  [120, 96, 80],
+  [92, 92, 88],
+];
+
+export function sidingColor(seed: number): [number, number, number] {
+  return sidings[Math.abs(Math.floor(seed)) % sidings.length];
+}
+
+export function shingleColor(seed: number): [number, number, number] {
+  return shingles[Math.abs(Math.floor(seed)) % shingles.length];
+}
+
+/** Filler houses stand where OSM has none mapped, so they keep to one plain colour. */
+export const FILLER_WALL: [number, number, number] = [200, 196, 188];
+export const FILLER_ROOF: [number, number, number] = [112, 108, 104];
 /** Buildings at least this tall stay drawn in far chunks. */
 export const TALL = 18;
