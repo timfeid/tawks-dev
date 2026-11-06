@@ -27,10 +27,12 @@ use tracing::{info, warn};
 use crate::access::LibraryAccess;
 use crate::chart::{Difficulty, Instrument};
 use crate::library::{Library, SongInfo, read_chart_file};
-use crate::room::{Finished, PartChoice, Progress, Room, RoomPresence};
+use crate::room::{Finished, PartChoice, Progress, Room, RoomPresence, run_record};
+use crate::scores::{ApiScores, ChartQuery, ScoreBackend};
 use crate::store::Store;
 use crate::uploads::{
-    self, ApiBackend, FileCache, MAX_TOTAL_BYTES, SongBackend, UploadForm, UploadRecord, api_message,
+    self, ApiBackend, FileCache, MAX_TOTAL_BYTES, SongBackend, UploadForm, UploadRecord,
+    api_message,
 };
 
 const MILESTONE_GAME_ID: &str = "encore";
@@ -84,7 +86,6 @@ enum ServerMsg<'a> {
         conn: u64,
         user_id: &'a str,
         settings: &'a Value,
-        bests: &'a HashMap<String, u64>,
         library: bool,
         uploads: bool,
     },
@@ -102,6 +103,10 @@ enum ServerMsg<'a> {
         conn: u64,
         t: f64,
         out: bool,
+    },
+    /// The player's own run as it was kept: their previous best and ranks.
+    Run {
+        run: &'a Value,
     },
 }
 
@@ -145,6 +150,7 @@ struct Inner {
     uploads: Option<Arc<dyn SongBackend>>,
     cache: FileCache,
     store: Store,
+    scores: Arc<dyn ScoreBackend>,
     secret: [u8; 32],
     rooms: DashMap<String, mpsc::UnboundedSender<Cmd>>,
     presence: DashMap<String, RoomPresence>,
@@ -159,6 +165,7 @@ pub struct EncoreConfig {
     pub library: Library,
     pub access: LibraryAccess,
     pub store: Store,
+    pub scores: Arc<dyn ScoreBackend>,
     pub cache_dir: PathBuf,
     pub secret: [u8; 32],
     pub ws_url: String,
@@ -187,7 +194,9 @@ impl EncoreServer {
     /// when there is neither a song folder nor uploads, so the game stays off.
     pub async fn from_env(party_public_url: &str) -> anyhow::Result<Option<Self>> {
         let uploads = env_flag("ENCORE_UPLOADS");
-        let songs = std::env::var("ENCORE_SONGS_DIR").ok().filter(|s| !s.is_empty());
+        let songs = std::env::var("ENCORE_SONGS_DIR")
+            .ok()
+            .filter(|s| !s.is_empty());
         let library = match songs {
             Some(songs) => {
                 let root = PathBuf::from(songs);
@@ -207,7 +216,11 @@ impl EncoreServer {
         }
         let access = LibraryAccess::from_env();
         if !library.is_empty() {
-            info!(songs = library.len(), accounts = access.len(), "the Encore library is open to its allow-list only");
+            info!(
+                songs = library.len(),
+                accounts = access.len(),
+                "the Encore library is open to its allow-list only"
+            );
         }
         let data_dir = std::env::var("ENCORE_DATA_DIR").ok().map(PathBuf::from);
         let cache_dir = data_dir
@@ -228,6 +241,7 @@ impl EncoreServer {
             library,
             access,
             store,
+            scores: Arc::new(ApiScores::new(bot.clone())),
             cache_dir,
             secret: party::server::signing_secret("ENCORE_SECRET"),
             ws_url: format!("{base}/party/encore/ws"),
@@ -248,6 +262,7 @@ impl EncoreServer {
                 uploads,
                 cache: FileCache::new(config.cache_dir, CACHE_BYTES),
                 store: config.store,
+                scores: config.scores,
                 secret: config.secret,
                 rooms: DashMap::new(),
                 presence: DashMap::new(),
@@ -297,10 +312,18 @@ impl EncoreServer {
             warn!("no bot connection yet; Encore milestones were not reported");
             return;
         };
-        info!(parts = finished.len(), lobby = lobby_id, "reporting Encore milestones");
+        info!(
+            parts = finished.len(),
+            lobby = lobby_id,
+            "reporting Encore milestones"
+        );
         for part in finished {
             let progress = &part.progress;
-            let accuracy = if progress.total > 0 { progress.hit * 100 / progress.total } else { 0 };
+            let accuracy = if progress.total > 0 {
+                progress.hit * 100 / progress.total
+            } else {
+                0
+            };
             let event = json!({
                 "game_id": MILESTONE_GAME_ID,
                 "event_key": "song_finished",
@@ -310,7 +333,7 @@ impl EncoreServer {
                     "instrument": part.part.instrument.key(),
                     "difficulty": part.part.difficulty.key(),
                     "accuracy": accuracy,
-                    "full_combo": !progress.auto_kick && progress.total > 0 && progress.best_streak >= progress.total,
+                    "full_combo": progress.full_combo(),
                     "auto_kick": progress.auto_kick,
                     "band_size": part.band_size,
                     "score": part.score,
@@ -320,11 +343,49 @@ impl EncoreServer {
             });
             let sdk = sdk.clone();
             tokio::spawn(async move {
-                if let Err(error) = sdk.web_client.mutate::<_, ()>("milestone_event", &event).await {
+                if let Err(error) = sdk
+                    .web_client
+                    .mutate::<_, ()>("milestone_event", &event)
+                    .await
+                {
                     warn!(%error, "an Encore milestone event did not send");
                 }
             });
         }
+    }
+
+    /// Keeps each part that counts and tells its player how the run stands.
+    fn record_runs(
+        &self,
+        lobby_id: &str,
+        started_at_ms: Option<f64>,
+        finished: &[Finished],
+        listeners: Vec<(String, mpsc::UnboundedSender<Message>)>,
+    ) {
+        let runs: Vec<_> = finished
+            .iter()
+            .filter_map(|part| run_record(lobby_id, started_at_ms, part))
+            .collect();
+        if runs.is_empty() {
+            return;
+        }
+        let scores = self.inner.scores.clone();
+        tokio::spawn(async move {
+            let recorded = match scores.record(&runs).await {
+                Ok(recorded) => recorded,
+                Err(error) => return warn!(%error, "Encore runs were not kept"),
+            };
+            for run in &recorded {
+                let user = run
+                    .get("user_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                let message = text(&ServerMsg::Run { run });
+                for (_, out) in listeners.iter().filter(|(listener, _)| listener == user) {
+                    let _ = out.send(message.clone());
+                }
+            }
+        });
     }
 
     fn report_award(&self, lobby_id: &str, started_at_ms: Option<f64>, finished: &[Finished]) {
@@ -360,6 +421,8 @@ impl EncoreServer {
             .route("/party/encore/ws", get(ws_handler))
             .route("/party/encore/me", get(me))
             .route("/party/encore/songs", get(catalog))
+            .route("/party/encore/scores", get(chart_scores))
+            .route("/party/encore/scores/mine", get(my_bests))
             .route("/party/encore/songs/:id/chart", get(chart))
             .route("/party/encore/songs/:id/files/:name", get(file))
             .route("/party/encore/songs/:id/report", post(report))
@@ -410,14 +473,22 @@ impl EncoreServer {
         if record.official || record.uploaded_by == claims.user_id {
             return true;
         }
-        self.inner.presence.get(&claims.match_id).is_some_and(|room| {
-            room.users.contains(&record.uploaded_by) || room.song.as_deref() == Some(record.id.as_str())
-        })
+        self.inner
+            .presence
+            .get(&claims.match_id)
+            .is_some_and(|room| {
+                room.users.contains(&record.uploaded_by)
+                    || room.song.as_deref() == Some(record.id.as_str())
+            })
     }
 
     async fn resolve(&self, claims: &Claims, id: &str) -> Option<Resolved> {
         if let Some(song) = self.inner.library.song(id) {
-            return self.inner.access.allows(claims).then(|| Resolved::Library(song.clone()));
+            return self
+                .inner
+                .access
+                .allows(claims)
+                .then(|| Resolved::Library(song.clone()));
         }
         let backend = self.inner.uploads.as_ref()?;
         let record = match backend.get(id).await {
@@ -427,7 +498,8 @@ impl EncoreServer {
                 return None;
             }
         };
-        self.may_hear(claims, &record).then_some(Resolved::Upload(record))
+        self.may_hear(claims, &record)
+            .then_some(Resolved::Upload(record))
     }
 
     fn length_ms(&self, song: &SongInfo) -> f64 {
@@ -503,6 +575,62 @@ async fn catalog(State(server): State<EncoreServer>, Query(pass): Query<Pass>) -
     json_body(format!("[{}]", parts.join(",")))
 }
 
+#[derive(Deserialize)]
+struct ScoresQuery {
+    token: String,
+    song_id: String,
+    instrument: Instrument,
+    difficulty: Difficulty,
+    #[serde(default)]
+    everyone: bool,
+}
+
+/// One chart's leaderboard, for a song the pass may hear. Everyone's scores
+/// are only kept for official songs; the rest are among friends.
+async fn chart_scores(
+    State(server): State<EncoreServer>,
+    Query(query): Query<ScoresQuery>,
+) -> Response {
+    let Some(claims) = server.check(&query.token) else {
+        return unauthorized();
+    };
+    if claims.guest {
+        return refused(StatusCode::FORBIDDEN, "Sign in to see scores");
+    }
+    let official = match server.resolve(&claims, &query.song_id).await {
+        Some(Resolved::Library(song)) => song.official,
+        Some(Resolved::Upload(record)) => record.official,
+        None => return not_found(),
+    };
+    if query.everyone && !official {
+        return refused(StatusCode::BAD_REQUEST, "Only official songs rank everyone");
+    }
+    let chart = ChartQuery {
+        viewer: claims.user_id.clone(),
+        song_id: query.song_id,
+        instrument: query.instrument.key().to_string(),
+        difficulty: query.difficulty.key().to_string(),
+        everyone: query.everyone,
+    };
+    match server.inner.scores.chart(&chart).await {
+        Ok(scores) => axum::Json(scores).into_response(),
+        Err(error) => refused(StatusCode::SERVICE_UNAVAILABLE, api_message(&error)),
+    }
+}
+
+async fn my_bests(State(server): State<EncoreServer>, Query(pass): Query<Pass>) -> Response {
+    let Some(claims) = server.check(&pass.token) else {
+        return unauthorized();
+    };
+    if claims.guest {
+        return axum::Json(json!([])).into_response();
+    }
+    match server.inner.scores.bests(&claims.user_id).await {
+        Ok(bests) => axum::Json(bests).into_response(),
+        Err(error) => refused(StatusCode::SERVICE_UNAVAILABLE, api_message(&error)),
+    }
+}
+
 async fn me(State(server): State<EncoreServer>, Query(pass): Query<Pass>) -> Response {
     let Some(claims) = server.check(&pass.token) else {
         return unauthorized();
@@ -556,7 +684,12 @@ async fn chart(
         }
         Some(Resolved::Upload(record)) => {
             let backend = server.inner.uploads.clone().expect("uploads are on");
-            let path = match server.inner.cache.get(backend.as_ref(), &record.id, &record.song.chart).await {
+            let path = match server
+                .inner
+                .cache
+                .get(backend.as_ref(), &record.id, &record.song.chart)
+                .await
+            {
                 Ok(path) => path,
                 Err(error) => {
                     warn!(%error, song = record.id, "an uploaded chart did not load");
@@ -598,7 +731,12 @@ async fn file(
                 return not_found();
             };
             let backend = server.inner.uploads.clone().expect("uploads are on");
-            match server.inner.cache.get(backend.as_ref(), &record.id, stored).await {
+            match server
+                .inner
+                .cache
+                .get(backend.as_ref(), &record.id, stored)
+                .await
+            {
                 Ok(path) => (path, "private, max-age=600"),
                 Err(error) => {
                     warn!(%error, song = record.id, "an uploaded file did not load");
@@ -639,7 +777,9 @@ async fn upload(
         Ok(status) => {
             return refused(
                 StatusCode::FORBIDDEN,
-                status.reason.unwrap_or_else(|| "You can't upload songs right now".into()),
+                status
+                    .reason
+                    .unwrap_or_else(|| "You can't upload songs right now".into()),
             );
         }
         Err(error) => return refused(StatusCode::SERVICE_UNAVAILABLE, api_message(&error)),
@@ -650,7 +790,12 @@ async fn upload(
         let field = match multipart.next_field().await {
             Ok(Some(field)) => field,
             Ok(None) => break,
-            Err(_) => return refused(StatusCode::BAD_REQUEST, "The upload did not arrive in one piece"),
+            Err(_) => {
+                return refused(
+                    StatusCode::BAD_REQUEST,
+                    "The upload did not arrive in one piece",
+                );
+            }
         };
         let name = field.name().unwrap_or_default().to_string();
         let file_name = field.file_name().map(String::from);
@@ -666,7 +811,9 @@ async fn upload(
             (_, Some(file_name)) => form.files.push((file_name, bytes.to_vec())),
             ("name", None) => form.name = Some(text()),
             ("artist", None) => form.artist = Some(text()),
-            ("rights", None) => form.rights = matches!(text().trim(), "accepted" | "true" | "on" | "1"),
+            ("rights", None) => {
+                form.rights = matches!(text().trim(), "accepted" | "true" | "on" | "1")
+            }
             _ => {}
         }
     }
@@ -677,12 +824,17 @@ async fn upload(
     };
     match backend.create(&claims.user_id, &validated).await {
         Ok(id) => {
-            info!(song = id, user = claims.user_id, "an Encore song was uploaded");
+            info!(
+                song = id,
+                user = claims.user_id,
+                "an Encore song was uploaded"
+            );
             let mut song = validated.song.info.clone();
             song.id = id.clone();
             song.uploaded_by = Some(claims.user_id.clone());
             song.uploader_name = Some(claims.name.clone());
-            axum::Json(json!({ "id": id, "song": song, "skipped": validated.skipped })).into_response()
+            axum::Json(json!({ "id": id, "song": song, "skipped": validated.skipped }))
+                .into_response()
         }
         Err(error) => {
             warn!(%error, "an Encore upload was not stored");
@@ -730,13 +882,24 @@ async fn report(
     if !REPORT_REASONS.contains(&body.reason.as_str()) {
         return refused(StatusCode::BAD_REQUEST, "Pick a reason");
     }
-    let details: String = body.details.trim().chars().take(MAX_REPORT_DETAILS).collect();
+    let details: String = body
+        .details
+        .trim()
+        .chars()
+        .take(MAX_REPORT_DETAILS)
+        .collect();
     let Some(Resolved::Upload(record)) = server.resolve(&claims, &id).await else {
         return not_found();
     };
     let backend = server.inner.uploads.clone().expect("uploads are on");
     match backend
-        .report(&record.id, &claims.user_id, &claims.match_id, &body.reason, &details)
+        .report(
+            &record.id,
+            &claims.user_id,
+            &claims.match_id,
+            &body.reason,
+            &details,
+        )
         .await
     {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
@@ -819,10 +982,16 @@ async fn serve_socket(server: EncoreServer, socket: WebSocket) {
                         Resolved::Upload(record) => record.info(),
                     };
                     let length_ms = server.length_ms(&song);
-                    let _ = room.send(Cmd::Pick { conn, song, length_ms });
+                    let _ = room.send(Cmd::Pick {
+                        conn,
+                        song,
+                        length_ms,
+                    });
                 }
                 None => {
-                    let _ = out.send(text(&ServerMsg::Error { message: "That song is gone" }));
+                    let _ = out.send(text(&ServerMsg::Error {
+                        message: "That song is gone",
+                    }));
                 }
             },
             msg => {
@@ -853,7 +1022,13 @@ async fn run_room(
             }
             _ = ticker.tick() => {
                 let finished = room.tick(now_ms());
-                server.inner.store.record(&finished);
+                if !finished.is_empty() {
+                    let listeners = outs
+                        .iter()
+                        .filter_map(|(conn, out)| Some((room.players.get(conn)?.user_id.clone(), out.clone())))
+                        .collect();
+                    server.record_runs(&match_id, room.start_at, &finished, listeners);
+                }
                 server.report_milestones(&match_id, &finished);
                 server.report_award(&match_id, room.start_at, &finished);
                 if room.dirty {
@@ -897,14 +1072,23 @@ fn handle(
                 conn,
                 user_id: &claims.user_id,
                 settings: &data.settings,
-                bests: &data.bests,
                 library,
                 uploads: server.inner.uploads.is_some(),
             }));
-            room.join(conn, &claims.user_id, &claims.name, &claims.avatar_url, library);
+            room.join(
+                conn,
+                &claims.user_id,
+                &claims.name,
+                &claims.avatar_url,
+                library,
+            );
             outs.insert(conn, out);
         }
-        Cmd::Pick { conn, song, length_ms } => {
+        Cmd::Pick {
+            conn,
+            song,
+            length_ms,
+        } => {
             if let Err(message) = room.pick(conn, song, length_ms) {
                 if let Some(out) = outs.get(&conn) {
                     let _ = out.send(text(&ServerMsg::Error { message: &message }));
@@ -970,6 +1154,7 @@ fn handle(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scores::MemoryScores;
     use crate::uploads::MemoryBackend;
     use crate::uploads::tests::{CHART, good_upload};
     use axum::body::Body;
@@ -978,6 +1163,7 @@ mod tests {
     struct Fixture {
         server: EncoreServer,
         backend: Arc<MemoryBackend>,
+        scores: Arc<MemoryScores>,
         library_id: String,
         root: PathBuf,
     }
@@ -989,21 +1175,28 @@ mod tests {
     }
 
     fn fixture(name: &str) -> Fixture {
-        let root = std::env::temp_dir().join(format!("encore-server-{name}-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("encore-server-{name}-{}", std::process::id()));
         let song = root.join("songs").join("Band - Tune");
         std::fs::create_dir_all(&song).unwrap();
-        std::fs::write(song.join("song.ini"), "[song]\nname = Tune\nartist = Band\ndiff_guitar = 3\n").unwrap();
+        std::fs::write(
+            song.join("song.ini"),
+            "[song]\nname = Tune\nartist = Band\ndiff_guitar = 3\n",
+        )
+        .unwrap();
         std::fs::write(song.join("notes.chart"), CHART).unwrap();
         std::fs::write(song.join("song.ogg"), b"library audio").unwrap();
         let library = Library::scan(&root.join("songs")).unwrap();
         let catalog: Vec<Value> = serde_json::from_str(library.catalog_json()).unwrap();
         let library_id = catalog[0]["id"].as_str().unwrap().to_string();
         let backend = Arc::new(MemoryBackend::default());
+        let scores = Arc::new(MemoryScores::default());
         let server = EncoreServer::new(
             EncoreConfig {
                 library,
                 access: LibraryAccess::parse("owner"),
                 store: Store::open(None),
+                scores: scores.clone() as Arc<dyn ScoreBackend>,
                 cache_dir: root.join("cache"),
                 secret: [7; 32],
                 ws_url: "ws://test/party/encore/ws".into(),
@@ -1012,7 +1205,13 @@ mod tests {
             Some(backend.clone() as Arc<dyn SongBackend>),
             Arc::new(RwLock::new(None)),
         );
-        Fixture { server, backend, library_id, root }
+        Fixture {
+            server,
+            backend,
+            scores,
+            library_id,
+            root,
+        }
     }
 
     fn pass(server: &EncoreServer, lobby: &str, user: &str) -> String {
@@ -1029,7 +1228,13 @@ mod tests {
         );
     }
 
-    async fn call(server: &EncoreServer, method: Method, uri: &str, body: Body, content_type: &str) -> (StatusCode, Vec<u8>) {
+    async fn call(
+        server: &EncoreServer,
+        method: Method,
+        uri: &str,
+        body: Body,
+        content_type: &str,
+    ) -> (StatusCode, Vec<u8>) {
         let request = Request::builder()
             .method(method)
             .uri(uri)
@@ -1038,7 +1243,9 @@ mod tests {
             .unwrap();
         let response = server.router().oneshot(request).await.unwrap();
         let status = response.status();
-        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         (status, bytes.to_vec())
     }
 
@@ -1050,7 +1257,10 @@ mod tests {
         let (status, body) = get(server, &format!("/party/encore/songs?token={token}")).await;
         assert_eq!(status, StatusCode::OK);
         let songs: Vec<Value> = serde_json::from_slice(&body).unwrap();
-        songs.iter().map(|s| s["id"].as_str().unwrap().to_string()).collect()
+        songs
+            .iter()
+            .map(|s| s["id"].as_str().unwrap().to_string())
+            .collect()
     }
 
     fn multipart(fields: &[(&str, &str)], files: &[(String, Vec<u8>)]) -> (Body, String) {
@@ -1068,13 +1278,29 @@ mod tests {
             body.extend(b"\r\n");
         }
         body.extend(format!("--{boundary}--\r\n").bytes());
-        (Body::from(body), format!("multipart/form-data; boundary={boundary}"))
+        (
+            Body::from(body),
+            format!("multipart/form-data; boundary={boundary}"),
+        )
     }
 
     async fn upload_as(server: &EncoreServer, token: &str, rights: &str) -> (StatusCode, Value) {
-        let (body, content_type) = multipart(&[("name", "Mine"), ("artist", "Me"), ("rights", rights)], &good_upload().files);
-        let (status, bytes) = call(server, Method::POST, &format!("/party/encore/uploads?token={token}"), body, &content_type).await;
-        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+        let (body, content_type) = multipart(
+            &[("name", "Mine"), ("artist", "Me"), ("rights", rights)],
+            &good_upload().files,
+        );
+        let (status, bytes) = call(
+            server,
+            Method::POST,
+            &format!("/party/encore/uploads?token={token}"),
+            body,
+            &content_type,
+        )
+        .await;
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
     }
 
     #[tokio::test]
@@ -1089,15 +1315,35 @@ mod tests {
         assert!(catalog_ids(&f.server, &stranger).await.is_empty());
         assert!(catalog_ids(&f.server, &guest).await.is_empty());
 
-        for path in [format!("songs/{id}/chart"), format!("songs/{id}/files/song"), format!("songs/{id}/files/album")] {
-            let (status, _) = get(&f.server, &format!("/party/encore/{path}?token={stranger}")).await;
+        for path in [
+            format!("songs/{id}/chart"),
+            format!("songs/{id}/files/song"),
+            format!("songs/{id}/files/album"),
+        ] {
+            let (status, _) =
+                get(&f.server, &format!("/party/encore/{path}?token={stranger}")).await;
             assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
         }
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/chart?token={owner}")).await.0, StatusCode::OK);
-        let (status, body) = get(&f.server, &format!("/party/encore/songs/{id}/files/song?token={owner}")).await;
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/chart?token={owner}")
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        let (status, body) = get(
+            &f.server,
+            &format!("/party/encore/songs/{id}/files/song?token={owner}"),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, b"library audio");
-        assert_eq!(get(&f.server, "/party/encore/songs?token=forged").await.0, StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            get(&f.server, "/party/encore/songs?token=forged").await.0,
+            StatusCode::UNAUTHORIZED
+        );
 
         let (status, _) = call(
             &f.server,
@@ -1117,7 +1363,10 @@ mod tests {
         let (status, body) = upload_as(&f.server, &ann, "no").await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
         let guest = f.server.issue_token("L1", "g1", "Guest", "", true);
-        assert_eq!(upload_as(&f.server, &guest, "accepted").await.0, StatusCode::FORBIDDEN);
+        assert_eq!(
+            upload_as(&f.server, &guest, "accepted").await.0,
+            StatusCode::FORBIDDEN
+        );
 
         let (status, body) = upload_as(&f.server, &ann, "accepted").await;
         assert_eq!(status, StatusCode::OK, "{body}");
@@ -1129,42 +1378,97 @@ mod tests {
         assert!(catalog_ids(&f.server, &bo_elsewhere).await.is_empty());
         let stem = format!("/party/encore/songs/{id}/files/song?token={bo_elsewhere}");
         assert_eq!(get(&f.server, &stem).await.0, StatusCode::NOT_FOUND);
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/chart?token={bo_elsewhere}")).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/chart?token={bo_elsewhere}")
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
 
         let bo = pass(&f.server, "L1", "bo");
         in_room(&f.server, "L1", &["ann", "bo"]);
         assert_eq!(catalog_ids(&f.server, &bo).await, vec![id.clone()]);
-        let (status, audio) = get(&f.server, &format!("/party/encore/songs/{id}/files/song?token={bo}")).await;
+        let (status, audio) = get(
+            &f.server,
+            &format!("/party/encore/songs/{id}/files/song?token={bo}"),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert!(audio.starts_with(b"OggS"));
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/chart?token={bo}")).await.0, StatusCode::OK);
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/files/notes.chart?token={bo}")).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/chart?token={bo}")
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/files/notes.chart?token={bo}")
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
 
         in_room(&f.server, "L1", &["bo"]);
         assert!(catalog_ids(&f.server, &bo).await.is_empty());
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/chart?token={bo}")).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/chart?token={bo}")
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
 
         let report = |token: &str, reason: &str| {
             let uri = format!("/party/encore/songs/{id}/report?token={token}");
             let body = Body::from(format!(r#"{{"reason":"{reason}","details":"not theirs"}}"#));
             let server = f.server.clone();
-            async move { call(&server, Method::POST, &uri, body, "application/json").await.0 }
+            async move {
+                call(&server, Method::POST, &uri, body, "application/json")
+                    .await
+                    .0
+            }
         };
         assert_eq!(report(&bo, "copyright").await, StatusCode::NOT_FOUND);
         in_room(&f.server, "L1", &["ann", "bo"]);
         assert_eq!(report(&bo, "made-up").await, StatusCode::BAD_REQUEST);
         assert_eq!(report(&bo, "copyright").await, StatusCode::NO_CONTENT);
-        assert_eq!(f.backend.reports.lock().unwrap().as_slice(), &[(id.clone(), "bo".to_string(), "copyright".to_string())]);
+        assert_eq!(
+            f.backend.reports.lock().unwrap().as_slice(),
+            &[(id.clone(), "bo".to_string(), "copyright".to_string())]
+        );
 
         let delete = |token: &str| {
             let uri = format!("/party/encore/uploads/{id}?token={token}");
             let server = f.server.clone();
-            async move { call(&server, Method::DELETE, &uri, Body::empty(), "text/plain").await.0 }
+            async move {
+                call(&server, Method::DELETE, &uri, Body::empty(), "text/plain")
+                    .await
+                    .0
+            }
         };
         assert_eq!(delete(&bo).await, StatusCode::BAD_REQUEST);
         assert_eq!(delete(&ann).await, StatusCode::NO_CONTENT);
         assert!(catalog_ids(&f.server, &ann).await.is_empty());
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/files/song?token={bo}")).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/files/song?token={bo}")
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
     }
 
     #[tokio::test]
@@ -1176,7 +1480,15 @@ mod tests {
         f.backend.songs.lock().unwrap()[0].0.official = true;
         let stranger = pass(&f.server, "L9", "stranger");
         assert_eq!(catalog_ids(&f.server, &stranger).await, vec![id.clone()]);
-        assert_eq!(get(&f.server, &format!("/party/encore/songs/{id}/chart?token={stranger}")).await.0, StatusCode::OK);
+        assert_eq!(
+            get(
+                &f.server,
+                &format!("/party/encore/songs/{id}/chart?token={stranger}")
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
 
         f.backend.blocked.lock().unwrap().insert("ann".into());
         let (status, body) = upload_as(&f.server, &ann, "accepted").await;
@@ -1187,5 +1499,117 @@ mod tests {
         let me: Value = serde_json::from_slice(&me).unwrap();
         assert_eq!(me["library"], false);
         assert_eq!(me["status"]["can_upload"], false);
+    }
+
+    #[tokio::test]
+    async fn scores_are_for_songs_the_pass_may_hear_and_everyone_only_on_official_ones() {
+        let f = fixture("scores");
+        let owner = pass(&f.server, "L1", "owner");
+        let stranger = pass(&f.server, "L1", "stranger");
+        let guest = f.server.issue_token("L1", "owner", "owner", "", true);
+        let id = f.library_id.clone();
+        let scores = |token: &str, song: &str, everyone: bool| {
+            let uri = format!(
+                "/party/encore/scores?token={token}&song_id={song}&instrument=guitar&difficulty=expert&everyone={everyone}"
+            );
+            let server = f.server.clone();
+            async move { get(&server, &uri).await.0 }
+        };
+        assert_eq!(scores(&owner, &id, false).await, StatusCode::OK);
+        assert_eq!(scores(&owner, &id, true).await, StatusCode::BAD_REQUEST);
+        assert_eq!(scores(&stranger, &id, false).await, StatusCode::NOT_FOUND);
+        assert_eq!(scores(&guest, &id, false).await, StatusCode::FORBIDDEN);
+        assert_eq!(scores("forged", &id, false).await, StatusCode::UNAUTHORIZED);
+        let bad = format!(
+            "/party/encore/scores?token={owner}&song_id={id}&instrument=kazoo&difficulty=expert"
+        );
+        assert_eq!(get(&f.server, &bad).await.0, StatusCode::BAD_REQUEST);
+
+        let ann = pass(&f.server, "L1", "ann");
+        let (_, body) = upload_as(&f.server, &ann, "accepted").await;
+        let upload = body["id"].as_str().unwrap().to_string();
+        f.backend.songs.lock().unwrap()[0].0.official = true;
+        assert_eq!(scores(&stranger, &upload, true).await, StatusCode::OK);
+
+        let asked = f.scores.asked.lock().unwrap().clone();
+        assert_eq!(
+            asked,
+            vec![
+                ChartQuery {
+                    viewer: "owner".into(),
+                    song_id: id.clone(),
+                    instrument: "guitar".into(),
+                    difficulty: "expert".into(),
+                    everyone: false,
+                },
+                ChartQuery {
+                    viewer: "stranger".into(),
+                    song_id: upload,
+                    instrument: "guitar".into(),
+                    difficulty: "expert".into(),
+                    everyone: true,
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn finished_parts_are_kept_and_each_player_hears_about_their_own() {
+        let f = fixture("runs");
+        let part = PartChoice {
+            instrument: Instrument::Guitar,
+            difficulty: Difficulty::Expert,
+        };
+        let finished = |user: &str, hit: u32, missed: u32| Finished {
+            user_id: user.into(),
+            song_id: "s1".into(),
+            part,
+            score: hit as u64 * 50,
+            progress: Progress {
+                score: hit as u64 * 50,
+                hit,
+                missed,
+                total: 100,
+                best_streak: hit,
+                ..Default::default()
+            },
+            band_size: 3,
+            official: false,
+        };
+        let (ann_out, mut ann_in) = mpsc::unbounded_channel();
+        let (bo_out, mut bo_in) = mpsc::unbounded_channel();
+        f.server.record_runs(
+            "L1",
+            Some(1_000.0),
+            &[
+                finished("ann", 90, 10),
+                finished("bo", 40, 0),
+                finished("cy", 100, 0),
+            ],
+            vec![("ann".into(), ann_out), ("bo".into(), bo_out)],
+        );
+        let Some(Message::Text(raw)) = ann_in.recv().await else {
+            panic!("ann heard nothing")
+        };
+        let heard: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(heard["type"], "run");
+        assert_eq!(heard["run"]["user_id"], "ann");
+        assert!(bo_in.try_recv().is_err());
+
+        let recorded = f.scores.recorded.lock().unwrap().clone();
+        let users: Vec<&str> = recorded.iter().map(|r| r.user_id.as_str()).collect();
+        assert_eq!(users, vec!["ann", "cy"]);
+        assert_eq!(recorded[0].reference_id, "encore:L1:1000:s1:ann:guitar");
+        assert!(recorded[1].full_combo);
+        assert_eq!(recorded[1].stars, 5);
+
+        let mine = format!(
+            "/party/encore/scores/mine?token={}",
+            pass(&f.server, "L1", "cy")
+        );
+        let (status, body) = get(&f.server, &mine).await;
+        assert_eq!(status, StatusCode::OK);
+        let bests: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(bests[0]["score"], 5_000);
     }
 }

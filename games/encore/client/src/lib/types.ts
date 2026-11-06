@@ -129,13 +129,13 @@ export type ServerMsg =
       conn: number;
       user_id: string;
       settings: unknown;
-      bests: Record<string, number>;
       library: boolean;
       uploads: boolean;
     }
   | { type: 'room'; room: RoomView }
   | { type: 'pong'; t: number; now: number }
   | { type: 'cue'; conn: number; t: number; out: boolean }
+  | { type: 'run'; run: KeptRun }
   | { type: 'error'; message: string };
 
 export type ClientMsg =
@@ -153,6 +153,48 @@ export type ClientMsg =
 
 /** What the join action hands the frame. */
 export type Pass = { ws_url: string; api_url: string; token: string; lobby_id: string };
+
+/** A player's best run on one chart: a song, an instrument and a difficulty. */
+export type Best = {
+  song_id: string;
+  instrument: Instrument;
+  difficulty: Difficulty;
+  score: number;
+  accuracy: number;
+  stars: number;
+  max_combo: number;
+  full_combo: boolean;
+  official: boolean;
+  achieved_at: string;
+};
+
+export type Standing = { rank: number | null; players: number };
+
+/** How a run the server kept stands against the player's best and the leaderboards. */
+export type KeptRun = {
+  user_id: string;
+  previous: Best | null;
+  best: Best;
+  new_best: boolean;
+  friends: Standing;
+  everyone: Standing | null;
+};
+
+export type ScoreEntry = {
+  rank: number;
+  user_id: string;
+  name: string;
+  score: number;
+  accuracy: number;
+  stars: number;
+  max_combo: number;
+  full_combo: boolean;
+  achieved_at: string;
+};
+
+export type ChartScores = { entries: ScoreEntry[]; mine: ScoreEntry | null; players: number };
+
+export const MAX_STARS = 5;
 
 export function bestKey(songId: string, part: PartChoice) {
   return `${songId}:${part.instrument}:${part.difficulty}`;

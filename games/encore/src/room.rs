@@ -113,6 +113,13 @@ pub fn earns_rewards(song: &SongInfo) -> bool {
 
 pub const AWARD_GAME: &str = "encore";
 
+/// Share of a part's notes a player has to have played through for the run to be kept.
+pub const MIN_PLAYED_SHARE: f64 = 0.9;
+/// Far above what a chord on a full multiplier in star power earns, sustains included.
+const MAX_POINTS_PER_NOTE: u64 = 5_000;
+/// Accuracy at or above each threshold earns one more star, out of five.
+const STAR_ACCURACY: [f64; 5] = [0.0, 0.5, 0.7, 0.85, 0.95];
+
 impl Progress {
     /// Notes hit out of the part's notes, 0 to 1.
     pub fn accuracy(&self) -> f64 {
@@ -121,11 +128,106 @@ impl Progress {
         }
         (self.hit as f64 / self.total as f64).clamp(0.0, 1.0)
     }
+
+    /// Notes judged, hit or missed, out of the part's notes.
+    pub fn played_share(&self) -> f64 {
+        if self.total == 0 {
+            return 0.0;
+        }
+        (self.hit.saturating_add(self.missed) as f64 / self.total as f64).clamp(0.0, 1.0)
+    }
+
+    pub fn full_combo(&self) -> bool {
+        !self.auto_kick && self.total > 0 && self.best_streak >= self.total
+    }
+
+    pub fn stars(&self) -> u32 {
+        if self.total == 0 {
+            return 0;
+        }
+        let accuracy = self.accuracy();
+        STAR_ACCURACY.iter().filter(|&&at| accuracy >= at).count() as u32
+    }
+
+    /// Counts that could come from playing the part: nothing judged twice,
+    /// no streak longer than the hits, no score beyond what the notes allow.
+    fn plausible(&self) -> bool {
+        self.hit.saturating_add(self.missed) <= self.total
+            && self.best_streak <= self.hit
+            && self.score <= (self.total as u64 * MAX_POINTS_PER_NOTE).min(u32::MAX as u64)
+    }
+}
+
+/// A part played to the end, as Encore keeps it. Matches the API's `EncoreRun`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct RunRecord {
+    pub reference_id: String,
+    pub user_id: String,
+    pub lobby_id: String,
+    pub song_id: String,
+    pub instrument: &'static str,
+    pub difficulty: &'static str,
+    pub score: u64,
+    pub accuracy: f64,
+    pub stars: u32,
+    pub max_combo: u32,
+    pub full_combo: bool,
+    pub notes_hit: u32,
+    pub notes_missed: u32,
+    pub notes_total: u32,
+    pub band_size: usize,
+    pub official: bool,
+}
+
+/// The run to keep for a finished part, or None when it does not count:
+/// kicks played themselves, the player left or stopped before
+/// `MIN_PLAYED_SHARE` of the notes, or the counts do not add up.
+pub fn run_record(
+    lobby_id: &str,
+    started_at_ms: Option<f64>,
+    part: &Finished,
+) -> Option<RunRecord> {
+    let progress = &part.progress;
+    if progress.auto_kick || progress.total == 0 || !progress.plausible() {
+        return None;
+    }
+    if progress.played_share() < MIN_PLAYED_SHARE {
+        return None;
+    }
+    let instrument = part.part.instrument.key();
+    let difficulty = part.part.difficulty.key();
+    Some(RunRecord {
+        reference_id: format!(
+            "{AWARD_GAME}:{lobby_id}:{}:{}:{}:{instrument}",
+            started_at_ms.unwrap_or(0.0) as u64,
+            part.song_id,
+            part.user_id
+        ),
+        user_id: part.user_id.clone(),
+        lobby_id: lobby_id.to_string(),
+        song_id: part.song_id.clone(),
+        instrument,
+        difficulty,
+        score: progress.score,
+        accuracy: progress.accuracy(),
+        stars: progress.stars(),
+        max_combo: progress.best_streak,
+        full_combo: progress.full_combo(),
+        notes_hit: progress.hit,
+        notes_missed: progress.missed,
+        notes_total: progress.total,
+        band_size: part.band_size,
+        official: part.official,
+    })
 }
 
 /// The award for one official song played through, each person's best part
 /// counting. None for anything that earns no rewards.
-pub fn award_args(lobby_id: &str, started_at_ms: Option<f64>, finished: &[Finished]) -> Option<serde_json::Value> {
+pub fn award_args(
+    lobby_id: &str,
+    started_at_ms: Option<f64>,
+    finished: &[Finished],
+) -> Option<serde_json::Value> {
     let official: Vec<&Finished> = finished.iter().filter(|f| f.official).collect();
     let song_id = &official.first()?.song_id;
     let mut best: BTreeMap<&str, f64> = BTreeMap::new();
@@ -215,7 +317,9 @@ impl Room {
     }
 
     fn present(&self, user_id: &str) -> bool {
-        self.players.values().any(|p| !p.away && p.user_id == user_id)
+        self.players
+            .values()
+            .any(|p| !p.away && p.user_id == user_id)
     }
 
     /// Why this song cannot be played in the room as it is now, if it can't.
@@ -252,9 +356,21 @@ impl Room {
     }
 
     pub fn join(&mut self, conn: u64, user_id: &str, name: &str, avatar_url: &str, library: bool) {
-        let returning = self.players.iter().find(|(_, p)| p.away && p.user_id == user_id).map(|(c, _)| *c);
+        let returning = self
+            .players
+            .iter()
+            .find(|(_, p)| p.away && p.user_id == user_id)
+            .map(|(c, _)| *c);
         if let Some(old) = returning.and_then(|old| self.players.remove(&old)) {
-            self.players.insert(conn, Player { conn, away: false, library, ..old });
+            self.players.insert(
+                conn,
+                Player {
+                    conn,
+                    away: false,
+                    library,
+                    ..old
+                },
+            );
             self.dirty = true;
             return;
         }
@@ -383,7 +499,11 @@ impl Room {
 
     /// Whether `conn` is playing the current song, so may send cues to the band.
     pub fn in_song(&self, conn: u64) -> bool {
-        self.phase == Phase::Playing && self.players.get(&conn).is_some_and(|p| p.playing && !p.away)
+        self.phase == Phase::Playing
+            && self
+                .players
+                .get(&conn)
+                .is_some_and(|p| p.playing && !p.away)
     }
 
     /// The host ends the song early; nothing from it counts.
@@ -424,13 +544,18 @@ impl Room {
     pub fn tick(&mut self, now: f64) -> Vec<Finished> {
         let mid_song = matches!(self.phase, Phase::Loading | Phase::Playing);
         let before = self.players.len();
-        self.players.retain(|_, p| !p.away || (mid_song && now - p.away_since < AWAY_GRACE_MS));
+        self.players
+            .retain(|_, p| !p.away || (mid_song && now - p.away_since < AWAY_GRACE_MS));
         if self.players.len() != before {
             self.dirty = true;
         }
         match self.phase {
             Phase::Lobby => {
-                if self.song.as_ref().is_some_and(|song| self.unplayable(song).is_some()) {
+                if self
+                    .song
+                    .as_ref()
+                    .is_some_and(|song| self.unplayable(song).is_some())
+                {
                     self.clear_song();
                 }
                 // People without a part are watching; everyone with one has to be ready.
@@ -539,7 +664,14 @@ mod tests {
         room.tick(0.0);
         room.loaded(conn);
         room.tick(1.0);
-        room.progress(conn, Progress { score: 100, ..Default::default() }, true);
+        room.progress(
+            conn,
+            Progress {
+                score: 100,
+                ..Default::default()
+            },
+            true,
+        );
         room.tick(2.0)
     }
 
@@ -583,7 +715,11 @@ mod tests {
 
     #[test]
     fn only_official_songs_earn_rewards() {
-        for (info, official) in [(song(), false), (upload("ann", false), false), (upload("ann", true), true)] {
+        for (info, official) in [
+            (song(), false),
+            (upload("ann", false), false),
+            (upload("ann", true), true),
+        ] {
             assert_eq!(earns_rewards(&info), official);
             let mut room = Room::default();
             room.join(1, "ann", "Ann", "", true);
@@ -600,7 +736,11 @@ mod tests {
             song_id: "s1".into(),
             part: GUITAR,
             score: 0,
-            progress: Progress { hit, total, ..Default::default() },
+            progress: Progress {
+                hit,
+                total,
+                ..Default::default()
+            },
             band_size: 2,
             official,
         }
@@ -620,7 +760,11 @@ mod tests {
         let args = award_args(
             "l1",
             Some(5.0),
-            &[finished("ann", 5, 10, true), finished("bo", 0, 0, true), finished("ann", 19, 20, true)],
+            &[
+                finished("ann", 5, 10, true),
+                finished("bo", 0, 0, true),
+                finished("ann", 19, 20, true),
+            ],
         )
         .unwrap();
         assert_eq!(
@@ -730,7 +874,14 @@ mod tests {
         room.tick(0.0);
         room.loaded(1);
         room.tick(1.0);
-        room.progress(1, Progress { score: 700, ..Default::default() }, false);
+        room.progress(
+            1,
+            Progress {
+                score: 700,
+                ..Default::default()
+            },
+            false,
+        );
         room.leave(1, 2_000.0);
         room.tick(3_000.0);
         assert_eq!(room.phase, Phase::Playing);
@@ -798,5 +949,136 @@ mod tests {
         let end = room.ends_at.unwrap();
         room.tick(end + 1.0);
         assert_eq!(room.phase, Phase::Results);
+    }
+
+    fn part_run(progress: Progress) -> Finished {
+        Finished {
+            user_id: "ann".into(),
+            song_id: "s1".into(),
+            part: GUITAR,
+            score: progress.score,
+            progress,
+            band_size: 1,
+            official: true,
+        }
+    }
+
+    fn played(hit: u32, missed: u32, best_streak: u32) -> Progress {
+        Progress {
+            score: hit as u64 * 50,
+            hit,
+            missed,
+            total: 100,
+            best_streak,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_run_is_kept_only_when_the_part_was_played_through() {
+        let kept = run_record("L1", Some(2_000.0), &part_run(played(80, 20, 30))).unwrap();
+        assert_eq!(kept.reference_id, "encore:L1:2000:s1:ann:guitar");
+        assert_eq!((kept.instrument, kept.difficulty), ("guitar", "expert"));
+        assert_eq!(
+            (
+                kept.notes_hit,
+                kept.notes_missed,
+                kept.notes_total,
+                kept.max_combo
+            ),
+            (80, 20, 100, 30)
+        );
+        assert_eq!(kept.score, 4_000);
+        assert!(kept.official && !kept.full_combo);
+
+        assert!(run_record("L1", None, &part_run(played(91, 0, 91))).is_some());
+        assert!(
+            run_record("L1", None, &part_run(played(50, 30, 10))).is_none(),
+            "left before the end"
+        );
+        assert!(
+            run_record("L1", None, &part_run(Progress::default())).is_none(),
+            "never loaded"
+        );
+        let auto_kick = Progress {
+            auto_kick: true,
+            ..played(100, 0, 100)
+        };
+        assert!(run_record("L1", None, &part_run(auto_kick)).is_none());
+    }
+
+    #[test]
+    fn counts_that_cannot_come_from_playing_are_not_kept() {
+        assert!(
+            run_record("L1", None, &part_run(played(90, 20, 10))).is_none(),
+            "judged twice"
+        );
+        assert!(
+            run_record("L1", None, &part_run(played(90, 10, 95))).is_none(),
+            "streak beyond hits"
+        );
+        let huge = Progress {
+            score: 100 * MAX_POINTS_PER_NOTE + 1,
+            ..played(100, 0, 100)
+        };
+        assert!(run_record("L1", None, &part_run(huge)).is_none());
+    }
+
+    #[test]
+    fn stars_follow_accuracy_and_a_full_combo_needs_every_note_in_one_streak() {
+        let stars = |hit| played(hit, 100 - hit, 1).stars();
+        assert_eq!(
+            [
+                stars(0),
+                stars(49),
+                stars(50),
+                stars(70),
+                stars(85),
+                stars(95),
+                stars(100)
+            ],
+            [1, 1, 2, 3, 4, 5, 5]
+        );
+        assert_eq!(Progress::default().stars(), 0);
+        assert!(played(100, 0, 100).full_combo());
+        assert!(!played(100, 0, 99).full_combo());
+        assert!(
+            !Progress {
+                auto_kick: true,
+                ..played(100, 0, 100)
+            }
+            .full_combo()
+        );
+        let fc = run_record("L1", None, &part_run(played(100, 0, 100))).unwrap();
+        assert!(fc.full_combo);
+        assert_eq!(fc.stars, 5);
+    }
+
+    #[test]
+    fn a_band_member_who_dropped_out_keeps_no_run() {
+        let mut room = Room::default();
+        room.join(1, "u1", "Ann", "", true);
+        room.join(2, "u2", "Bo", "", true);
+        room.pick(1, song(), 10_000.0).unwrap();
+        for conn in [1, 2] {
+            room.set_part(conn, Some(GUITAR)).unwrap();
+            room.set_ready(conn, true).unwrap();
+        }
+        room.tick(0.0);
+        room.loaded(1);
+        room.loaded(2);
+        room.tick(1.0);
+        room.progress(1, played(95, 5, 60), true);
+        room.progress(2, played(30, 2, 30), false);
+        room.leave(2, 2.0);
+        let end = room.ends_at.unwrap();
+        let finished = room.tick(end + 1.0);
+        assert_eq!(finished.len(), 2);
+        let kept: Vec<String> = finished
+            .iter()
+            .filter_map(|f| run_record("L1", room.start_at, f))
+            .map(|r| r.user_id)
+            .collect();
+        assert_eq!(kept, vec!["u1".to_string()]);
     }
 }

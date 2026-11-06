@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BadgeCheck, Check, Drum, Flag, Gamepad2, Guitar, Mic, Music, Piano, Search, Trash2, Upload as UploadIcon, X } from '@lucide/svelte';
+  import { BadgeCheck, Check, Drum, Flag, Gamepad2, Guitar, Mic, Music, Piano, Search, Trash2, Trophy, Upload as UploadIcon, X } from '@lucide/svelte';
   import { unlockAudio } from '../lib/audio';
   import { deleteSong } from '../lib/songs';
   import type { RoomConnection } from '../lib/room.svelte';
@@ -14,7 +14,11 @@
     type SongInfo,
   } from '../lib/types';
   import BandList from './BandList.svelte';
+  import FullCombo from './FullCombo.svelte';
+  import MyBests from './MyBests.svelte';
   import Report from './Report.svelte';
+  import Scores from './Scores.svelte';
+  import Stars from './Stars.svelte';
   import Upload from './Upload.svelte';
 
   let {
@@ -38,6 +42,7 @@
   let uploading = $state(false);
   let reporting = $state<SongInfo | null>(null);
   let confirmDelete = $state<string | null>(null);
+  let bestsOpen = $state(false);
 
   const mine = (entry: SongInfo) => !!conn.userId && entry.uploaded_by === conn.userId;
   const reportable = (entry: SongInfo) => entry.source === 'upload' && !mine(entry);
@@ -170,6 +175,14 @@
               {entry.artist}{entry.year ? ` (${entry.year})` : ''}{#if uploader(entry)}<span class="text-neutral-500"> / {uploader(entry)}</span>{/if}
             </div>
           </div>
+          {#if me?.part && conn.bests[bestKey(entry.id, me.part)]}
+            {@const best = conn.bests[bestKey(entry.id, me.part)]}
+            <div class="flex shrink-0 items-center gap-1.5" title="Your best on this part">
+              {#if best.full_combo}<FullCombo />{/if}
+              <Stars stars={best.stars} />
+              <span class="w-16 text-right font-mono text-xs text-neutral-300">{best.score.toLocaleString()}</span>
+            </div>
+          {/if}
           <div class="flex gap-1 text-neutral-500">
             {#each entry.parts as part (part.instrument)}
               {@const Icon = ICONS[part.instrument]}
@@ -292,7 +305,11 @@
               {/each}
             </div>
             {#if myBest}
-              <div class="text-xs text-neutral-400">Your best on this part: <span class="font-mono text-white">{myBest.toLocaleString()}</span></div>
+              <div class="flex items-center gap-1.5 text-xs text-neutral-400">
+                Your best on this part: <span class="font-mono text-white">{myBest.score.toLocaleString()}</span>
+                <Stars stars={myBest.stars} />
+                {#if myBest.full_combo}<FullCombo />{/if}
+              </div>
             {/if}
             <button
               class="flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold transition-colors {me.ready
@@ -311,6 +328,10 @@
       </div>
     {/if}
 
+    {#if song && me?.part}
+      <Scores {conn} {song} part={me.part} />
+    {/if}
+
     {#if busy && room.host === conn.conn}
       <button
         class="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-2 text-sm hover:border-white/30"
@@ -323,12 +344,20 @@
     <BandList {conn} live={busy} />
 
     <div class="mt-auto space-y-2 border-t border-white/10 pt-4">
-      <button
-        class="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-2 text-sm hover:border-white/30"
-        onclick={onSetup}
-      >
-        <Gamepad2 class="size-4" /> Controller and calibration
-      </button>
+      <div class="flex gap-2">
+        <button
+          class="flex flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 py-2 text-sm hover:border-white/30"
+          onclick={onSetup}
+        >
+          <Gamepad2 class="size-4" /> Controller and calibration
+        </button>
+        <button
+          class="flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm hover:border-white/30"
+          onclick={() => (bestsOpen = true)}
+        >
+          <Trophy class="size-4" /> My best
+        </button>
+      </div>
       <p class="text-xs leading-relaxed text-neutral-500">
         Plug in a guitar or drum kit, or play on the keyboard{firstBinding?.kind === 'key' ? ` (${layoutHint === 'drums' ? 'Space, J, K, L, ;' : 'A S D F G to fret, arrows or Enter to strum'})` : ''}.
         Headphones help: your mic would pick up the song.
@@ -340,6 +369,9 @@
 
 {#if uploading}
   <Upload {conn} onClose={() => (uploading = false)} onUploaded={onCatalogChange} />
+{/if}
+{#if bestsOpen}
+  <MyBests {conn} {catalog} onClose={() => (bestsOpen = false)} />
 {/if}
 {#if reporting}
   <Report {conn} song={reporting} onClose={() => (reporting = null)} />

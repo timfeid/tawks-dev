@@ -1,5 +1,5 @@
 import type { RoomConnection } from './room.svelte';
-import type { Me, ReportReason, SongInfo } from './types';
+import type { Best, ChartScores, Me, PartChoice, ReportReason, SongInfo } from './types';
 
 function url(conn: RoomConnection, path: string) {
   const pass = conn.current;
@@ -49,4 +49,27 @@ export async function reportSong(conn: RoomConnection, id: string, reason: Repor
     body: JSON.stringify({ reason, details }),
   });
   if (!response.ok) throw await failure(response);
+}
+
+export async function fetchBests(conn: RoomConnection): Promise<Best[]> {
+  const response = await fetch(url(conn, '/scores/mine'));
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as Best[];
+}
+
+export async function fetchChartScores(
+  conn: RoomConnection,
+  songId: string,
+  part: PartChoice,
+  everyone: boolean,
+): Promise<ChartScores> {
+  const query = new URLSearchParams({
+    song_id: songId,
+    instrument: part.instrument,
+    difficulty: part.difficulty,
+    everyone: String(everyone),
+  });
+  const response = await fetch(url(conn, `/scores?${query}`));
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as ChartScores;
 }

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { Trophy } from '@lucide/svelte';
   import type { RoomConnection } from '../lib/room.svelte';
-  import { INSTRUMENT_LABELS, bestKey } from '../lib/types';
+  import { INSTRUMENT_LABELS, type Standing } from '../lib/types';
   import { readSettings } from '../lib/settings';
+  import FullCombo from './FullCombo.svelte';
+  import Stars from './Stars.svelte';
 
   let { conn }: { conn: RoomConnection } = $props();
 
@@ -13,12 +15,9 @@
   const total = $derived(band.reduce((sum, p) => sum + p.progress.score, 0));
   const accuracy = (hit: number, all: number) => (all ? Math.round((hit / all) * 100) : 0);
 
-  // The server keeps the new best; remember the old one here to tell the player.
-  const mine = conn.me;
-  const key = mine?.part && conn.room?.song ? bestKey(conn.room.song.id, mine.part) : null;
-  const previousBest = key ? (conn.bests[key] ?? 0) : 0;
-  const newBest = !!key && !!mine && !mine.progress.auto_kick && mine.progress.score > previousBest;
-  if (key && mine && newBest) conn.bests = { ...conn.bests, [key]: mine.progress.score };
+  const kept = $derived(conn.lastRun);
+  const newBest = $derived(!!kept?.new_best);
+  const describe = (standing: Standing) => (standing.rank ? `#${standing.rank} of ${standing.players}` : 'not ranked');
 
   const timing = conn.timing;
   conn.timing = null;
@@ -57,6 +56,36 @@
         >
         <button class="text-xs text-neutral-400 hover:text-white" onclick={() => (timingOpen = false)}>Not now</button>
       {/if}
+    </div>
+  {/if}
+
+  {#if kept}
+    <div
+      class="flex w-full max-w-xl flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border px-4 py-3 text-sm {newBest
+        ? 'border-primary/40 bg-primary/10'
+        : 'border-white/10 bg-white/[0.04]'}"
+      data-testid="encore-kept-run"
+    >
+      <div>
+        <div class="font-semibold {newBest ? 'text-primary' : ''}">{newBest ? 'New personal best' : 'Personal best'}</div>
+        <div class="flex items-center gap-1.5 text-xs text-neutral-400">
+          <span class="font-mono text-white">{kept.best.score.toLocaleString()}</span>
+          <Stars stars={kept.best.stars} />
+          {#if kept.best.full_combo}<FullCombo />{/if}
+        </div>
+      </div>
+      {#if newBest}
+        <div class="text-xs text-neutral-400">
+          <div>Previous best</div>
+          <div class="font-mono text-white">{kept.previous ? kept.previous.score.toLocaleString() : 'None yet'}</div>
+        </div>
+      {/if}
+      <div class="ml-auto text-right text-xs text-neutral-400">
+        <div>Friends <span class="font-mono text-white">{describe(kept.friends)}</span></div>
+        {#if kept.everyone}
+          <div>Everyone <span class="font-mono text-white">{describe(kept.everyone)}</span></div>
+        {/if}
+      </div>
     </div>
   {/if}
 

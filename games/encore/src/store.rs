@@ -1,6 +1,6 @@
 //! What each player keeps between visits: their controller bindings and
-//! calibration (the activity frame has no storage of its own) and their best
-//! scores. One JSON file, rewritten on every change.
+//! calibration, since the activity frame has no storage of its own. One JSON
+//! file, rewritten on every change. Scores live in the tawks database.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,26 +10,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::warn;
 
-use crate::room::Finished;
-
 pub const MAX_SETTINGS_BYTES: usize = 16 * 1024;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PlayerData {
     #[serde(default)]
     pub settings: Value,
-    /// Keyed by `song:instrument:difficulty`.
-    #[serde(default)]
-    pub bests: HashMap<String, u64>,
 }
 
 pub struct Store {
     path: Option<PathBuf>,
     players: Mutex<HashMap<String, PlayerData>>,
-}
-
-pub fn best_key(song_id: &str, instrument: &str, difficulty: &str) -> String {
-    format!("{song_id}:{instrument}:{difficulty}")
 }
 
 impl Store {
@@ -72,30 +63,6 @@ impl Store {
         Ok(())
     }
 
-    pub fn record(&self, finished: &[Finished]) {
-        if finished.is_empty() {
-            return;
-        }
-        {
-            let mut players = self.players.lock().unwrap();
-            for part in finished.iter().filter(|part| !part.progress.auto_kick) {
-                let key = best_key(
-                    &part.song_id,
-                    part.part.instrument.key(),
-                    part.part.difficulty.key(),
-                );
-                let best = players
-                    .entry(part.user_id.clone())
-                    .or_default()
-                    .bests
-                    .entry(key)
-                    .or_insert(0);
-                *best = (*best).max(part.score);
-            }
-        }
-        self.save();
-    }
-
     fn save(&self) {
         let Some(path) = &self.path else { return };
         let json = match serde_json::to_vec(&*self.players.lock().unwrap()) {
@@ -112,67 +79,21 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chart::{Difficulty, Instrument};
-    use crate::room::PartChoice;
 
     #[test]
-    fn keeps_settings_and_the_best_score() {
+    fn keeps_settings_between_visits() {
         let dir = std::env::temp_dir().join(format!("encore-store-{}", std::process::id()));
         let store = Store::open(Some(dir.clone()));
         store
             .set_settings("u1", serde_json::json!({ "offset": 30 }))
             .unwrap();
-        let part = PartChoice {
-            instrument: Instrument::Bass,
-            difficulty: Difficulty::Hard,
-        };
-        let finished = |score| Finished {
-            user_id: "u1".into(),
-            song_id: "s".into(),
-            part,
-            score,
-            progress: Default::default(),
-            band_size: 1,
-            official: false,
-        };
-        store.record(&[finished(500)]);
-        store.record(&[finished(300)]);
-
         let reopened = Store::open(Some(dir.clone()));
-        let data = reopened.get("u1");
-        assert_eq!(data.settings["offset"], 30);
-        assert_eq!(data.bests["s:bass:hard"], 500);
+        assert_eq!(reopened.get("u1").settings["offset"], 30);
         assert!(
             store
                 .set_settings("u1", Value::String("x".repeat(MAX_SETTINGS_BYTES)))
                 .is_err()
         );
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn an_auto_kick_run_keeps_no_best() {
-        let store = Store::open(None);
-        let drums = PartChoice {
-            instrument: Instrument::Drums,
-            difficulty: Difficulty::Expert,
-        };
-        let run = |score, auto_kick| Finished {
-            user_id: "u1".into(),
-            song_id: "s".into(),
-            part: drums,
-            score,
-            progress: crate::room::Progress {
-                score,
-                auto_kick,
-                ..Default::default()
-            },
-            band_size: 1,
-            official: false,
-        };
-        store.record(&[run(900, true)]);
-        assert!(store.get("u1").bests.is_empty());
-        store.record(&[run(400, false), run(800, true)]);
-        assert_eq!(store.get("u1").bests["s:drums:expert"], 400);
     }
 }

@@ -1,4 +1,5 @@
-import type { ClientMsg, Pass, RoomView, ServerMsg } from './types';
+import { fetchBests } from './songs';
+import { bestKey, type Best, type ClientMsg, type KeptRun, type Pass, type RoomView, type ServerMsg } from './types';
 
 type Sample = { rtt: number; offset: number };
 
@@ -12,7 +13,12 @@ export class RoomConnection {
   conn = $state<number | null>(null);
   userId = $state<string | null>(null);
   settings = $state<unknown>(null);
-  bests = $state<Record<string, number>>({});
+  /** The player's best per chart, keyed by `bestKey`. */
+  bests = $state<Record<string, Best>>({});
+  /** The player's run from the last song, once the server has kept it. */
+  lastRun = $state<KeptRun | null>(null);
+  /** Bumped whenever a kept run may have moved a leaderboard. */
+  scoresVersion = $state(0);
   /** How the last song's hits landed, for the results screen: `late` in ms, and the change auto adjust made, if any. */
   timing = $state<{ late: number; adjusted: number | null } | null>(null);
   error = $state<string | null>(null);
@@ -74,6 +80,15 @@ export class RoomConnection {
     this.send({ type: 'settings', settings });
   }
 
+  async loadBests() {
+    try {
+      const bests = await fetchBests(this);
+      this.bests = Object.fromEntries(bests.map((best) => [bestKey(best.song_id, best), best]));
+    } catch {
+      // The picker shows no bests until the next connect.
+    }
+  }
+
   close() {
     this.closed = true;
     if (this.pingTimer) clearTimeout(this.pingTimer);
@@ -115,14 +130,22 @@ export class RoomConnection {
         this.conn = message.conn;
         this.userId = message.user_id;
         this.settings = message.settings;
-        this.bests = message.bests;
+        void this.loadBests();
         this.library = !!message.library;
         this.uploads = !!message.uploads;
         this.status = 'online';
         break;
       case 'room':
+        if (message.room.phase === 'loading' && this.room?.phase !== 'loading') this.lastRun = null;
         this.room = message.room;
         break;
+      case 'run': {
+        const best = message.run.best;
+        this.lastRun = message.run;
+        this.bests = { ...this.bests, [bestKey(best.song_id, best)]: best };
+        this.scoresVersion++;
+        break;
+      }
       case 'pong': {
         const now = performance.now();
         const rtt = now - message.t;

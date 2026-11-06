@@ -8,6 +8,7 @@ pub mod formats;
 pub mod library;
 pub mod room;
 pub mod runtime;
+pub mod scores;
 pub mod server;
 pub mod store;
 pub mod uploads;
