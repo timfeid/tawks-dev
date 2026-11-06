@@ -1,0 +1,159 @@
+:root {
+  --night: #0c1117;
+  --panel: rgba(14, 19, 26, 0.86);
+  --panel-solid: #121922;
+  --panel-raised: #1a2330;
+  --line: rgba(196, 214, 232, 0.14);
+  --line-strong: rgba(196, 214, 232, 0.28);
+  --text: #eef2f6;
+  --text-dim: #a9b6c4;
+  --text-faint: #6f7d8c;
+  --signal: #ffb547;
+  --signal-deep: #e08a12;
+  --go: #3fd08f;
+  --stop: #ff5b4a;
+  --sign: #1f6f4f;
+  --radius: 14px;
+  --radius-small: 9px;
+  --control: 40px;
+  --font-body: 'Barlow', system-ui, sans-serif;
+  --font-sign: 'Barlow Condensed', 'Barlow', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--night);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control);
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  border-color: var(--line-strong);
+}
+
+.chip.icon {
+  width: var(--control);
+  padding: 0;
+  justify-content: center;
+}
+
+.chip.on {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.primary {
+  background: var(--signal);
+  color: #1b1307;
+  border: none;
+  border-radius: var(--radius-small);
+  height: var(--control);
+  padding: 0 16px;
+  font-weight: 700;
+}
+
+.primary:hover {
+  background: #ffc46b;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  height: var(--control);
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+.ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.car-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.78);
+  border: 1px solid color-mix(in srgb, var(--car) 60%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.car-label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--car);
+  vertical-align: 0;
+}
+
+.car-label.honk {
+  animation: honk 0.5s ease-out;
+}
+
+@keyframes honk {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--car) 80%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}

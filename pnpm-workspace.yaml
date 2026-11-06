@@ -8,6 +8,7 @@ packages:
   - "games/cards/client"
   - "games/encore/client"
   - "games/longtable/client"
+  - "games/outroads/client"
 
 onlyBuiltDependencies:
   - esbuild

@@ -3,6 +3,7 @@
 import {
   Atom,
   Bug,
+  Car,
   Dices,
   Swords,
   UserPlus,
@@ -260,6 +261,7 @@ export const LUCIDE_REGISTRY: Record<string, any> = {
   angry: Angry,
   dices: Dices,
   swords: Swords,
+  car: Car,
 };
 
 // Optional: export a helper type for stronger typing elsewhere

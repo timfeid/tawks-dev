@@ -208,6 +208,40 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@26.6.6)(happy-dom@20.14.6)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.107.1)(yaml@2.9.1)
 
+  games/outroads/client:
+    dependencies:
+      '@lucide/svelte':
+        specifier: ^0.561.0
+        version: 0.561.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@tawks/activity-sdk':
+        specifier: workspace:^
+        version: link:../../../sdk/activity
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.1.0
+        version: 6.2.4(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@7.3.7(@types/node@26.6.6)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.107.1)(yaml@2.9.1))
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+      svelte:
+        specifier: ^5.37.1
+        version: 5.57.3(@typescript-eslint/types@8.72.1)
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.7.8(picomatch@4.0.7)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^7.0.6
+        version: 7.3.7(@types/node@26.6.6)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.107.1)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.6.6)(happy-dom@20.14.6)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.107.1)(yaml@2.9.1)
+
   sdk/activity:
     devDependencies:
       typescript:
