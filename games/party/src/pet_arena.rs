@@ -63,6 +63,9 @@ pub fn aimed_range(champion: usize, slot: usize, width: f32) -> f32 {
 }
 pub const SHOP_ITEMS: [&str; 3] = ["Hourglass", "Renewal Flask", "Wind Charm"];
 pub const SHOP_COST: [u16; 3] = [140, 95, 115];
+fn bot_shop_item(role: usize) -> usize {
+    match role { 0 | 2 => 1, 3 => 2, _ => 3 }
+}
 pub fn champion_allowed(position: usize, champion: usize) -> bool {
     match position {
         0 => matches!(champion, 0 | 1 | 3 | 6 | 7),
@@ -291,6 +294,7 @@ struct Fighter {
     height: f32,
     vertical_speed: f32,
     last_hit: Option<usize>,
+    tower_aggro_until: f32,
     action_n: u32,
     cast: u8,
     avatar_x: f32,
@@ -366,7 +370,7 @@ fn bot_path(p: &Fighter, target: (f32, f32)) -> (f32, f32) {
 fn initial_towers(player_count: usize) -> Vec<Tower> {
     let mut towers = Vec::with_capacity(10);
     let durability = match player_count { 0..=2 => 0.35, 3..=4 => 0.55,
-        5..=6 => 0.75, _ => 0.45 };
+        5..=6 => 0.75, _ => 0.95 };
     let final_durability = durability;
     for team in 0..2u8 {
         let sign = if team == 0 { -1.0 } else { 1.0 };
@@ -968,16 +972,23 @@ impl PetArena {
             self.towers[index].shot = (self.towers[index].shot - dt).max(0.0);
             if self.towers[index].shot > 0.0 { continue; }
             let (team, x, z) = { let t=&self.towers[index]; (t.team,t.x,t.z) };
-            if let Some(minion) = self.minions.iter().position(|m| m.team != team
-                && m.hp > 0.0 && (m.x-x).hypot(m.z-z) < 7.2) {
+            let aggro = self.players.iter().position(|p| p.team != team
+                && p.selected && p.respawn <= 0.0 && !p.busy
+                && p.invuln <= 0.0 && p.stasis <= 0.0
+                && p.tower_aggro_until > self.time
+                && (p.runner.x-x).hypot(p.runner.z-z) < 7.2);
+            let minion = if aggro.is_none() { self.minions.iter().position(|m| m.team != team
+                && m.hp > 0.0 && (m.x-x).hypot(m.z-z) < 7.2)
+            } else { None };
+            if let Some(minion) = minion {
                 self.minions[minion].hp -= 42.0;
                 self.towers[index].shot = 1.35;
                 events.push(json!({"kind":"crownfall_tower_shot","x":x,"z":z,
                     "target_x":self.minions[minion].x,"target_z":self.minions[minion].z,"team":team}));
-            } else if let Some(champ) = self.players.iter().position(|p| p.team != team
+            } else if let Some(champ) = aggro.or_else(|| self.players.iter().position(|p| p.team != team
                 && p.selected && p.respawn <= 0.0 && !p.busy
                 && p.invuln <= 0.0 && p.stasis <= 0.0
-                && (p.runner.x-x).hypot(p.runner.z-z) < 7.2) {
+                && (p.runner.x-x).hypot(p.runner.z-z) < 7.2)) {
                 let victim = &mut self.players[champ];
                 victim.hp = (victim.hp - 34.0).max(0.0);
                 if victim.hp == 0.0 {
@@ -1101,6 +1112,7 @@ impl PetArena {
                     height: 0.0,
                     vertical_speed: 0.0,
                     last_hit: None,
+                    tower_aggro_until: 0.0,
                     action_n: 0,
                     cast: 0,
                     avatar_x: (index as f32 - (count as f32 - 1.0) * 0.5) * 2.8,
@@ -1429,6 +1441,17 @@ impl PetArena {
         }
         let attacker = self.players[from].seat;
         let team = self.players[from].team;
+        let defended = self.kind == 1 && self.time >= DRAFT
+            && team != self.players[to].team
+            && self.towers.iter().any(|tower| tower.team == self.players[to].team
+                && tower.hp > 0.0
+                && (tower.x - self.players[to].runner.x)
+                    .hypot(tower.z - self.players[to].runner.z) < 7.2
+                && (tower.x - self.players[from].runner.x)
+                    .hypot(tower.z - self.players[from].runner.z) < 7.2);
+        if defended {
+            self.players[from].tower_aggro_until = self.time + 3.0;
+        }
         let rank = self.players[from].ranks.get(self.players[from].cast as usize)
             .copied().unwrap_or(1);
         let amount = amount
@@ -1980,7 +2003,8 @@ impl Bout for PetArena {
                         p.hp = (p.hp + 72.0 * dt).min(Self::max_hp(p.level));
                         p.mana = (p.mana + 85.0 * dt).min(Self::max_mana(p.level));
                     }
-                    let item_key = (0.45..0.95).contains(&input.pitch);
+                    let item_key = (0.45..0.55).contains(&input.pitch)
+                        || (0.65..0.95).contains(&input.pitch);
                     if item_key && !p.held_item_key {
                         if (0.65..0.95).contains(&input.pitch) && at_base {
                             let item = ((input.pitch * 10.0).round() as i32 - 6).clamp(1, 3) as usize;
@@ -2176,6 +2200,44 @@ impl Bout for PetArena {
                 yaw: p.champ as f32,
                 ..Default::default()
             };
+        }
+        if self.kind == 1 && p.selected && p.respawn <= 0.0 && !p.busy {
+            let hp_ratio = p.hp / Self::max_hp(p.level);
+            let mana_ratio = p.mana / Self::max_mana(p.level);
+            let home = CROWN_POS[p.team as usize];
+            let at_base = (p.runner.x-home.0).hypot(p.runner.z-home.1) < 8.0;
+            let threat = self.players.iter().any(|enemy| enemy.team != p.team
+                && enemy.selected && enemy.respawn <= 0.0 && !enemy.busy
+                && (enemy.runner.x-p.runner.x).hypot(enemy.runner.z-p.runner.z) < 10.0);
+            let shop_item = bot_shop_item(p.role);
+            let can_shop = p.item == 0 && p.gold >= SHOP_COST[shop_item - 1];
+            if at_base {
+                if can_shop && !p.held_item_key {
+                    return Input { pitch: 0.6 + shop_item as f32 * 0.1, ..Default::default() };
+                }
+                if hp_ratio < 0.9 || mana_ratio < 0.75 {
+                    return Input::default();
+                }
+            } else {
+                if p.item > 0 && p.item_cd <= 0.0 && !p.held_item_key {
+                    let use_item = match p.item {
+                        1 => hp_ratio < 0.4 && threat,
+                        2 => hp_ratio < 0.55 || mana_ratio < 0.25,
+                        3 => threat && hp_ratio > 0.45,
+                        _ => false,
+                    };
+                    if use_item {
+                        return Input { pitch: 0.5, ..Default::default() };
+                    }
+                }
+                let near_enemy_tower = self.towers.iter().any(|tower| tower.team != p.team
+                    && tower.hp > 0.0
+                    && (tower.x-p.runner.x).hypot(tower.z-p.runner.z) < 9.0);
+                if self.time > DRAFT + 25.0 && !threat && !near_enemy_tower
+                    && (can_shop || hp_ratio < 0.34 && mana_ratio < 0.55) {
+                    return Input { pitch: 0.6, ..Default::default() };
+                }
+            }
         }
         if self.kind == 1 && p.position == Some(3) && self.time >= RIFT_UNLOCK
             && !self.rift_used && self.side_bout.is_none() {
@@ -3100,6 +3162,47 @@ mod tests {
         assert!(game.crown_hp[1] < CROWN_HP);
     }
     #[test]
+    fn tower_defends_champion_from_enemy_attack_even_with_minions_present() {
+        let contestants = [Contestant::person(0).on_team(0), Contestant::person(1).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 10);
+        game.time = DRAFT + 10.0;
+        game.players[0].selected = true;
+        game.players[1].selected = true;
+        game.players[0].runner = Runner::at(-17.0, LANE_Z[0]);
+        game.players[1].runner = Runner::at(-15.0, LANE_Z[0]);
+        game.minions.push(Minion { id: 1, team: 1, lane: 0,
+            x: -16.0, z: LANE_Z[0], hp: 100.0, attack: 0.0 });
+        let tower = game.towers.iter().position(|t| t.team == 0
+            && t.lane == Some(0) && t.tier == 0).unwrap();
+        let mut events = Vec::new();
+
+        game.step_towers(0.01, &mut events);
+        assert_eq!(game.minions[0].hp, 58.0);
+        assert_eq!(game.players[1].hp, MAX_HP);
+
+        game.towers[tower].shot = 0.0;
+        game.hit_team(1, 0, 12.0, 0.0, &mut events);
+        game.step_towers(0.01, &mut events);
+        assert_eq!(game.players[1].hp, MAX_HP - 34.0);
+        assert_eq!(game.minions[0].hp, 58.0);
+
+        game.time += 3.1;
+        game.towers[tower].shot = 0.0;
+        game.step_towers(0.01, &mut events);
+        assert_eq!(game.minions[0].hp, 16.0);
+
+        game.players[0].runner = Runner::at(0.0, 0.0);
+        game.players[1].runner = Runner::at(2.0, 0.0);
+        game.hit_team(1, 0, 12.0, 0.0, &mut events);
+        assert!(game.players[1].tower_aggro_until < game.time);
+        game.players[1].runner = Runner::at(-15.0, LANE_Z[0]);
+        let hp = game.players[1].hp;
+        game.towers[tower].shot = 0.0;
+        game.step_towers(0.01, &mut events);
+        assert_eq!(game.players[1].hp, hp);
+        assert!(game.minions[0].hp <= 0.0);
+    }
+    #[test]
     fn jungle_walls_have_passages_and_dash_landings() {
         assert!(inside_jungle_wall(0.0, 20.0, 0.45));
         assert!(!inside_jungle_wall(13.0, 20.0, 0.45));
@@ -3547,6 +3650,43 @@ mod tests {
         for _ in 0..25 { game.step(&[], 0.1, &mut Vec::new()); }
         assert!(game.players[0].hp > 200.0);
         assert!(game.players[0].mana > 100.0);
+    }
+    #[test]
+    fn bot_recalls_buys_and_uses_a_role_item() {
+        let contestants = [Contestant::bot(0, 0.7).on_team(0),
+            Contestant::bot(1, 0.7).on_team(1)];
+        let mut game = PetArena::new(1, &contestants, 31);
+        game.time = DRAFT + 60.0;
+        game.players[0].selected = true;
+        game.players[1].selected = true;
+        game.players[0].role = 0;
+        game.players[0].gold = 160;
+        game.players[0].runner = Runner::at(-5.0, 31.0);
+        game.players[1].runner = Runner::at(30.0, -31.0);
+        let mut events = Vec::new();
+        for _ in 0..31 {
+            let input = game.bot_input(0, 0.1);
+            assert!((input.pitch - 0.6).abs() < 0.01);
+            game.step(&[(0, input)], 0.1, &mut events);
+        }
+        assert!((game.players[0].runner.x - CROWN_POS[0].0).abs() < 8.0);
+        let buy = game.bot_input(0, 0.1);
+        assert!((buy.pitch - 0.7).abs() < 0.01, "pitch={} item={} gold={} pos=({}, {}) recall={}",
+            buy.pitch, game.players[0].item, game.players[0].gold,
+            game.players[0].runner.x, game.players[0].runner.z, game.players[0].recall);
+        game.step(&[(0, buy)], 0.1, &mut events);
+        assert_eq!(game.players[0].item, 1);
+        assert_eq!(game.players[0].gold, 20);
+        game.step(&[(0, Input::default())], 0.1, &mut events);
+        game.players[0].runner = Runner::at(0.0, 0.0);
+        game.players[0].hp = 70.0;
+        game.players[1].runner = Runner::at(3.0, 0.0);
+        let use_item = game.bot_input(0, 0.1);
+        assert!((use_item.pitch - 0.5).abs() < 0.01);
+        game.step(&[(0, use_item)], 0.1, &mut events);
+        assert!(game.players[0].stasis > 1.5);
+        assert!(events.iter().any(|event| event["kind"] == "crownfall_buy"));
+        assert!(events.iter().any(|event| event["kind"] == "crownfall_item"));
     }
     #[test]
     fn portal_waits_five_seconds_then_starts_existing_minigame() {
